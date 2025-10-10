@@ -360,10 +360,12 @@ function cleanExtractedText(text: string): string {
     .trim()
     // Remove common OCR artifacts
     .replace(/[^\w\s,;:().-]/g, ' ')
-    // Fix common OCR mistakes
-    .replace(/\b0\b/g, 'o') // Replace standalone 0 with o
-    .replace(/\bl\b/g, 'I') // Replace standalone l with I
-    .replace(/\b1\b/g, 'I') // Replace standalone 1 with I
+    // Fix specific common OCR errors in ingredient names only
+    .replace(/\bfl0ur\b/gi, 'flour')
+    .replace(/\bwh0le\b/gi, 'whole')
+    .replace(/\bs0y\b/gi, 'soy')
+    .replace(/\bc0rn\b/gi, 'corn')
+    .replace(/\bsugar0se\b/gi, 'sugarose')
     // Normalize ingredient separators
     .replace(/[,;]\s*/g, ', ')
     // Remove multiple consecutive commas
@@ -392,6 +394,9 @@ function extractIngredientsSection(text: string): string | null {
   
   // Enhanced patterns for ingredients sections with better edge case handling
   const patterns = [
+    // Most flexible: captures everything between INGREDIENTS and stop markers
+    /INGREDIENTS?[:\s]*([\s\S]*?)(?=\n\n|CONTAINS:|MAY CONTAIN:|ALLERGEN INFO|DISTRIBUTED|MANUFACTURED|PRODUCED|NUTRITION|SERVING SIZE|NET WT|$)/i,
+    
     // Standard "INGREDIENTS:" with colon
     /ingredients?:\s*([\s\S]*?)(?=\n(?:PRODUCED IN|DISTRIBUTED|MANUFACTURED|CONTAINS:|MAY CONTAIN|ALLERGEN|CERTIFIED|Chat with|talk2us|Distributed \+|Manufactured by|CERTIFIED ORGANIC BY|NUTRITION FACTS|SERVING SIZE|CALORIES|DAILY VALUE|PER SERVING|NET WT|NET WEIGHT|PACKAGED BY|IMPORTED BY|MADE IN|ORIGIN|COUNTRY OF ORIGIN)|$)/i,
     
@@ -505,6 +510,14 @@ function extractIngredientsSection(text: string): string | null {
   let ingredientsLines = [];
   let foundIngredients = false;
   
+  // Common ingredient words for validation
+  const commonIngredients = [
+    'organic', 'natural', 'sugar', 'salt', 'oil', 'water', 'flour', 'milk', 'egg',
+    'wheat', 'corn', 'rice', 'soy', 'coconut', 'olive', 'sunflower', 'canola',
+    'vanilla', 'cocoa', 'chocolate', 'butter', 'cream', 'cheese', 'yogurt',
+    'vinegar', 'citric', 'acid', 'lecithin', 'gum', 'xanthan', 'guar'
+  ];
+  
   // Enhanced patterns for manual extraction
   const manualPatterns = [
     /ingredients?:\s*/i,
@@ -537,14 +550,35 @@ function extractIngredientsSection(text: string): string | null {
         for (let j = i + 1; j < textLines.length; j++) {
           const nextLine = textLines[j].trim();
           
-          // Stop at common section headers
+          // Stop at section headers or stop markers
           if (nextLine.match(/^[A-Z][A-Z\s]*:/) || 
               stopMarkers.some(marker => nextLine.toUpperCase().includes(marker))) {
             break;
           }
           
-          if (nextLine) {
+          // Skip empty lines
+          if (!nextLine || nextLine.length < 3) continue;
+          
+          // Check if line looks like ingredients
+          const hasComma = nextLine.includes(',');
+          const hasFoodWord = commonIngredients.some(word => 
+            nextLine.toLowerCase().includes(word)
+          );
+          const hasParentheses = nextLine.includes('(');
+          
+          // Continue if it looks like ingredients
+          if (hasComma || hasFoodWord || hasParentheses) {
             ingredientsLines.push(nextLine);
+          } else {
+            // If 2+ consecutive lines don't look like ingredients, stop
+            const nextNextLine = textLines[j + 1]?.trim() || '';
+            const nextNextLooksLikeIngredient = 
+              nextNextLine.includes(',') || 
+              commonIngredients.some(w => nextNextLine.toLowerCase().includes(w));
+            
+            if (!nextNextLooksLikeIngredient) {
+              break;
+            }
           }
         }
         break;
@@ -585,8 +619,22 @@ function cleanIngredientsList(text: string): string {
   
   console.log('🔧 After bullet/dash handling:', cleaned);
   
-  // Step 2: Remove C/O (care of) and everything after it
-  cleaned = cleaned.replace(/\s*C[IT]*M?\s*\/\s*O\s+.*/i, '').trim();
+  // Remove standalone percentage lines (often listed separately)
+  // But preserve percentages within parentheses
+  cleaned = cleaned
+    .replace(/,\s*\d+%\s*or\s+less\s*,/gi, ', ')
+    .replace(/,\s*less\s+than\s+\d+%\s*,/gi, ', ')
+    .replace(/,\s*\d+%\s*,/gi, ', ')
+    // Clean up any resulting double commas
+    .replace(/,\s*,/g, ',');
+  
+  console.log('🔧 After percentage removal:', cleaned);
+  
+  // Step 2: Remove company info after C/O but preserve ingredients before it
+  const coIndex = cleaned.search(/\s+C[IT]*M?\s*\/\s*O\s+/i);
+  if (coIndex > 0) {
+    cleaned = cleaned.substring(0, coIndex).trim();
+  }
   console.log('🔧 After C/O removal:', cleaned);
   
   // Step 3: Remove percentage qualifiers like "CONTAINS X% OR LESS OF"
@@ -641,10 +689,12 @@ function cleanIngredientsList(text: string): string {
     
     // Fix specific case: "Organic Sourdough Starter organic wheat flour" -> separate ingredients
     .replace(/organic sourdough starter organic wheat flour/gi, 'organic sourdough starter, organic wheat flour')
-    // Handle common OCR errors in ingredient names
-    .replace(/\b0\b/g, 'o') // Replace standalone 0 with o
-    .replace(/\bl\b/g, 'I') // Replace standalone l with I
-    .replace(/\b1\b/g, 'I') // Replace standalone 1 with I
+    // Fix specific common OCR errors in ingredient names only
+    .replace(/\bfl0ur\b/gi, 'flour')
+    .replace(/\bwh0le\b/gi, 'whole')
+    .replace(/\bs0y\b/gi, 'soy')
+    .replace(/\bc0rn\b/gi, 'corn')
+    .replace(/\bsugar0se\b/gi, 'sugarose')
     // Remove duplicate ingredients (case-insensitive)
     .split(',')
     .map(ingredient => ingredient.trim())
@@ -688,6 +738,9 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
     'preservative', 'color', 'flavor', 'extract', 'essence', 'spice', 'herb'
   ];
 
+  // Expand "and/or" to separate ingredients before parsing
+  text = text.replace(/\s+and\/or\s+/gi, ', ');
+
   // Enhanced regex to split ingredients while preserving parentheses and handling edge cases
   const ingredientSplitRegex = /,(?![^()]*\))/g; // Split on commas not inside parentheses
   
@@ -713,8 +766,21 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
     }
   }
 
-  console.log('✅ Final parsed ingredients:', parsedIngredients);
-  return parsedIngredients;
+  // Post-parsing cleanup
+  const cleanedIngredients = parsedIngredients
+    // Remove duplicates (case-insensitive)
+    .filter((ingredient, index, array) => 
+      array.findIndex(item => 
+        item.name.toLowerCase() === ingredient.name.toLowerCase()
+      ) === index
+    )
+    // Sort by confidence (highest first) for better quality
+    .sort((a, b) => b.confidence - a.confidence)
+    // Remove very low confidence ingredients (likely errors)
+    .filter(ingredient => ingredient.confidence > 0.2);
+
+  console.log('✅ Final parsed ingredients after cleanup:', cleanedIngredients);
+  return cleanedIngredients;
 }
 
 /**
@@ -724,22 +790,6 @@ function parseIndividualIngredient(text: string, commonIngredients: string[]): P
   let ingredient = text.trim();
   let confidence = 0.5; // Base confidence
   const modifiers: string[] = [];
-  
-  // Handle "and/or" constructions
-  if (ingredient.includes(' and/or ')) {
-    // Split on "and/or" and process each part
-    const parts = ingredient.split(/\s+and\/or\s+/i);
-    if (parts.length === 2) {
-      // Create separate ingredients for each part
-      const leftPart = parseIndividualIngredient(parts[0], commonIngredients);
-      const rightPart = parseIndividualIngredient(parts[1], commonIngredients);
-      
-      if (leftPart && rightPart) {
-        // Return the first part, but note that this creates multiple ingredients
-        return leftPart;
-      }
-    }
-  }
   
   // Remove leading "and" or "or"
   ingredient = ingredient.replace(/^(and|or)\s+/i, '').trim();
@@ -771,20 +821,24 @@ function parseIndividualIngredient(text: string, commonIngredients: string[]): P
   // Remove brackets from main ingredient name
   ingredient = ingredient.replace(/\s*\[[^\]]*\]/g, '').trim();
   
-  // Handle multi-word ingredients with commas (like "natural flavors, including vanilla")
+  // Handle multi-word ingredients with commas (like "natural flavors, including vanilla, with color")
   if (ingredient.includes(',')) {
-    // Check if it's a legitimate multi-word ingredient
-    const commaParts = ingredient.split(',');
-    if (commaParts.length === 2) {
-      const firstPart = commaParts[0].trim();
-      const secondPart = commaParts[1].trim();
-      
-      // If second part starts with "including", "such as", etc., treat as one ingredient
-      if (secondPart.match(/^(including|such as|like|e\.g\.)/i)) {
-        ingredient = firstPart;
-        modifiers.push(secondPart);
-        confidence += 0.2; // Boost confidence for well-structured multi-word ingredients
-      }
+    const commaParts = ingredient.split(',').map(p => p.trim());
+    
+    // Check if first part is main ingredient and rest are modifiers
+    const firstPart = commaParts[0];
+    const restParts = commaParts.slice(1);
+    
+    // If rest starts with modifier keywords or are short descriptors
+    const isModifierPattern = restParts.every(part => 
+      part.match(/^(including|such as|like|e\.g\.|contains?|with)/i) ||
+      part.split(' ').length <= 3  // Short phrases likely modifiers
+    );
+    
+    if (isModifierPattern && restParts.length > 0) {
+      ingredient = firstPart;
+      modifiers.push(...restParts);
+      confidence += 0.15;
     }
   }
   
@@ -816,6 +870,26 @@ function parseIndividualIngredient(text: string, commonIngredients: string[]): P
  */
 function isValidIngredient(ingredient: string, commonIngredients: string[]): boolean {
   if (!ingredient || ingredient.length < 2 || ingredient.length > 150) {
+    return false;
+  }
+  
+  // Filter out measurement-only text
+  if (ingredient.match(/^\d+\s*(mg|g|ml|oz|lb|kg|l|mcg|iu)/i)) {
+    return false;
+  }
+  
+  // Filter out percentage-only text
+  if (ingredient.match(/^\d+%$/)) {
+    return false;
+  }
+  
+  // Filter out "X or less" patterns
+  if (ingredient.match(/^\d+%?\s+or\s+(less|more)/i)) {
+    return false;
+  }
+  
+  // Filter out standalone allergen warnings
+  if (ingredient.match(/^(contains|may contain)/i) && ingredient.length < 30) {
     return false;
   }
   
@@ -852,6 +926,11 @@ function isValidIngredient(ingredient: string, commonIngredients: string[]): boo
     return false;
   }
   
+  // Must contain at least one letter
+  if (!ingredient.match(/[a-zA-Z]/)) {
+    return false;
+  }
+  
   return true;
 }
 
@@ -859,42 +938,47 @@ function isValidIngredient(ingredient: string, commonIngredients: string[]): boo
  * Calculate confidence score for an ingredient
  */
 function calculateIngredientConfidence(ingredient: string, modifiers: string[], commonIngredients: string[]): number {
-  let confidence = 0.5; // Base confidence
+  let confidence = 0.3; // Lower base confidence
   
-  // Boost confidence for common ingredient words
+  // Major confidence boost for common ingredient words (0.3)
   const ingredientLower = ingredient.toLowerCase();
-  for (const common of commonIngredients) {
-    if (ingredientLower.includes(common.toLowerCase())) {
-      confidence += 0.1;
-      break;
-    }
+  const hasCommonWord = commonIngredients.some(common => 
+    ingredientLower.includes(common.toLowerCase())
+  );
+  if (hasCommonWord) {
+    confidence += 0.3;
   }
   
-  // Boost confidence for having modifiers (indicates well-structured ingredient)
+  // Medium boost for modifiers (0.15)
   if (modifiers.length > 0) {
+    confidence += 0.15;
+  }
+  
+  // Small boost for proper formatting (0.1)
+  if (ingredient.match(/^[A-Z][a-z]/) || ingredient.match(/^[a-z]/)) {
     confidence += 0.1;
   }
   
-  // Boost confidence for proper capitalization
-  if (ingredient.match(/^[A-Z][a-z]/)) {
-    confidence += 0.1;
-  }
-  
-  // Boost confidence for reasonable length
+  // Small boost for reasonable length (0.1)
   if (ingredient.length >= 3 && ingredient.length <= 50) {
     confidence += 0.1;
   }
   
-  // Reduce confidence for very short or very long ingredients
+  // Penalties
   if (ingredient.length < 3) {
-    confidence -= 0.2;
+    confidence -= 0.3;
   }
   if (ingredient.length > 100) {
-    confidence -= 0.1;
+    confidence -= 0.2;
   }
   
-  // Ensure confidence is between 0 and 1
-  return Math.max(0, Math.min(1, confidence));
+  // Penalty for too many numbers (likely not an ingredient)
+  const numberCount = (ingredient.match(/\d/g) || []).length;
+  if (numberCount > 3) {
+    confidence -= 0.2;
+  }
+  
+  return Math.max(0.1, Math.min(1.0, confidence));
 }
 
 /**
