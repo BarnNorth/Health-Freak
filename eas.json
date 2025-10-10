@@ -14,8 +14,7 @@
       "distribution": "internal",
       "channel": "preview",
       "ios": {
-        "simulator": false,
-        "bundleIdentifier": "com.healthfreak.app"
+        "simulator": false
       },
       "android": {
         "buildType": "apk"
@@ -27,11 +26,10 @@
     "production": {
       "channel": "production",
       "ios": {
-        "simulator": false,
-        "bundleIdentifier": "com.healthfreak.app"
+        "simulator": false
       },
       "android": {
-        "buildType": "aab"
+        "buildType": "app-bundle"
       },
       "env": {
         "EXPO_PUBLIC_APP_URL": "healthfreak://"
@@ -39,16 +37,7 @@
     }
   },
   "submit": {
-    "production": {
-      "ios": {
-        "appleId": "your-apple-id@example.com",
-        "ascAppId": "1234567890",
-        "appleTeamId": "YOUR_TEAM_ID"
-      }
-    }
-  },
-  "update": {
-    "url": "https://u.expo.dev/your-project-id"
+    "production": {}
   }
 }
 
