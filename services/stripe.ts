@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { redirectConfig } from '@/lib/config';
 import { getStripeProduct } from '@/src/stripe-config';
 import { Linking } from 'react-native';
 
@@ -57,8 +58,8 @@ export async function startPremiumSubscription(): Promise<void> {
     const checkoutParams: StripeCheckoutParams = {
       priceId: product.priceId,
       mode: 'subscription',
-      successUrl: 'exp://192.168.1.36:8081/--/subscription-success',
-      cancelUrl: 'exp://192.168.1.36:8081/--/subscription-cancel',
+      successUrl: redirectConfig.subscriptionSuccess(),
+      cancelUrl: redirectConfig.subscriptionCancel(),
     };
 
     const { url } = await createStripeCheckoutSession(checkoutParams);

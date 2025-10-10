@@ -1,7 +1,15 @@
 import { supabase } from '@/lib/supabase';
 import { Alert } from 'react-native';
 
-export async function cancelSubscription(): Promise<boolean> {
+interface CancelSubscriptionResponse {
+  success: boolean;
+  subscription_id: string;
+  cancel_at_period_end: boolean;
+  current_period_end: number;
+  cancelled_immediately: boolean;
+}
+
+export async function cancelSubscription(): Promise<CancelSubscriptionResponse> {
   try {
     const { data, error } = await supabase.functions.invoke('stripe-cancel-subscription', {
       body: {},
@@ -12,7 +20,7 @@ export async function cancelSubscription(): Promise<boolean> {
       throw error;
     }
 
-    return true;
+    return data as CancelSubscriptionResponse;
   } catch (error: any) {
     console.error('❌ Failed to cancel subscription:', error);
     throw error;
@@ -22,7 +30,7 @@ export async function cancelSubscription(): Promise<boolean> {
 export async function showCancelSubscriptionPrompt(): Promise<void> {
   Alert.alert(
     'Cancel Subscription',
-    'Are you sure you want to cancel your premium subscription? You will lose access to premium features immediately (testing mode).',
+    'Are you sure you want to cancel your premium subscription?',
     [
       { text: 'Keep Subscription', style: 'cancel' },
       { 
@@ -30,12 +38,23 @@ export async function showCancelSubscriptionPrompt(): Promise<void> {
         style: 'destructive',
         onPress: async () => {
           try {
-            await cancelSubscription();
-            Alert.alert(
-              'Subscription Cancelled',
-              'Your subscription has been cancelled immediately. You will lose premium access right away (testing mode).',
-              [{ text: 'OK' }]
-            );
+            const result = await cancelSubscription();
+            
+            // Show different messages based on cancellation mode
+            if (result.cancelled_immediately) {
+              Alert.alert(
+                'Subscription Cancelled',
+                'Your subscription has been cancelled immediately. You will lose premium access right away.\n\nNote: This is test mode behavior. In production, you would retain access until the end of your billing period.',
+                [{ text: 'OK' }]
+              );
+            } else {
+              const endDate = new Date(result.current_period_end * 1000).toLocaleDateString();
+              Alert.alert(
+                'Subscription Cancelled',
+                `Your subscription has been cancelled. You will retain premium access until ${endDate}.`,
+                [{ text: 'OK' }]
+              );
+            }
           } catch (error) {
             console.error('❌ Subscription cancellation failed:', error);
             Alert.alert(

@@ -97,3 +97,33 @@ export function getGoogleCloudConfig() {
     credentialsPath: config.googleCloud.credentialsPath,
   };
 }
+
+/**
+ * Redirect URL configuration for auth callbacks and payment redirects
+ * Automatically switches between development and production based on EXPO_PUBLIC_APP_URL
+ */
+export const redirectConfig = {
+  // Base URL for the app - defaults to localhost for development
+  baseUrl: process.env.EXPO_PUBLIC_APP_URL || 'exp://localhost:8081',
+  
+  // Subscription redirect URLs
+  subscriptionSuccess: function() {
+    return `${this.baseUrl}/--/subscription-success`;
+  },
+  subscriptionCancel: function() {
+    return `${this.baseUrl}/--/subscription-cancel`;
+  },
+  
+  // Auth callback URL
+  authCallback: function() {
+    return `${this.baseUrl}/--/auth/callback`;
+  },
+};
+
+// Debug redirect configuration
+console.log('🔗 Redirect Configuration:', {
+  baseUrl: redirectConfig.baseUrl,
+  subscriptionSuccess: redirectConfig.subscriptionSuccess(),
+  subscriptionCancel: redirectConfig.subscriptionCancel(),
+  authCallback: redirectConfig.authCallback(),
+});

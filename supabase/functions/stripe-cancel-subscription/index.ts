@@ -64,16 +64,37 @@ Deno.serve(async (req) => {
 
     const subscription = subscriptions.data[0];
 
-    // Cancel the subscription immediately (for testing - change back to cancel_at_period_end: true for production)
-    const cancelledSubscription = await stripe.subscriptions.cancel(subscription.id);
+    // Determine cancellation behavior based on environment
+    const isTestMode = Deno.env.get('STRIPE_CANCEL_MODE') === 'immediate';
 
-    console.log('Subscription cancelled immediately (testing mode):', cancelledSubscription.id);
+    let cancelledSubscription;
+
+    if (isTestMode) {
+      // Test mode: Cancel immediately for easy testing
+      console.log('TEST MODE: Cancelling subscription immediately');
+      cancelledSubscription = await stripe.subscriptions.cancel(subscription.id);
+    } else {
+      // Production mode: Cancel at end of period (industry standard)
+      console.log('PRODUCTION MODE: Cancelling at end of billing period');
+      cancelledSubscription = await stripe.subscriptions.update(subscription.id, {
+        cancel_at_period_end: true,
+      });
+    }
+
+    console.log('Subscription cancellation processed:', {
+      subscription_id: cancelledSubscription.id,
+      cancel_at_period_end: cancelledSubscription.cancel_at_period_end,
+      current_period_end: cancelledSubscription.current_period_end,
+      status: cancelledSubscription.status,
+      mode: isTestMode ? 'immediate' : 'end-of-period'
+    });
 
     return Response.json({ 
       success: true, 
       subscription_id: cancelledSubscription.id,
       cancel_at_period_end: cancelledSubscription.cancel_at_period_end,
-      current_period_end: cancelledSubscription.current_period_end
+      current_period_end: cancelledSubscription.current_period_end,
+      cancelled_immediately: isTestMode
     });
 
   } catch (error: any) {
