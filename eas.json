@@ -1,0 +1,54 @@
+{
+  "cli": {
+    "version": ">= 5.2.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "ios": {
+        "simulator": false,
+        "bundleIdentifier": "com.healthfreak.app"
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_APP_URL": "healthfreak://"
+      }
+    },
+    "production": {
+      "channel": "production",
+      "ios": {
+        "simulator": false,
+        "bundleIdentifier": "com.healthfreak.app"
+      },
+      "android": {
+        "buildType": "aab"
+      },
+      "env": {
+        "EXPO_PUBLIC_APP_URL": "healthfreak://"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "your-apple-id@example.com",
+        "ascAppId": "1234567890",
+        "appleTeamId": "YOUR_TEAM_ID"
+      }
+    }
+  },
+  "update": {
+    "url": "https://u.expo.dev/your-project-id"
+  }
+}
+
