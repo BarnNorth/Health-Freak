@@ -10,8 +10,8 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "bundleIdentifier": "com.healthfreak.app",
-      "buildNumber": "1",
+      "bundleIdentifier": "com.tommymulder.healthfreak",
+      "buildNumber": "3",
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "This app needs camera access to scan ingredient labels on food products.",

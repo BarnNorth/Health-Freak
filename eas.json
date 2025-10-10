@@ -11,16 +11,14 @@
       }
     },
     "preview": {
-      "distribution": "internal",
+      "distribution": "store",
+      "developmentClient": true,
       "channel": "preview",
       "ios": {
         "simulator": false
       },
       "android": {
         "buildType": "apk"
-      },
-      "env": {
-        "EXPO_PUBLIC_APP_URL": "healthfreak://"
       }
     },
     "production": {
@@ -30,14 +28,11 @@
       },
       "android": {
         "buildType": "app-bundle"
-      },
-      "env": {
-        "EXPO_PUBLIC_APP_URL": "healthfreak://"
       }
     }
   },
   "submit": {
+    "preview": {},
     "production": {}
   }
 }
-
