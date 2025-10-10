@@ -34,23 +34,15 @@ Deno.serve(async (req) => {
     // get the raw body
     const body = await req.text();
 
-    // verify the webhook signature
+    // Verify the webhook signature - this ensures the webhook is genuinely from Stripe
     let event: Stripe.Event;
 
     try {
       event = await stripe.webhooks.constructEventAsync(body, signature, stripeWebhookSecret);
     } catch (error: any) {
-      console.error(`Webhook signature verification failed: ${error.message}`);
-      console.log('Stripe webhook secret length:', stripeWebhookSecret?.length);
-      console.log('Stripe webhook secret value:', stripeWebhookSecret);
-      
-      // TEMPORARILY: Skip signature verification for testing
-      console.log('TEMPORARILY SKIPPING SIGNATURE VERIFICATION FOR TESTING');
-      try {
-        event = JSON.parse(body) as Stripe.Event;
-      } catch (parseError) {
-        return new Response(`Failed to parse webhook body: ${parseError}`, { status: 400 });
-      }
+      console.error('❌ Webhook signature verification failed:', error.message);
+      console.error('This webhook request is not from Stripe and will be rejected.');
+      return new Response('Webhook signature verification failed', { status: 400 });
     }
 
     EdgeRuntime.waitUntil(handleEvent(event));
