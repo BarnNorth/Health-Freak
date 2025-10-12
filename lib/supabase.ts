@@ -4,13 +4,20 @@ import 'react-native-url-polyfill/auto';
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
+// Log Supabase configuration for debugging
+console.log('🔧 Supabase client configuration:');
+console.log('URL:', supabaseUrl);
+console.log('Anon key (first 10 chars):', supabaseAnonKey?.substring(0, 10) + '...');
+console.log('detectSessionInUrl:', false);
+console.log('flowType:', 'pkce');
+
 // Simple Supabase configuration - no custom fetch needed
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true, // Enable to handle email confirmation links
+    detectSessionInUrl: false, // Disabled - doesn't work in React Native
     flowType: 'pkce', // Use PKCE flow for better security
   },
   global: {

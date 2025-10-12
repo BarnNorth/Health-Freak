@@ -108,15 +108,48 @@ export const redirectConfig = {
   
   // Subscription redirect URLs
   subscriptionSuccess: function() {
-    return `${this.baseUrl}/--/subscription-success`;
+    const base = this.baseUrl;
+    
+    // Custom scheme (healthfreak://) should use simple format without /--/
+    if (base.startsWith('healthfreak://') || base.startsWith('healthfreak:')) {
+      return 'healthfreak://subscription-success';
+    }
+    
+    // Clean any trailing slash from baseUrl before appending path
+    const cleanBase = base.replace(/\/$/, '');
+    return `${cleanBase}/subscription-success`;
   },
+  
   subscriptionCancel: function() {
-    return `${this.baseUrl}/--/subscription-cancel`;
+    const base = this.baseUrl;
+    
+    // Custom scheme (healthfreak://) should use simple format without /--/
+    if (base.startsWith('healthfreak://') || base.startsWith('healthfreak:')) {
+      return 'healthfreak://subscription-cancel';
+    }
+    
+    // Clean any trailing slash from baseUrl before appending path
+    const cleanBase = base.replace(/\/$/, '');
+    return `${cleanBase}/subscription-cancel`;
   },
   
   // Auth callback URL
   authCallback: function() {
-    return `${this.baseUrl}/--/auth/callback`;
+    const base = this.baseUrl;
+    
+    // Custom scheme (healthfreak://) should use simple format without /--/
+    if (base.startsWith('healthfreak://') || base.startsWith('healthfreak:')) {
+      return 'healthfreak://auth/callback';
+    }
+    
+    // The /--/ prefix is only for Expo development scheme (exp://)
+    if (base.startsWith('exp://')) {
+      return `${base}/--/auth/callback`;
+    }
+    
+    // Clean any trailing slash from baseUrl before appending path
+    const cleanBase = base.replace(/\/$/, '');
+    return `${cleanBase}/auth/callback`;
   },
 };
 

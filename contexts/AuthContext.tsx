@@ -53,14 +53,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('[AUTH] Auth state changed:', event);
+        console.log('[AUTH] Auth state changed:', event, session ? `User: ${session.user?.email}` : 'No session');
         
         if (event === 'SIGNED_IN' && session?.user) {
           console.log('[AUTH] SIGNED_IN - Loading user profile for:', session.user.email);
-          // Email verification triggers SIGNED_IN
-          await loadUserProfile(session.user.id, session.user.email || '');
-          setAuthReady(true);
-          console.log('[AUTH] User profile loaded and auth ready');
+          try {
+            // Email verification triggers SIGNED_IN
+            await loadUserProfile(session.user.id, session.user.email || '');
+            setAuthReady(true);
+            console.log('[AUTH] User profile loaded and auth ready');
+          } catch (error) {
+            console.error('[AUTH] Error loading user profile after SIGNED_IN:', error);
+            // Still set auth ready so the app can continue
+            setAuthReady(true);
+          }
         } else if (event === 'SIGNED_OUT') {
           console.log('[AUTH] SIGNED_OUT');
           setUser(null);
@@ -69,6 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else if (event === 'TOKEN_REFRESHED') {
           console.log('[AUTH] TOKEN_REFRESHED');
           // Keep existing user state on token refresh
+        } else {
+          console.log('[AUTH] Unhandled auth event:', event);
         }
       }
     );
@@ -113,17 +121,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadUserProfile = async (userId: string, email: string) => {
     try {
-      // Try to get existing profile
-      let profile = await getUserProfile(userId);
+      console.log('[AUTH] Loading user profile for:', userId);
       
-      // If profile doesn't exist, create it
-      if (!profile) {
-        profile = await createUserProfile(userId, email);
-      }
+      // Add timeout to prevent hanging
+      const profilePromise = Promise.race([
+        (async () => {
+          // Try to get existing profile
+          let profile = await getUserProfile(userId);
+          
+          // If profile doesn't exist, create it
+          if (!profile) {
+            console.log('[AUTH] Profile not found, creating new profile');
+            profile = await createUserProfile(userId, email);
+          }
+          
+          return profile;
+        })(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Profile loading timeout')), 10000)
+        )
+      ]).catch(error => {
+        console.log('[AUTH] Profile load attempt timed out, but continuing...');
+        throw error;
+      });
+
+      const profile = await profilePromise;
       
       if (profile) {
+        console.log('[AUTH] Profile loaded successfully:', profile.email);
         setUser(profile);
       } else {
+        console.log('[AUTH] No profile returned, using fallback');
         // Fallback to basic user object
         const userObj = {
           id: userId,

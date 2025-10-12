@@ -486,6 +486,16 @@ export async function checkUserLimits(userId: string): Promise<{
       .single();
 
     if (error) {
+      // If no profile exists yet (new user), default to free tier
+      if (error.code === 'PGRST116' || error.details?.includes('0 rows')) {
+        console.log('[LIMITS] Profile not ready yet, defaulting to free tier');
+        return {
+          canAnalyze: true,
+          remaining: 5,
+          totalUsed: 0,
+          subscriptionStatus: 'free'
+        };
+      }
       console.error('[LIMITS] Error checking user limits:', error);
       // Default to allowing analysis on error
       return { canAnalyze: true, totalUsed: 0, subscriptionStatus: 'free', remaining: 5 };

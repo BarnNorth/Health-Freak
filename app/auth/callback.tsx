@@ -2,137 +2,259 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, SafeAreaView, TouchableOpacity } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
+import * as Linking from 'expo-linking';
+import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import { supabase } from '@/lib/supabase';
 import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
 
 export default function AuthCallbackScreen() {
-  const params = useLocalSearchParams();
   const hasProcessed = useRef(false);
   const [showRetry, setShowRetry] = useState(false);
+  const params = useLocalSearchParams();
   
-  // Log all parameters to debug
-  console.log('Callback params received:', params);
+  console.log('🔄 AuthCallbackScreen mounted');
+  console.log('📋 Route params:', params);
 
   useEffect(() => {
-    const handleAuthCallback = async () => {
-      // Prevent duplicate processing
-      if (hasProcessed.current) {
-        console.log('Callback already processed, skipping');
-        return;
-      }
-      hasProcessed.current = true;
+    if (hasProcessed.current) {
+      console.log('Callback already processed, skipping');
+      return;
+    }
+
+    const createSessionFromParams = async (params: any) => {
+      console.log('🚀 Creating session from params:', params);
+      
       try {
-        // Check if we have the required parameters
-        const { access_token, refresh_token, type, token_hash, code, error, error_description } = params;
+        console.log('📋 Processing params:', params);
         
-        // Handle error cases first
-        if (error) {
-          console.error('Auth error from callback:', error, error_description);
-          router.replace('/auth?error=' + encodeURIComponent(error_description || error));
+        // Check for error first
+        if (params.error) {
+          console.error('Error from params:', params.error);
+          router.replace('/auth?error=' + encodeURIComponent(params.error));
           return;
         }
 
-        // Handle PKCE flow with authorization code
+        // For PKCE flow, we get a 'code' parameter
+        const { code, access_token, refresh_token } = params;
+
         if (code) {
-          console.log('Exchanging authorization code for session');
+          console.log('🔐 Found PKCE code, exchanging for session...');
           console.log('Code value:', code);
           
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code as string);
-          
-          if (error) {
-            console.error('Error exchanging code for session:', error);
-            router.replace('/auth?error=' + encodeURIComponent(error.message));
-            return;
-          }
-          
-          if (data.session) {
-            console.log('✅ Code exchange successful - Session established');
-            console.log('⏳ Waiting for AuthContext to update...');
-            // Wait longer for AuthContext to process the SIGNED_IN event
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            console.log('🚀 Navigating to main app');
-            router.replace('/(tabs)');
-            return;
-          } else {
-            console.log('⚠️ Code exchange completed but no session returned');
+          try {
+            console.log('⏱️ Starting exchangeCodeForSession call (15 second timeout)...');
+            
+            // Create a 15-second timeout promise
+            const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => reject(new Error('Exchange timeout after 15 seconds')), 15000);
+            });
+            
+            // Race the exchange against the timeout
+            const result = await Promise.race([
+              supabase.auth.exchangeCodeForSession(String(code)),
+              timeoutPromise
+            ]);
+            
+            const { data, error } = result as any;
+            
+            console.log('📦 Exchange completed');
+            
+            if (error) {
+              console.error('❌ Code exchange error:', error.message);
+              router.replace('/auth?error=' + encodeURIComponent(error.message));
+              return;
+            }
+
+            if (data?.session) {
+              console.log('✅ Session created via PKCE!');
+              console.log('👤 User:', data.session.user.email);
+              console.log('⏳ Waiting 1000ms for AuthContext...');
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              console.log('🚀 Navigating to /(tabs)');
+              router.replace('/(tabs)');
+              return;
+            } else {
+              console.log('⚠️ Exchange succeeded but no session');
+              setShowRetry(true);
+              return;
+            }
+          } catch (error: any) {
+            console.error('💥 Exception during PKCE exchange:', error.message);
             setShowRetry(true);
+            return;
           }
         }
 
-        // For email confirmation, we might get different parameter names
+        // For non-PKCE flow (direct tokens)
         if (access_token && refresh_token) {
-          console.log('Setting session with tokens');
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token: access_token as string,
-            refresh_token: refresh_token as string,
-          });
+          console.log('🔑 Found tokens, setting session...');
+          console.log('Access token present:', !!access_token);
+          console.log('Access token type:', typeof access_token);
+          console.log('Access token length:', String(access_token).length);
+          console.log('Refresh token present:', !!refresh_token);
+          console.log('Refresh token type:', typeof refresh_token);
+          console.log('Refresh token length:', String(refresh_token).length);
+          
+          try {
+            console.log('⏱️ Starting setSession call...');
+            
+            // Create a timeout promise
+            const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => reject(new Error('SetSession timeout after 8 seconds')), 8000);
+            });
+            
+            // Race the session set against the timeout
+            const sessionResult = await Promise.race([
+              supabase.auth.setSession({
+                access_token: String(access_token),
+                refresh_token: String(refresh_token),
+              }),
+              timeoutPromise
+            ]).catch(err => {
+              console.error('💥 Promise.race caught error:', err);
+              return { data: null, error: err };
+            });
 
-          if (sessionError) {
-            console.error('Error setting session:', sessionError);
-            router.replace('/auth?error=session_failed');
+            console.log('📦 Session result received');
+            console.log('Has data:', !!sessionResult.data);
+            console.log('Has error:', !!sessionResult.error);
+            console.log('Has session:', !!sessionResult.data?.session);
+
+            const { data, error } = sessionResult;
+
+            if (error) {
+              console.error('❌ Set session error:', error);
+              console.error('Error message:', error.message);
+              console.error('Error name:', error.name);
+              console.error('Full error:', JSON.stringify(error, null, 2));
+              router.replace('/auth?error=' + encodeURIComponent(error.message));
+              return;
+            }
+
+            if (data?.session) {
+              console.log('✅ Session created via tokens!');
+              console.log('👤 User:', data.session.user?.email);
+              console.log('🔑 Access token length:', data.session.access_token?.length);
+              console.log('🕒 Session expires at:', data.session.expires_at);
+              console.log('⏳ Waiting 500ms for AuthContext...');
+              await new Promise(resolve => setTimeout(resolve, 500));
+              console.log('🚀 About to navigate to /(tabs)');
+              router.replace('/(tabs)');
+              console.log('✅ Navigation command issued');
+              return;
+            } else {
+              console.log('⚠️ Token session set completed but no session returned');
+              console.log('Data object:', JSON.stringify(data, null, 2));
+              setShowRetry(true);
+              return;
+            }
+          } catch (error) {
+            console.error('💥 Caught exception during token session set:');
+            console.error('Error type:', error?.constructor?.name);
+            console.error('Error message:', error?.message);
+            console.error('Error stack:', error?.stack);
+            console.error('Full error:', JSON.stringify(error, null, 2));
+            setShowRetry(true);
             return;
           }
-
-          console.log('✅ Session set successfully with tokens');
-          console.log('⏳ Waiting for AuthContext to update...');
-          // Wait longer for AuthContext to process the SIGNED_IN event
-          await new Promise(resolve => setTimeout(resolve, 1500));
-          console.log('🚀 Navigating to main app');
-          router.replace('/(tabs)');
-          return;
         }
 
-        // Try to get the current session (in case the URL handling already processed it)
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (session && !sessionError) {
-          console.log('✅ Found existing session');
-          console.log('⏳ Waiting for AuthContext to update...');
-          // Wait longer for AuthContext to process
-          await new Promise(resolve => setTimeout(resolve, 1500));
-          console.log('🚀 Navigating to main app');
-          router.replace('/(tabs)');
-          return;
-        }
-
-        // If we have a token_hash, try to exchange it for a session
-        if (token_hash) {
-          console.log('Exchanging token hash for session');
-          const { data, error: exchangeError } = await supabase.auth.verifyOtp({
-            token_hash: token_hash as string,
-            type: 'email'
-          });
-
-          if (exchangeError) {
-            console.error('Error exchanging token:', exchangeError);
-            router.replace('/auth?error=token_exchange_failed');
-            return;
-          }
-
-          if (data.session) {
-            console.log('✅ Token exchange successful - Session established');
-            console.log('⏳ Waiting for AuthContext to update...');
-            // Wait longer for AuthContext to process the SIGNED_IN event
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            console.log('🚀 Navigating to main app');
-            router.replace('/(tabs)');
-            return;
-          }
-        }
-
-        // If we get here, something went wrong
-        console.error('No valid authentication method found. Params:', params);
+        console.log('⚠️ No valid auth parameters found in URL');
+        console.log('Available params:', Object.keys(params));
         setShowRetry(true);
         
       } catch (error) {
-        console.error('Auth callback error:', error);
-        setShowRetry(true);
+        console.error('💥 Exception in createSessionFromUrl:', error);
+        console.error('Exception details:', JSON.stringify(error, null, 2));
+        router.replace('/auth?error=session_creation_failed');
       }
     };
 
-    handleAuthCallback();
-  }, [params]);
+    const createSessionFromUrl = async (url: string) => {
+      console.log('🚀 Creating session from URL:', url);
+      
+      try {
+        const { params: urlParams, errorCode } = QueryParams.getQueryParams(url);
+        
+        console.log('📋 Parsed URL params:', urlParams);
+        console.log('❌ Error code:', errorCode);
+        
+        if (errorCode) {
+          console.error('Error from URL:', errorCode);
+          router.replace('/auth?error=' + encodeURIComponent(errorCode));
+          return;
+        }
+
+        // Process the URL params the same way
+        await createSessionFromParams(urlParams);
+        
+      } catch (error) {
+        console.error('💥 Exception in createSessionFromUrl:', error);
+        console.error('Exception details:', JSON.stringify(error, null, 2));
+        router.replace('/auth?error=session_creation_failed');
+      }
+    };
+
+    // Handle the callback
+    const handleCallback = async () => {
+      hasProcessed.current = true;
+      
+      console.log('🔍 Processing auth callback...');
+      
+      // Method 1: Use route params directly (most reliable for Expo Router)
+      if (params && Object.keys(params).length > 0) {
+        console.log('✅ Using route params directly');
+        await createSessionFromParams(params);
+        return;
+      }
+      
+      // Method 2: Fallback to Linking API
+      console.log('🔍 Route params empty, trying Linking API...');
+      
+      // Try to get the URL that opened the app
+      let url = await Linking.getInitialURL();
+      console.log('🔗 Initial URL:', url);
+      
+      if (url) {
+        await createSessionFromUrl(url);
+        return;
+      }
+      
+      // Method 3: Listen for URL events (for when app is already running)
+      console.log('🔍 Setting up URL listener...');
+      const urlListener = Linking.addEventListener('url', (event) => {
+        console.log('📨 URL event received:', event.url);
+        if (event.url && event.url.includes('auth/callback')) {
+          urlListener?.remove();
+          createSessionFromUrl(event.url);
+        }
+      });
+      
+      // Give it a moment to receive URL events
+      setTimeout(() => {
+        console.log('⚠️ No URL received after waiting');
+        urlListener?.remove();
+        setShowRetry(true);
+      }, 3000);
+    };
+
+    handleCallback();
+  }, []);
+
+  // Timeout fallback - if we've processed the callback but nothing happens after 20 seconds
+  useEffect(() => {
+    if (!hasProcessed.current) return;
+    
+    const timeout = setTimeout(() => {
+      if (!hasProcessed.current) {
+        console.log('⏰ Auth callback timeout - showing retry option');
+        setShowRetry(true);
+      }
+    }, 20000); // 20 seconds to give exchange time to complete
+
+    return () => clearTimeout(timeout);
+  }, [hasProcessed.current]);
 
   const handleRetry = () => {
     console.log('User clicked Try Auto Sign-In - redirecting to sign in screen');
