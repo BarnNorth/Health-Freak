@@ -11,8 +11,11 @@
     "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "com.tommymulder.healthfreak",
-      "buildNumber": "4",
+      "buildNumber": "5",
       "supportsTablet": true,
+      "associatedDomains": [
+        "applinks:vuiaqdkbpkbcvyrzpmzv.supabase.co"
+      ],
       "infoPlist": {
         "NSCameraUsageDescription": "This app needs camera access to scan ingredient labels on food products.",
         "NSPhotoLibraryUsageDescription": "This app needs photo library access to analyze ingredient photos.",
@@ -26,6 +29,23 @@
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "vuiaqdkbpkbcvyrzpmzv.supabase.co",
+              "pathPrefix": "/auth/v1/verify"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",

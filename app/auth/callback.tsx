@@ -47,13 +47,15 @@ export default function AuthCallbackScreen() {
           }
           
           if (data.session) {
-            console.log('Code exchange successful, navigating to app');
-            // Small delay to ensure AuthContext updates
-            await new Promise(resolve => setTimeout(resolve, 500));
+            console.log('✅ Code exchange successful - Session established');
+            console.log('⏳ Waiting for AuthContext to update...');
+            // Wait longer for AuthContext to process the SIGNED_IN event
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            console.log('🚀 Navigating to main app');
             router.replace('/(tabs)');
             return;
           } else {
-            console.log('Code exchange completed but no session returned');
+            console.log('⚠️ Code exchange completed but no session returned');
             setShowRetry(true);
           }
         }
@@ -72,9 +74,11 @@ export default function AuthCallbackScreen() {
             return;
           }
 
-          console.log('Session set successfully, navigating to app');
-          // Small delay to ensure AuthContext updates
-          await new Promise(resolve => setTimeout(resolve, 500));
+          console.log('✅ Session set successfully with tokens');
+          console.log('⏳ Waiting for AuthContext to update...');
+          // Wait longer for AuthContext to process the SIGNED_IN event
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          console.log('🚀 Navigating to main app');
           router.replace('/(tabs)');
           return;
         }
@@ -83,9 +87,11 @@ export default function AuthCallbackScreen() {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         if (session && !sessionError) {
-          console.log('Found existing session, navigating to app');
-          // Small delay to ensure AuthContext updates
-          await new Promise(resolve => setTimeout(resolve, 500));
+          console.log('✅ Found existing session');
+          console.log('⏳ Waiting for AuthContext to update...');
+          // Wait longer for AuthContext to process
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          console.log('🚀 Navigating to main app');
           router.replace('/(tabs)');
           return;
         }
@@ -105,9 +111,11 @@ export default function AuthCallbackScreen() {
           }
 
           if (data.session) {
-            console.log('Token exchange successful, navigating to app');
-            // Small delay to ensure AuthContext updates
-            await new Promise(resolve => setTimeout(resolve, 500));
+            console.log('✅ Token exchange successful - Session established');
+            console.log('⏳ Waiting for AuthContext to update...');
+            // Wait longer for AuthContext to process the SIGNED_IN event
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            console.log('🚀 Navigating to main app');
             router.replace('/(tabs)');
             return;
           }

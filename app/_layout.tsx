@@ -18,14 +18,21 @@ function RootLayoutNav() {
     const inAuthGroup = segments[0] === 'auth' || segments[0] === 'email-confirmation';
     const inCallbackGroup = segments[0] === 'auth' && segments[1] === 'callback';
 
-    // Allow callback handling
-    if (inCallbackGroup) return;
+    // IMPORTANT: Allow callback route to complete its authentication flow
+    // The callback handler will navigate to the correct screen after establishing the session
+    if (inCallbackGroup) {
+      console.log('[LAYOUT] In callback route - skipping automatic redirects');
+      return;
+    }
 
+    // Redirect logic for non-callback routes
     if (!user && !inAuthGroup) {
       // Redirect to auth if not authenticated
+      console.log('[LAYOUT] No user, not in auth group - redirecting to /auth');
       router.replace('/auth');
     } else if (user && inAuthGroup) {
       // Redirect to main app if authenticated
+      console.log('[LAYOUT] User authenticated, in auth group - redirecting to /(tabs)');
       router.replace('/(tabs)');
     }
   }, [user, initializing, segments]);

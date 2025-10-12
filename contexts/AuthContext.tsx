@@ -31,31 +31,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
+  const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
+      console.log('[AUTH] Initial session check:', session ? 'Session found' : 'No session');
       if (session?.user) {
         await loadUserProfile(session.user.id, session.user.email || '');
+        setAuthReady(true);
       } else {
         setInitializing(false);
+        setAuthReady(true);
       }
     }).catch((error) => {
       console.error('[AUTH] Error getting initial session:', error);
       setInitializing(false);
+      setAuthReady(true);
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('[AUTH] Auth state changed:', event);
+        
         if (event === 'SIGNED_IN' && session?.user) {
-          console.log('[AUTH] SIGNED_IN');
-          loadUserProfile(session.user.id, session.user.email || '');
+          console.log('[AUTH] SIGNED_IN - Loading user profile for:', session.user.email);
+          // Email verification triggers SIGNED_IN
+          await loadUserProfile(session.user.id, session.user.email || '');
+          setAuthReady(true);
+          console.log('[AUTH] User profile loaded and auth ready');
         } else if (event === 'SIGNED_OUT') {
           console.log('[AUTH] SIGNED_OUT');
           setUser(null);
           setInitializing(false);
+          setAuthReady(true);
         } else if (event === 'TOKEN_REFRESHED') {
+          console.log('[AUTH] TOKEN_REFRESHED');
           // Keep existing user state on token refresh
         }
       }
