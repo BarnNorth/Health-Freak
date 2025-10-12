@@ -30,8 +30,9 @@ export interface User {
   id: string;
   email: string;
   subscription_status: 'free' | 'premium';
-  total_analyses_used: number;
-  terms_accepted: boolean;
+  total_scans_used: number;
+  stripe_customer_id?: string;
+  stripe_subscription_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -41,8 +42,21 @@ export interface IngredientCache {
   ingredient_name: string;
   status: 'generally_clean' | 'potentially_toxic';
   educational_note: string;
+  basic_note?: string; // Short version for free users
+  cached_at?: string; // When the ingredient was cached
+  expires_at?: string; // When the cache expires
   created_at: string;
   updated_at: string;
+}
+
+export interface Scan {
+  id: string;
+  user_id: string;
+  barcode?: string;
+  product_name: string;
+  scan_date: string;
+  result: any; // JSON data containing scan results
+  created_at: string;
 }
 
 export interface AnalysisHistory {
@@ -51,4 +65,48 @@ export interface AnalysisHistory {
   extracted_text: string;
   results_json: any;
   created_at: string;
+}
+
+export interface IngredientFeedback {
+  id: string;
+  user_id: string;
+  ingredient_name: string;
+  ai_classification: string;
+  user_classification?: string;
+  product_name?: string;
+  created_at: string;
+}
+
+export interface AIAccuracyTracking {
+  id: string;
+  ingredient_name: string;
+  ai_classification: string;
+  ai_confidence: number;
+  user_feedback?: string;
+  created_at: string;
+}
+
+export interface StripeCustomer {
+  id: number;
+  user_id: string;
+  customer_id: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string;
+}
+
+export interface StripeSubscription {
+  id: number;
+  customer_id: string;
+  subscription_id?: string;
+  price_id?: string;
+  current_period_start?: number;
+  current_period_end?: number;
+  cancel_at_period_end: boolean;
+  payment_method_brand?: string;
+  payment_method_last4?: string;
+  status: 'not_started' | 'incomplete' | 'incomplete_expired' | 'trialing' | 'active' | 'past_due' | 'canceled' | 'unpaid' | 'paused';
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string;
 }

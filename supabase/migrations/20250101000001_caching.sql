@@ -1,6 +1,7 @@
 -- Add caching and expiration columns to ingredients_cache table
 ALTER TABLE ingredients_cache ADD COLUMN IF NOT EXISTS cached_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE ingredients_cache ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ DEFAULT NOW() + INTERVAL '180 days';
+ALTER TABLE ingredients_cache ADD COLUMN IF NOT EXISTS basic_note TEXT;
 
 -- Create index for efficient expiry queries
 CREATE INDEX IF NOT EXISTS idx_ingredients_cache_expiry ON ingredients_cache(expires_at);
@@ -60,7 +61,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Function to get ingredients expiring soon (for background refresh)
-CREATE OR REPLACE FUNCTION get_expiring_ingredients(days_until_expiry INT DEFAULT 30)
+CREATE OR REPLACE FUNCTION get_expiring_ingredients(expiry_threshold_days INT DEFAULT 30)
 RETURNS TABLE (
   ingredient_name TEXT,
   status TEXT,
@@ -78,7 +79,7 @@ BEGIN
     EXTRACT(DAY FROM (i.expires_at - NOW()))::INT as days_until_expiry
   FROM ingredients_cache i
   WHERE i.expires_at > NOW()
-    AND i.expires_at < (NOW() + (days_until_expiry || ' days')::INTERVAL)
+    AND i.expires_at < (NOW() + (expiry_threshold_days || ' days')::INTERVAL)
   ORDER BY i.expires_at ASC;
 END;
 $$ LANGUAGE plpgsql;
@@ -128,4 +129,16 @@ COMMENT ON FUNCTION get_fresh_ingredients_batch IS 'Retrieves multiple non-expir
 COMMENT ON FUNCTION get_expiring_ingredients IS 'Lists ingredients that will expire within specified days';
 COMMENT ON FUNCTION get_cache_statistics IS 'Returns statistics about ingredient cache health';
 COMMENT ON FUNCTION cleanup_expired_ingredients IS 'Removes expired ingredients older than 7 days';
+
+-- Update existing rows to have proper expiry dates and basic notes
+UPDATE ingredients_cache 
+SET 
+  cached_at = COALESCE(cached_at, created_at),
+  expires_at = COALESCE(expires_at, created_at + INTERVAL '180 days'),
+  basic_note = CASE 
+    WHEN basic_note IS NULL AND status = 'generally_clean' THEN 'Generally recognized as safe for consumption'
+    WHEN basic_note IS NULL AND status = 'potentially_toxic' THEN 'May contain concerning compounds - upgrade for detailed explanation'
+    ELSE basic_note
+  END
+WHERE cached_at IS NULL OR expires_at IS NULL OR basic_note IS NULL;
 

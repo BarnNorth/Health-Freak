@@ -111,20 +111,7 @@ export default function HistoryScreen() {
     };
   };
 
-  if (!user) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.emptyContainer}>
-          <FileSearch size={64} color={COLORS.textSecondary} />
-          <Text style={styles.emptyTitle}>Sign In Required</Text>
-          <Text style={styles.emptyText}>
-            Please sign in to view your analysis history.
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
+  // Show loading
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -135,14 +122,36 @@ export default function HistoryScreen() {
     );
   }
 
-  if (history.length === 0 && !latestResult) {
+  // Free tier users don't have saved history
+  if (user?.subscription_status === 'free' && !latestResult) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.emptyContainer}>
           <FileSearch size={64} color={COLORS.textSecondary} />
-          <Text style={styles.emptyTitle}>No Analysis History</Text>
+          <Text style={styles.emptyTitle}>History Saved with Premium</Text>
           <Text style={styles.emptyText}>
-            Your ingredient analyses will appear here for easy reference.
+            Free tier gives you 5 scans to try the app, but history isn't saved. Upgrade to Premium for unlimited scans and full history tracking.
+          </Text>
+          <TouchableOpacity style={styles.upgradePromptButton} onPress={() => router.push('/profile')}>
+            <Text style={styles.upgradePromptButtonText}>View Premium Benefits</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.cameraButton} onPress={() => router.push('/')}>
+            <Text style={styles.cameraButtonText}>Start Scanning</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Premium users with no history
+  if (user?.subscription_status === 'premium' && history.length === 0 && !latestResult) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.emptyContainer}>
+          <FileSearch size={64} color={COLORS.textSecondary} />
+          <Text style={styles.emptyTitle}>No Analysis History Yet</Text>
+          <Text style={styles.emptyText}>
+            Your ingredient analyses will be saved here automatically. Start scanning to build your history!
           </Text>
           <TouchableOpacity style={styles.cameraButton} onPress={() => router.push('/')}>
             <Text style={styles.cameraButtonText}>Start Analyzing</Text>
@@ -214,15 +223,15 @@ export default function HistoryScreen() {
                 </View>
 
                 {/* Free User Upgrade Prompt */}
-                {!user || user.subscription_status !== 'premium' && latestResult.results.overallVerdict === 'TOXIC' && (
+                {user?.subscription_status === 'free' && latestResult && (
                   <View style={styles.upgradePrompt}>
                     <View style={styles.upgradeHeader}>
                       <Crown size={14} color={COLORS.accentYellow} />
-                      <Text style={styles.upgradeTitle}>See which ingredients are toxic?</Text>
+                      <Text style={styles.upgradeTitle}>Upgrade to save your scan history</Text>
                     </View>
                     <TouchableOpacity style={styles.upgradeButton} onPress={showPremiumUpgradePrompt}>
                       <Zap size={16} color={COLORS.white} />
-                      <Text style={styles.upgradeButtonText}>⚡ Try Premium - $10/month</Text>
+                      <Text style={styles.upgradeButtonText}>Upgrade to Premium - $10/month</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -239,18 +248,25 @@ export default function HistoryScreen() {
                 })}
               >
                 <Text style={styles.viewLatestButtonText}>View Full Results</Text>
-                <ChevronRight size={16} color={COLORS.cleanGreen} />
+                <ChevronRight size={16} color={COLORS.textPrimary} />
               </TouchableOpacity>
             </View>
           </View>
         )}
 
-        {/* Premium Notice */}
-        {user?.subscription_status !== 'premium' && (
-          <View style={styles.premiumNotice}>
-            <Text style={styles.premiumNoticeText}>
-              📈 Showing last 10 analyses. Upgrade to Premium for unlimited history, search, and export features
+        {/* Free Tier Notice */}
+        {user?.subscription_status === 'free' && latestResult && (
+          <View style={styles.freeTierNotice}>
+            <Text style={styles.freeTierNoticeTitle}>⚡ Free Tier Limits</Text>
+            <Text style={styles.freeTierNoticeText}>
+              • 5 total scans to try the app{'\n'}
+              • Full analysis during each scan{'\n'}
+              • History NOT saved{'\n\n'}
+              Upgrade to Premium for unlimited scans and full history tracking!
             </Text>
+            <TouchableOpacity style={styles.upgradeButton} onPress={() => router.push('/profile')}>
+              <Text style={styles.upgradeButtonText}>View Premium</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -318,13 +334,15 @@ export default function HistoryScreen() {
 
         {/* Educational Note & Disclaimer */}
         <View style={styles.educationalNote}>
-          <Text style={styles.educationalTitle}>About Your History</Text>
+          <Text style={styles.educationalTitle}>
+            {user?.subscription_status === 'premium' ? 'About Your History' : 'About Your Analysis'}
+          </Text>
           <Text style={styles.educationalText}>
             📚 For educational reference only. Not medical advice.
             {'\n\n'}
             {user?.subscription_status === 'premium' ? 
-              '♾️ You have unlimited analysis history.' :
-              '📊 Free accounts show last 10 analyses. Upgrade to Premium for unlimited history.'
+              '♾️ Premium: Unlimited scans with full history saved automatically.' :
+              '⚡ Free Tier: 5 scans to try the app. History not saved - upgrade to Premium for full tracking!'
             }
             {'\n\n'}🏥 Always consult healthcare professionals for dietary decisions.
           </Text>
@@ -694,7 +712,7 @@ const styles = StyleSheet.create({
   },
   viewLatestButtonText: {
     fontSize: 19,
-    color: COLORS.cleanGreen,
+    color: COLORS.textPrimary,
     fontWeight: '400',
     marginRight: 4,
     fontFamily: FONTS.terminalGrotesque,
@@ -710,5 +728,77 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontFamily: FONTS.karmaFuture,
     lineHeight: LINE_HEIGHTS.titleSmall,
+  },
+  upgradePromptButton: {
+    backgroundColor: COLORS.cleanGreen,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    marginBottom: 16,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.8,
+    shadowRadius: 0,
+    elevation: 3,
+  },
+  upgradePromptButtonText: {
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZES.bodyLarge,
+    fontWeight: '400',
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodyLarge,
+  },
+  freeTierNotice: {
+    backgroundColor: COLORS.accentYellow,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.8,
+    shadowRadius: 0,
+    elevation: 3,
+  },
+  freeTierNoticeTitle: {
+    fontSize: FONT_SIZES.titleSmall,
+    fontWeight: '400',
+    color: COLORS.textPrimary,
+    marginBottom: 12,
+    fontFamily: FONTS.karmaFuture,
+    lineHeight: LINE_HEIGHTS.titleSmall,
+  },
+  freeTierNoticeText: {
+    fontSize: FONT_SIZES.bodyMedium,
+    color: COLORS.textPrimary,
+    marginBottom: 16,
+    lineHeight: LINE_HEIGHTS.bodyLarge,
+    fontFamily: FONTS.terminalGrotesque,
+  },
+  upgradeButton: {
+    backgroundColor: COLORS.cleanGreen,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.8,
+    shadowRadius: 0,
+    elevation: 3,
+  },
+  upgradeButtonText: {
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZES.bodyLarge,
+    fontWeight: '400',
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodyLarge,
   },
 });

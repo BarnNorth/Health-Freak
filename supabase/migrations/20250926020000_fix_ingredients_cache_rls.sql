@@ -1,14 +1,14 @@
 /*
   # Fix ingredients_cache RLS policies
   
-  Allow anonymous users to insert into ingredients_cache for AI analysis caching
-  This enables the app to cache ingredient analysis results even for free users
+  Allow unauthenticated service access to ingredients_cache for AI analysis caching
+  This enables the app to cache ingredient analysis results for all users efficiently
 */
 
 -- Drop the existing restrictive policy
 DROP POLICY IF EXISTS "Only authenticated users can insert ingredients" ON ingredients_cache;
 
--- Create a new policy that allows both authenticated and anonymous users to insert
+-- Create a new policy that allows both authenticated and unauthenticated access for caching
 DROP POLICY IF EXISTS "Anyone can insert ingredients for caching" ON ingredients_cache;
 CREATE POLICY "Anyone can insert ingredients for caching"
   ON ingredients_cache

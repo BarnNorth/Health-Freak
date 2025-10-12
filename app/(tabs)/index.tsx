@@ -4,11 +4,12 @@ import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { Camera, RotateCcw, Zap, Keyboard, X, Heart, Star, Search, Apple, Carrot, Leaf } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { incrementAnalysisCount } from '@/lib/database';
+import { incrementAnalysisCount, checkUserLimits } from '@/lib/database';
 import { analyzeIngredients } from '@/services/ingredients';
 import { saveAnalysis } from '@/lib/database';
 import { analyzePhoto as analyzePhotoWithOCR, getOCRStatus } from '@/services/photoAnalysis';
 import { testOpenAIAPIKey } from '@/services/aiAnalysis';
+import { showScanLimitReachedModal } from '@/services/subscription';
 import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
 
@@ -23,7 +24,9 @@ export default function CameraScreen() {
   const [showPreview, setShowPreview] = useState(false);
   const [ocrProgress, setOcrProgress] = useState<string>('');
   const [extractedText, setExtractedText] = useState<string>('');
-  const { user, initializing } = useAuth();
+  const [scansRemaining, setScansRemaining] = useState<number | null>(null);
+  const [canScan, setCanScan] = useState(true);
+  const { user, initializing, refreshUserProfile } = useAuth();
 
   useEffect(() => {
     let isMounted = true;
@@ -43,6 +46,33 @@ export default function CameraScreen() {
       isMounted = false;
     };
   }, [user]);
+
+  // Check scan limits for Free tier users
+  useEffect(() => {
+    async function checkLimits() {
+      if (!user) return;
+
+      // Premium users have unlimited scans
+      if (user.subscription_status === 'premium') {
+        setScansRemaining(null); // null = unlimited
+        setCanScan(true);
+        return;
+      }
+
+      // Free tier: Check database for current usage
+      const limits = await checkUserLimits(user.id);
+      setScansRemaining(limits.remaining);
+      setCanScan(limits.canAnalyze);
+      
+      console.log('[SCANNER] Free tier limits:', {
+        totalUsed: limits.totalUsed,
+        remaining: limits.remaining,
+        canScan: limits.canAnalyze
+      });
+    }
+
+    checkLimits();
+  }, [user, user?.total_scans_used]); // Re-check when user or their scan count changes
 
   if (!permission) {
     return <View style={styles.container} />;
@@ -70,11 +100,23 @@ export default function CameraScreen() {
   }
 
   function openTextInput() {
+    // Check if user has reached scan limit (Free tier only)
+    if (!canScan) {
+      showScanLimitReachedModal();
+      return;
+    }
+    
     setShowTextInput(true);
   }
 
   async function takePicture() {
     try {
+      // Check if user has reached scan limit (Free tier only)
+      if (!canScan) {
+        showScanLimitReachedModal();
+        return;
+      }
+
       setIsAnalyzing(true);
       setOcrProgress('Capturing photo...');
       
@@ -163,11 +205,25 @@ export default function CameraScreen() {
         ingredients: results.ingredients
       });
       
-      // Save analysis to database only if user is signed in
-      if (user) {
-        console.log('💾 Saving analysis to database...');
+      // Increment scan count for all users (to track free tier limit)
+      await incrementAnalysisCount(user!.id);
+      
+      // Refresh user profile to update scan count across app
+      await refreshUserProfile();
+      
+      // Update scan counter UI for free users
+      if (user?.subscription_status === 'free') {
+        const updatedLimits = await checkUserLimits(user.id);
+        setScansRemaining(updatedLimits.remaining);
+        setCanScan(updatedLimits.canAnalyze);
+      }
+      
+      // Save history only for premium users
+      if (user?.subscription_status === 'premium') {
+        console.log('💾 Saving analysis to database (Premium user)...');
         await saveAnalysis(user.id, photoAnalysis.extractedText, results);
-        await incrementAnalysisCount(user.id);
+      } else {
+        console.log('ℹ️ Free tier - analysis not saved to history');
       }
       
       setOcrProgress('');
@@ -205,10 +261,22 @@ export default function CameraScreen() {
       const isPremium = user?.subscription_status === 'premium';
       const results = await analyzeIngredients(extractedText, isPremium);
       
-      // Save analysis to database only if user is signed in
-      if (user) {
+      // Increment scan count for all users (to track free tier limit)
+      await incrementAnalysisCount(user!.id);
+      
+      // Refresh user profile to update scan count across app
+      await refreshUserProfile();
+      
+      // Update scan counter UI for free users
+      if (user?.subscription_status === 'free') {
+        const updatedLimits = await checkUserLimits(user.id);
+        setScansRemaining(updatedLimits.remaining);
+        setCanScan(updatedLimits.canAnalyze);
+      }
+      
+      // Save history only for premium users
+      if (user?.subscription_status === 'premium') {
         await saveAnalysis(user.id, extractedText, results);
-        await incrementAnalysisCount(user.id);
       }
       
       // Navigate to history with latest results
@@ -250,6 +318,25 @@ export default function CameraScreen() {
       {/* Header Text */}
       <View style={styles.header}>
         <Text style={styles.title}>Health Freak</Text>
+        
+        {/* Scan Counter - Free tier only */}
+        {user?.subscription_status === 'free' && scansRemaining !== null && (
+          <View style={styles.scanCounter}>
+            <Text style={styles.scanCounterText}>
+              {scansRemaining > 0 
+                ? `⚡ ${scansRemaining} scan${scansRemaining !== 1 ? 's' : ''} remaining`
+                : '🔒 Limit reached - Upgrade to continue'
+              }
+            </Text>
+          </View>
+        )}
+        
+        {/* Premium Badge */}
+        {user?.subscription_status === 'premium' && (
+          <View style={styles.premiumBadge}>
+            <Text style={styles.premiumBadgeText}>👑 Unlimited Scans</Text>
+          </View>
+        )}
       </View>
 
       {/* Camera - Takes most of the screen */}
@@ -412,6 +499,38 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.karmaFuture,
     lineHeight: LINE_HEIGHTS.titleXL,
     width: '100%',
+  },
+  scanCounter: {
+    backgroundColor: COLORS.accentYellow,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 8,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+  },
+  scanCounterText: {
+    fontSize: FONT_SIZES.bodyMedium,
+    fontWeight: '400',
+    color: COLORS.textPrimary,
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodyMedium,
+  },
+  premiumBadge: {
+    backgroundColor: COLORS.cleanGreen,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 8,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+  },
+  premiumBadgeText: {
+    fontSize: FONT_SIZES.bodyMedium,
+    fontWeight: '400',
+    color: COLORS.textPrimary,
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodyMedium,
   },
   cameraContainer: {
     flex: 1,

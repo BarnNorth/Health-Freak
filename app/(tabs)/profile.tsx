@@ -109,7 +109,7 @@ export default function ProfileScreen() {
                 {user.subscription_status === 'premium' ? (
                   <Text style={styles.premiumStatus}>👑 Premium Member</Text>
                 ) : (
-                  <Text style={styles.freeStatus}>Free Plan - Unlimited Scans</Text>
+                  <Text style={styles.freeStatus}>⚡ Free Account - {user.total_scans_used} of 5 scans used</Text>
                 )}
               </View>
             </View>
@@ -122,28 +122,49 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Subscription Section */}
+        {/* Free Tier Upgrade Section */}
         {user.subscription_status === 'free' && (
-          <View style={styles.subscriptionCard}>
-            <View style={styles.subscriptionHeader}>
-              <Crown size={28} color={COLORS.accentYellow} />
-              <Text style={styles.subscriptionTitle}>Unlock Advanced Features</Text>
+          <View style={styles.upgradeCard}>
+            <View style={styles.upgradeHeader}>
+              <Crown size={24} color={COLORS.accentYellow} />
+              <Text style={styles.upgradeTitle}>Upgrade to Premium</Text>
             </View>
-            <Text style={styles.subscriptionDescription}>
-              Get detailed ingredient explanations and advanced features to make better food choices.
+            
+            <Text style={styles.upgradeDescription}>
+              You've used {user.total_scans_used} of your 5 free scans. Upgrade for unlimited access!
             </Text>
-            <View style={styles.benefitsList}>
-              <Text style={styles.benefit}>✓ Detailed ingredient explanations</Text>
-              <Text style={styles.benefit}>✓ Health impact information</Text>
-              <Text style={styles.benefit}>✓ Alternative product suggestions</Text>
-              <Text style={styles.benefit}>✓ Unlimited scan history with search</Text>
-              <Text style={styles.benefit}>✓ Export functionality</Text>
-              <Text style={styles.benefit}>✓ Priority support</Text>
+            
+            <View style={styles.benefitsContainer}>
+              <Text style={styles.benefitTitle}>Premium Benefits:</Text>
+              <Text style={styles.benefit}>• ♾️ Unlimited scans forever</Text>
+              <Text style={styles.benefit}>• 💾 Scan history saved automatically</Text>
+              <Text style={styles.benefit}>• 🔍 Search and filter your history</Text>
             </View>
+            
             <TouchableOpacity style={styles.upgradeButton} onPress={handleSubscribe}>
               <CreditCard size={20} color={COLORS.white} />
-              <Text style={styles.upgradeButtonText}>⚡ Upgrade for $10/month</Text>
+              <Text style={styles.upgradeButtonText}>Upgrade to Premium - $10/month</Text>
             </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Premium Status Section */}
+        {user.subscription_status === 'premium' && (
+          <View style={styles.premiumCard}>
+            <View style={styles.premiumHeader}>
+              <Crown size={24} color={COLORS.accentYellow} />
+              <Text style={styles.premiumTitle}>Premium Member</Text>
+            </View>
+            
+            <Text style={styles.premiumDescription}>
+              You have unlimited scans and full history tracking enabled.
+            </Text>
+            
+            <View style={styles.premiumFeatures}>
+              <Text style={styles.premiumFeature}>✅ Unlimited ingredient scans</Text>
+              <Text style={styles.premiumFeature}>✅ Full scan history saved</Text>
+              <Text style={styles.premiumFeature}>✅ Search and export features</Text>
+            </View>
           </View>
         )}
 
@@ -154,8 +175,8 @@ export default function ProfileScreen() {
               style={styles.menuItem} 
               onPress={showCancelSubscriptionPrompt}
             >
-              <CreditCard size={20} color={COLORS.toxicRed} />
-              <Text style={styles.cancelMenuText}>Cancel Subscription</Text>
+              <CreditCard size={20} color={COLORS.cleanGreen} />
+              <Text style={styles.menuText}>Manage Subscription</Text>
               <Text style={styles.menuArrow}>›</Text>
             </TouchableOpacity>
           )}
@@ -327,14 +348,103 @@ const styles = StyleSheet.create({
     lineHeight: LINE_HEIGHTS.bodyMedium,
     fontFamily: FONTS.terminalGrotesque,
   },
-  benefitsList: {
+  // Free Tier Upgrade Card
+  upgradeCard: {
+    backgroundColor: COLORS.background,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 20,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: COLORS.accentYellow,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.8,
+    shadowRadius: 0,
+    elevation: 3,
+  },
+  upgradeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  upgradeTitle: {
+    fontSize: FONT_SIZES.titleMedium,
+    fontWeight: '400',
+    color: COLORS.textPrimary,
+    marginLeft: 8,
+    fontFamily: FONTS.karmaFuture,
+    lineHeight: LINE_HEIGHTS.titleMedium,
+  },
+  upgradeDescription: {
+    fontSize: FONT_SIZES.bodyLarge,
+    color: COLORS.textSecondary,
+    marginBottom: 16,
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodyLarge,
+  },
+  benefitsContainer: {
     marginBottom: 20,
+  },
+  benefitTitle: {
+    fontSize: FONT_SIZES.titleSmall,
+    fontWeight: '400',
+    color: COLORS.textPrimary,
+    marginBottom: 8,
+    fontFamily: FONTS.karmaFuture,
+    lineHeight: LINE_HEIGHTS.titleSmall,
   },
   benefit: {
     fontSize: FONT_SIZES.bodyMedium,
     color: COLORS.textPrimary,
     fontWeight: '400',
-    marginBottom: 4,
+    marginBottom: 6,
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodyMedium,
+  },
+  // Premium Status Card
+  premiumCard: {
+    backgroundColor: COLORS.background,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 20,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: COLORS.cleanGreen,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.8,
+    shadowRadius: 0,
+    elevation: 3,
+  },
+  premiumHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  premiumTitle: {
+    fontSize: FONT_SIZES.titleMedium,
+    fontWeight: '400',
+    color: COLORS.textPrimary,
+    marginLeft: 8,
+    fontFamily: FONTS.karmaFuture,
+    lineHeight: LINE_HEIGHTS.titleMedium,
+  },
+  premiumDescription: {
+    fontSize: FONT_SIZES.bodyLarge,
+    color: COLORS.textSecondary,
+    marginBottom: 16,
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodyLarge,
+  },
+  premiumFeatures: {
+    marginBottom: 0,
+  },
+  premiumFeature: {
+    fontSize: FONT_SIZES.bodyMedium,
+    color: COLORS.textPrimary,
+    fontWeight: '400',
+    marginBottom: 6,
     fontFamily: FONTS.terminalGrotesque,
     lineHeight: LINE_HEIGHTS.bodyMedium,
   },

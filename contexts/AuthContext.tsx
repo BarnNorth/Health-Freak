@@ -7,8 +7,11 @@ interface User {
   id: string;
   email: string;
   subscription_status: 'free' | 'premium';
-  total_analyses_used: number;
-  terms_accepted: boolean;
+  total_scans_used: number;
+  stripe_customer_id?: string;
+  stripe_subscription_id?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface AuthContextType {
@@ -19,7 +22,6 @@ interface AuthContextType {
   signUp: (email: string, password: string) => Promise<{ requiresConfirmation: boolean; user: any }>;
   signOut: () => Promise<void>;
   resendConfirmation: (email: string) => Promise<boolean>;
-  acceptTerms: () => Promise<boolean>;
   refreshUserProfile: () => Promise<void>;
 }
 
@@ -115,8 +117,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           id: userId,
           email: email,
           subscription_status: 'free' as const,
-          total_analyses_used: 0,
-          terms_accepted: false,
+          total_scans_used: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         };
         setUser(userObj);
       }
@@ -127,8 +130,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: userId,
         email: email,
         subscription_status: 'free' as const,
-        total_analyses_used: 0,
-        terms_accepted: false,
+        total_scans_used: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
       setUser(userObj);
     } finally {
@@ -237,10 +241,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const acceptTerms = async () => {
-    // Placeholder - implement if needed
-    return true;
-  };
 
   return (
     <AuthContext.Provider value={{
@@ -251,7 +251,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUp,
       signOut,
       resendConfirmation,
-      acceptTerms,
       refreshUserProfile,
     }}>
       {children}

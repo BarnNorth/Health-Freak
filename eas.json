@@ -6,14 +6,18 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "channel": "development",
       "ios": {
-        "simulator": true
+        "simulator": false
       }
     },
     "preview": {
       "distribution": "store",
-      "developmentClient": true,
+      "developmentClient": false,
       "channel": "preview",
+      "env": {
+        "EXPO_PUBLIC_APP_URL": "healthfreak://"
+      },
       "ios": {
         "simulator": false
       },
@@ -23,6 +27,9 @@
     },
     "production": {
       "channel": "production",
+      "env": {
+        "EXPO_PUBLIC_APP_URL": "healthfreak://"
+      },
       "ios": {
         "simulator": false
       },
@@ -32,6 +39,7 @@
     }
   },
   "submit": {
+    "development": {},
     "preview": {},
     "production": {}
   }

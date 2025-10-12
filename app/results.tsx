@@ -182,16 +182,29 @@ export default function ResultsScreen() {
           </Text>
         </View>
 
-        {/* Premium Upgrade CTA */}
+        {/* Free Tier Subtle Upsell Banner */}
+        {!isPremium && (
+          <View style={styles.freeUpsellBanner}>
+            <Crown size={16} color={COLORS.accentYellow} />
+            <Text style={styles.freeUpsellText}>
+              Upgrade to Premium to save your scan history
+            </Text>
+            <TouchableOpacity style={styles.freeUpsellButton} onPress={showPremiumUpgradePrompt}>
+              <Text style={styles.freeUpsellButtonText}>Upgrade</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Premium Upgrade CTA for Toxic Results */}
         {!isPremium && analysisResult.overallVerdict === 'TOXIC' && (
           <View style={styles.upgradePrompt}>
             <View style={styles.upgradeHeader}>
               <Crown size={20} color={COLORS.accentYellow} />
-              <Text style={styles.upgradeTitle}>See which ingredients are toxic?</Text>
+              <Text style={styles.upgradeTitle}>Get unlimited scans + scan history</Text>
             </View>
             <TouchableOpacity style={styles.upgradeButton} onPress={showPremiumUpgradePrompt}>
               <Zap size={18} color={COLORS.white} />
-              <Text style={styles.upgradeButtonText}>⚡ Try Premium - $10/month</Text>
+              <Text style={styles.upgradeButtonText}>Upgrade to Premium - $10/month</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -503,6 +516,45 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontFamily: FONTS.terminalGrotesque,
     lineHeight: LINE_HEIGHTS.bodyLarge,
+  },
+  // Free Tier Subtle Upsell Banner
+  freeUpsellBanner: {
+    backgroundColor: COLORS.background,
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.accentYellow,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  freeUpsellText: {
+    flex: 1,
+    fontSize: FONT_SIZES.bodyMedium,
+    color: COLORS.textSecondary,
+    marginLeft: 8,
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodyMedium,
+  },
+  freeUpsellButton: {
+    backgroundColor: COLORS.accentYellow,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  freeUpsellButtonText: {
+    color: COLORS.textPrimary,
+    fontSize: FONT_SIZES.bodySmall,
+    fontWeight: '400',
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodySmall,
   },
   comparisonContainer: {
     backgroundColor: COLORS.background,

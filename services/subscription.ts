@@ -72,14 +72,43 @@ export async function showCancelSubscriptionPrompt(): Promise<void> {
 export async function showPremiumUpgradePrompt(): Promise<void> {
   Alert.alert(
     'Upgrade to Premium',
-    'See exactly which ingredients are toxic and why. Get detailed explanations for every ingredient.\n\n$10/month',
+    'Get unlimited scans and automatic scan history tracking.\n\n• ♾️ Unlimited ingredient scans\n• 💾 Scan history saved automatically\n• 🔍 Search and filter features\n\n$10/month',
     [
       { text: 'Maybe Later', style: 'cancel' },
       { 
-        text: 'Upgrade Now', 
-        onPress: () => {
-          // Navigate to subscription/payment flow
-          console.log('Navigate to subscription flow');
+        text: 'Upgrade to Premium - $10/month', 
+        onPress: async () => {
+          try {
+            const { startPremiumSubscription } = require('./stripe');
+            await startPremiumSubscription();
+          } catch (error) {
+            console.error('Failed to start subscription:', error);
+          }
+        }
+      }
+    ]
+  );
+}
+
+export async function showScanLimitReachedModal(): Promise<void> {
+  Alert.alert(
+    'You\'ve Used All 5 Free Scans',
+    'Upgrade to Premium for unlimited scanning and automatic scan history tracking.\n\n• ♾️ Unlimited scans forever\n• 💾 Scan history saved automatically\n• 🔍 Search and export features\n\n$10/month',
+    [
+      { text: 'Learn More', style: 'default', onPress: () => {
+        // Navigate to profile/upgrade section
+        const { router } = require('expo-router');
+        router.push('/profile');
+      }},
+      { 
+        text: 'Upgrade to Premium - $10/month', 
+        onPress: async () => {
+          try {
+            const { startPremiumSubscription } = require('./stripe');
+            await startPremiumSubscription();
+          } catch (error) {
+            console.error('Failed to start subscription:', error);
+          }
         }
       }
     ]

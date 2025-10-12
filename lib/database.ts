@@ -1,4 +1,4 @@
-import { supabase, User, IngredientCache, AnalysisHistory } from './supabase';
+import { supabase, User, IngredientCache, AnalysisHistory, Scan } from './supabase';
 
 // User management functions
 export async function createUserProfile(userId: string, email: string): Promise<User | null> {
@@ -26,8 +26,7 @@ export async function createUserProfile(userId: string, email: string): Promise<
         id: userId,
         email,
         subscription_status: 'free',
-        total_analyses_used: 0,
-        terms_accepted: false,
+        total_scans_used: 0,
       })
       .select()
       .single();
@@ -242,7 +241,7 @@ export async function getExpiringIngredients(daysUntilExpiry: number = 30): Prom
     console.log('[DATABASE] Fetching ingredients expiring within', daysUntilExpiry, 'days');
     
     const { data, error } = await supabase
-      .rpc('get_expiring_ingredients', { days_until_expiry: daysUntilExpiry });
+      .rpc('get_expiring_ingredients', { expiry_threshold_days: daysUntilExpiry });
 
     if (error) {
       console.error('[DATABASE] Error getting expiring ingredients:', error);
@@ -257,60 +256,7 @@ export async function getExpiringIngredients(daysUntilExpiry: number = 30): Prom
   }
 }
 
-/**
- * Get cache statistics for monitoring cache health
- */
-export async function getCacheStatistics(): Promise<{
-  total_cached: number;
-  fresh_ingredients: number;
-  expired_ingredients: number;
-  expiring_soon: number;
-  oldest_cached: string | null;
-  newest_cached: string | null;
-} | null> {
-  try {
-    console.log('[DATABASE] Fetching cache statistics...');
-    
-    const { data, error } = await supabase
-      .rpc('get_cache_statistics')
-      .single();
 
-    if (error) {
-      console.error('[DATABASE] Error getting cache statistics:', error);
-      return null;
-    }
-
-    console.log('[DATABASE] Cache statistics:', data);
-    return data;
-  } catch (error) {
-    console.error('[DATABASE] Exception getting cache statistics:', error);
-    return null;
-  }
-}
-
-/**
- * Clean up expired ingredients from cache (maintenance function)
- */
-export async function cleanupExpiredIngredients(): Promise<number> {
-  try {
-    console.log('[DATABASE] Cleaning up expired ingredients...');
-    
-    const { data, error } = await supabase
-      .rpc('cleanup_expired_ingredients');
-
-    if (error) {
-      console.error('[DATABASE] Error cleaning up expired ingredients:', error);
-      return 0;
-    }
-
-    const deletedCount = data || 0;
-    console.log('[DATABASE] Cleaned up', deletedCount, 'expired ingredients');
-    return deletedCount;
-  } catch (error) {
-    console.error('[DATABASE] Exception cleaning up expired ingredients:', error);
-    return 0;
-  }
-}
 
 /**
  * Helper function to generate basic note for caching
@@ -323,26 +269,10 @@ function getBasicNoteForCache(status: 'generally_clean' | 'potentially_toxic'): 
   }
 }
 
-export async function getAllIngredients(): Promise<IngredientCache[]> {
-  try {
-    const { data, error } = await supabase
-      .from('ingredients_cache')
-      .select('*')
-      .order('ingredient_name');
-
-    if (error) {
-      console.error('Error fetching all ingredients:', error);
-      return [];
-    }
-
-    return data || [];
-  } catch (error) {
-    console.error('Error fetching all ingredients:', error);
-    return [];
-  }
-}
 
 // Analysis history functions
+// Note: Only Premium users have their history saved
+// Free tier users (5 scans) do NOT save history - they only get real-time analysis
 export async function saveAnalysis(
   userId: string,
   extractedText: string,
@@ -396,6 +326,7 @@ export async function getUserAnalyses(userId: string): Promise<AnalysisHistory[]
     console.log('📚 Fetching analyses for user:', userId);
     
     // Get user profile to check subscription status
+    // Note: Free tier users don't save history, so this will always return empty for them
     const user = await getUserProfile(userId);
     const limit = user?.subscription_status === 'premium' ? undefined : 10;
     
@@ -448,13 +379,68 @@ export async function deleteAnalysis(userId: string, analysisId: string): Promis
   }
 }
 
+// Scan management functions for Premium users
+export async function addUserScan(
+  userId: string,
+  productName: string,
+  result: any,
+  barcode?: string
+): Promise<Scan | null> {
+  try {
+    console.log('💾 Adding scan for user:', userId);
+    
+    const { data, error } = await supabase
+      .rpc('add_user_scan', {
+        user_uuid: userId,
+        p_product_name: productName,
+        p_result: result,
+        p_barcode: barcode
+      });
+
+    if (error) {
+      console.error('❌ Error adding scan:', error);
+      return null;
+    }
+
+    console.log('✅ Scan added successfully:', data);
+    return data;
+  } catch (error) {
+    console.error('💥 Exception adding scan:', error);
+    return null;
+  }
+}
+
+export async function getUserScans(userId: string): Promise<Scan[]> {
+  try {
+    console.log('📚 Fetching scans for user:', userId);
+    
+    const { data, error } = await supabase
+      .from('user_scan_history')
+      .select('*');
+
+    if (error) {
+      console.error('[DATABASE] Error fetching user scans:', error);
+      return [];
+    }
+
+    console.log('[DATABASE] Found', data?.length || 0, 'scans for user');
+    return data || [];
+  } catch (error) {
+    console.error('[DATABASE] Exception fetching user scans:', error);
+    return [];
+  }
+}
+
 // Usage tracking functions
+// Note: This tracks scans for ALL users (both Free and Premium)
+// Free tier: Limited to 5 scans total
+// Premium tier: Unlimited scans
 export async function incrementAnalysisCount(userId: string): Promise<boolean> {
   try {
     // Get current count first, then increment
     const { data: user, error: fetchError } = await supabase
       .from('users')
-      .select('total_analyses_used')
+      .select('total_scans_used')
       .eq('id', userId)
       .single();
 
@@ -463,12 +449,12 @@ export async function incrementAnalysisCount(userId: string): Promise<boolean> {
       return false;
     }
 
-    const newCount = (user?.total_analyses_used || 0) + 1;
+    const newCount = (user?.total_scans_used || 0) + 1;
 
     const { error } = await supabase
       .from('users')
       .update({ 
-        total_analyses_used: newCount,
+        total_scans_used: newCount,
         updated_at: new Date().toISOString()
       })
       .eq('id', userId);
@@ -485,13 +471,39 @@ export async function incrementAnalysisCount(userId: string): Promise<boolean> {
   }
 }
 
-export async function checkUserLimits(userId: string): Promise<boolean> {
+export async function checkUserLimits(userId: string): Promise<{
+  canAnalyze: boolean;
+  totalUsed: number;
+  subscriptionStatus: string;
+  remaining: number;
+}> {
   try {
-    // All users now have unlimited analyses
-    return true;
+    console.log('[LIMITS] Checking scan limits for user:', userId);
+    
+    // Call the database function to get user analysis stats
+    const { data, error } = await supabase
+      .rpc('get_user_analysis_stats', { user_id: userId })
+      .single();
+
+    if (error) {
+      console.error('[LIMITS] Error checking user limits:', error);
+      // Default to allowing analysis on error
+      return { canAnalyze: true, totalUsed: 0, subscriptionStatus: 'free', remaining: 5 };
+    }
+
+    const result = {
+      canAnalyze: data.can_analyze,
+      totalUsed: data.total_used,
+      subscriptionStatus: data.subscription_status,
+      remaining: data.subscription_status === 'premium' ? 999 : Math.max(0, 5 - data.total_used)
+    };
+
+    console.log('[LIMITS] Scan limit check result:', result);
+    return result;
   } catch (error) {
-    console.error('Error checking user limits:', error);
-    return true; // Default to allowing analysis
+    console.error('[LIMITS] Exception checking user limits:', error);
+    // Default to allowing analysis on exception
+    return { canAnalyze: true, totalUsed: 0, subscriptionStatus: 'free', remaining: 5 };
   }
 }
 

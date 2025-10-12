@@ -48,7 +48,9 @@ export default function AuthCallbackScreen() {
           
           if (data.session) {
             console.log('Code exchange successful, navigating to app');
-            router.replace('/');
+            // Small delay to ensure AuthContext updates
+            await new Promise(resolve => setTimeout(resolve, 500));
+            router.replace('/(tabs)');
             return;
           } else {
             console.log('Code exchange completed but no session returned');
@@ -71,7 +73,9 @@ export default function AuthCallbackScreen() {
           }
 
           console.log('Session set successfully, navigating to app');
-          router.replace('/');
+          // Small delay to ensure AuthContext updates
+          await new Promise(resolve => setTimeout(resolve, 500));
+          router.replace('/(tabs)');
           return;
         }
 
@@ -80,7 +84,9 @@ export default function AuthCallbackScreen() {
         
         if (session && !sessionError) {
           console.log('Found existing session, navigating to app');
-          router.replace('/');
+          // Small delay to ensure AuthContext updates
+          await new Promise(resolve => setTimeout(resolve, 500));
+          router.replace('/(tabs)');
           return;
         }
 
@@ -100,7 +106,9 @@ export default function AuthCallbackScreen() {
 
           if (data.session) {
             console.log('Token exchange successful, navigating to app');
-            router.replace('/');
+            // Small delay to ensure AuthContext updates
+            await new Promise(resolve => setTimeout(resolve, 500));
+            router.replace('/(tabs)');
             return;
           }
         }

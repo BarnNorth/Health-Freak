@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, Linking, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, Linking, Platform, ScrollView } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Mail, ArrowLeft, RefreshCw, CheckCircle } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
@@ -116,7 +116,12 @@ export default function EmailConfirmationScreen() {
         <View style={styles.placeholder} />
       </View>
 
-      <View style={styles.content}>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.content}>
         {/* Icon */}
         <View style={styles.iconContainer}>
           <Mail size={64} color={COLORS.cleanGreen} />
@@ -128,6 +133,34 @@ export default function EmailConfirmationScreen() {
           We've sent a confirmation link to:
         </Text>
         <Text style={styles.emailText}>{email}</Text>
+
+        {/* Welcome Message */}
+        <View style={styles.welcomeContainer}>
+          <Text style={styles.welcomeTitle}>🎉 Welcome to Health Freak!</Text>
+          <Text style={styles.welcomeDescription}>
+            You now have 5 free scans to try the app and evaluate toxic ingredients in your products.
+          </Text>
+          
+          <View style={styles.benefitsContainer}>
+            <Text style={styles.benefitsTitle}>What's included in your free account:</Text>
+            <View style={styles.benefitItem}>
+              <CheckCircle size={16} color={COLORS.cleanGreen} />
+              <Text style={styles.benefitText}>5 ingredient scans to try the app</Text>
+            </View>
+            <View style={styles.benefitItem}>
+              <CheckCircle size={16} color={COLORS.cleanGreen} />
+              <Text style={styles.benefitText}>Full analysis of each product</Text>
+            </View>
+            <View style={styles.benefitItem}>
+              <CheckCircle size={16} color={COLORS.cleanGreen} />
+              <Text style={styles.benefitText}>Toxic ingredient detection</Text>
+            </View>
+          </View>
+          
+          <Text style={styles.upgradeHint}>
+            💡 Upgrade to Premium anytime for unlimited scans + scan history!
+          </Text>
+        </View>
 
         {/* Instructions */}
         <View style={styles.instructionsContainer}>
@@ -183,7 +216,8 @@ export default function EmailConfirmationScreen() {
             Make sure you entered the correct email address.
           </Text>
         </View>
-      </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -216,8 +250,14 @@ const styles = StyleSheet.create({
   placeholder: {
     width: 40,
   },
-  content: {
+  scrollView: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 32,
+  },
+  content: {
     paddingHorizontal: 24,
     paddingTop: 32,
     alignItems: 'center',
@@ -248,6 +288,71 @@ const styles = StyleSheet.create({
     color: COLORS.cleanGreen,
     textAlign: 'center',
     marginBottom: 32,
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodyMedium,
+  },
+  welcomeContainer: {
+    backgroundColor: COLORS.accentYellow,
+    padding: 20,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    marginBottom: 20,
+    width: '100%',
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.8,
+    shadowRadius: 0,
+    elevation: 3,
+  },
+  welcomeTitle: {
+    fontSize: FONT_SIZES.titleMedium,
+    fontWeight: '400',
+    color: COLORS.textPrimary,
+    marginBottom: 12,
+    textAlign: 'center',
+    fontFamily: FONTS.karmaFuture,
+    lineHeight: LINE_HEIGHTS.titleMedium,
+  },
+  welcomeDescription: {
+    fontSize: FONT_SIZES.bodyMedium,
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+    marginBottom: 16,
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodyMedium,
+  },
+  benefitsContainer: {
+    marginBottom: 16,
+  },
+  benefitsTitle: {
+    fontSize: FONT_SIZES.bodyLarge,
+    fontWeight: '400',
+    color: COLORS.textPrimary,
+    marginBottom: 12,
+    textAlign: 'center',
+    fontFamily: FONTS.karmaFuture,
+    lineHeight: LINE_HEIGHTS.bodyLarge,
+  },
+  benefitItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 8,
+  },
+  benefitText: {
+    fontSize: FONT_SIZES.bodyMedium,
+    color: COLORS.textPrimary,
+    marginLeft: 12,
+    flex: 1,
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodyMedium,
+  },
+  upgradeHint: {
+    fontSize: FONT_SIZES.bodyMedium,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    fontStyle: 'italic',
     fontFamily: FONTS.terminalGrotesque,
     lineHeight: LINE_HEIGHTS.bodyMedium,
   },

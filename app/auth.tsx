@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, Alert, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { User, Mail, Lock, ArrowLeft } from 'lucide-react-native';
+import { User, Mail, Lock } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
 
 export default function AuthScreen() {
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(true); // Default to sign up
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -57,20 +57,34 @@ export default function AuthScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <ArrowLeft size={24} color={COLORS.cleanGreen} />
-        </TouchableOpacity>
-        <Text style={styles.title}>{isSignUp ? 'Create Account' : 'Sign In'}</Text>
-        <View style={styles.placeholder} />
+        <Text style={styles.title}>Health Freak</Text>
       </View>
 
-      <View style={styles.content}>
+      <KeyboardAvoidingView 
+        style={styles.keyboardAvoid}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.content}>
         <View style={styles.iconContainer}>
           <User size={48} color={COLORS.cleanGreen} />
         </View>
 
+        <Text style={styles.mainTitle}>
+          {isSignUp ? 'Create Your Free Account' : 'Welcome Back'}
+        </Text>
+
         <Text style={styles.subtitle}>
-          {isSignUp ? 'Join our educational community' : 'Welcome back'}
+          {isSignUp 
+            ? 'Get 5 free scans to try the app'
+            : 'Sign in to continue scanning'
+          }
         </Text>
 
         <View style={styles.form}>
@@ -138,10 +152,15 @@ export default function AuthScreen() {
 
         <View style={styles.disclaimer}>
           <Text style={styles.disclaimerText}>
-            By creating an account, you agree to our Terms of Service and acknowledge that this app provides educational information only, not medical advice.
+            {isSignUp 
+              ? 'By creating an account, you agree to our Terms. For educational purposes only.'
+              : 'For educational purposes only. Not medical advice.'
+            }
           </Text>
         </View>
-      </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -152,17 +171,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   header: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 20,
     borderBottomWidth: 2,
     borderBottomColor: COLORS.border,
     backgroundColor: COLORS.background,
-  },
-  backButton: {
-    padding: 8,
   },
   title: {
     fontSize: FONT_SIZES.titleXL,
@@ -171,28 +186,43 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.karmaFuture,
     lineHeight: LINE_HEIGHTS.titleXL,
   },
-  placeholder: {
-    width: 40,
+  keyboardAvoid: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingTop: 16,
+    paddingBottom: 20,
   },
   content: {
-    flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 32,
   },
   iconContainer: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
+  },
+  mainTitle: {
+    fontSize: FONT_SIZES.titleMedium,
+    fontWeight: '400',
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+    marginBottom: 8,
+    fontFamily: FONTS.karmaFuture,
+    lineHeight: LINE_HEIGHTS.titleMedium,
   },
   subtitle: {
-    fontSize: FONT_SIZES.titleSmall,
+    fontSize: FONT_SIZES.bodyMedium,
     color: COLORS.textSecondary,
     textAlign: 'center',
-    marginBottom: 32,
-    fontFamily: FONTS.karmaFuture,
-    lineHeight: LINE_HEIGHTS.titleSmall,
+    marginBottom: 20,
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodyMedium,
   },
   form: {
-    marginBottom: 32,
+    marginBottom: 16,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -201,9 +231,9 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: COLORS.border,
     borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
   },
   input: {
     flex: 1,
@@ -214,10 +244,10 @@ const styles = StyleSheet.create({
   },
   authButton: {
     backgroundColor: COLORS.cleanGreen,
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 4,
   },
   authButtonDisabled: {
     backgroundColor: COLORS.gray,
@@ -231,7 +261,7 @@ const styles = StyleSheet.create({
   },
   switchButton: {
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 12,
   },
   switchButtonText: {
     color: COLORS.cleanGreen,
@@ -242,16 +272,17 @@ const styles = StyleSheet.create({
   },
   disclaimer: {
     backgroundColor: COLORS.accentYellow,
-    padding: 16,
+    padding: 12,
     borderRadius: 8,
     borderWidth: 2,
     borderColor: COLORS.border,
+    marginTop: 12,
   },
   disclaimerText: {
-    fontSize: FONT_SIZES.bodyMedium,
+    fontSize: FONT_SIZES.bodySmall,
     color: COLORS.textPrimary,
     textAlign: 'center',
-    lineHeight: LINE_HEIGHTS.bodyMedium,
+    lineHeight: LINE_HEIGHTS.bodySmall,
     fontFamily: FONTS.terminalGrotesque,
   },
 });
