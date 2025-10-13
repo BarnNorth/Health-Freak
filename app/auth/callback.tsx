@@ -1,301 +1,174 @@
-import React, { useEffect, useRef, useState } from 'react';
+/**
+ * Email Verification Callback Handler
+ * 
+ * Handles the redirect after email confirmation.
+ * Works with Supabase's PKCE flow for secure authentication.
+ */
+
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, SafeAreaView, TouchableOpacity } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
-import * as Linking from 'expo-linking';
 import * as QueryParams from 'expo-auth-session/build/QueryParams';
+import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
 import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
 
 export default function AuthCallbackScreen() {
-  const hasProcessed = useRef(false);
-  const [showRetry, setShowRetry] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const params = useLocalSearchParams();
-  
-  console.log('🔄 AuthCallbackScreen mounted');
-  console.log('📋 Route params:', params);
+  const url = Linking.useURL();
 
   useEffect(() => {
-    if (hasProcessed.current) {
-      console.log('Callback already processed, skipping');
+    handleAuthCallback();
+  }, []);
+  
+  // Handle URL from deep link
+  useEffect(() => {
+    if (url) {
+      processAuthUrl(url);
+    }
+  }, [url]);
+
+  const processAuthUrl = async (url: string) => {
+    try {
+      const startTime = Date.now();
+      
+      const { params, errorCode } = QueryParams.getQueryParams(url);
+      
+      if (errorCode) {
+        setError(`Authentication error: ${errorCode}`);
+        return;
+      }
+
+      const { access_token, refresh_token, code } = params;
+
+      // Handle PKCE flow (with code)
+      if (code) {
+        const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(String(code));
+        
+        if (exchangeError) {
+          setError(`Authentication failed: ${exchangeError.message}`);
+          return;
+        }
+        
+        if (data?.session) {
+          const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
+          console.log(`✅ Auth completed in ${totalTime}s`);
+          
+          await new Promise(resolve => setTimeout(resolve, 500));
+          router.replace('/(tabs)');
+          return;
+        }
+      }
+
+      // Handle implicit flow (with tokens)
+      if (access_token && refresh_token) {
+        const { data, error: sessionError } = await supabase.auth.setSession({
+          access_token: String(access_token),
+          refresh_token: String(refresh_token),
+        });
+
+        if (sessionError) {
+          setError(`Failed to create session: ${sessionError.message}`);
+          return;
+        }
+
+        if (data?.session) {
+          const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
+          console.log(`✅ Auth completed in ${totalTime}s`);
+          
+          await new Promise(resolve => setTimeout(resolve, 500));
+          router.replace('/(tabs)');
+          return;
+        }
+      }
+
+      setError('No valid authentication data received');
+    } catch (err: any) {
+      console.error('Auth error:', err);
+      setError(`Unexpected error: ${err.message}`);
+    }
+  };
+
+  const handleAuthCallback = async () => {
+    // Check if session already exists (Supabase may have handled it automatically)
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      console.log('✅ Session already exists');
+      await new Promise(resolve => setTimeout(resolve, 500));
+      router.replace('/(tabs)');
+      return;
+    }
+    
+    // Check route params
+    if (params.access_token || params.code) {
+      const urlParams = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) urlParams.append(key, String(value));
+      });
+      const url = `healthfreak://auth/callback?${urlParams.toString()}`;
+      await processAuthUrl(url);
       return;
     }
 
-    const createSessionFromParams = async (params: any) => {
-      console.log('🚀 Creating session from params:', params);
-      
-      try {
-        console.log('📋 Processing params:', params);
-        
-        // Check for error first
-        if (params.error) {
-          console.error('Error from params:', params.error);
-          router.replace('/auth?error=' + encodeURIComponent(params.error));
-          return;
-        }
+    // Try getting URL from Linking
+    const initialUrl = await Linking.getInitialURL();
+    if (initialUrl && initialUrl.includes('auth/callback')) {
+      await processAuthUrl(initialUrl);
+      return;
+    }
 
-        // For PKCE flow, we get a 'code' parameter
-        const { code, access_token, refresh_token } = params;
-
-        if (code) {
-          console.log('🔐 Found PKCE code, exchanging for session...');
-          console.log('Code value:', code);
-          
-          try {
-            console.log('⏱️ Starting exchangeCodeForSession call (15 second timeout)...');
-            
-            // Create a 15-second timeout promise
-            const timeoutPromise = new Promise((_, reject) => {
-              setTimeout(() => reject(new Error('Exchange timeout after 15 seconds')), 15000);
-            });
-            
-            // Race the exchange against the timeout
-            const result = await Promise.race([
-              supabase.auth.exchangeCodeForSession(String(code)),
-              timeoutPromise
-            ]);
-            
-            const { data, error } = result as any;
-            
-            console.log('📦 Exchange completed');
-            
-            if (error) {
-              console.error('❌ Code exchange error:', error.message);
-              router.replace('/auth?error=' + encodeURIComponent(error.message));
-              return;
-            }
-
-            if (data?.session) {
-              console.log('✅ Session created via PKCE!');
-              console.log('👤 User:', data.session.user.email);
-              console.log('⏳ Waiting 1000ms for AuthContext...');
-              await new Promise(resolve => setTimeout(resolve, 1000));
-              console.log('🚀 Navigating to /(tabs)');
-              router.replace('/(tabs)');
-              return;
-            } else {
-              console.log('⚠️ Exchange succeeded but no session');
-              setShowRetry(true);
-              return;
-            }
-          } catch (error: any) {
-            console.error('💥 Exception during PKCE exchange:', error.message);
-            setShowRetry(true);
-            return;
-          }
-        }
-
-        // For non-PKCE flow (direct tokens)
-        if (access_token && refresh_token) {
-          console.log('🔑 Found tokens, setting session...');
-          console.log('Access token present:', !!access_token);
-          console.log('Access token type:', typeof access_token);
-          console.log('Access token length:', String(access_token).length);
-          console.log('Refresh token present:', !!refresh_token);
-          console.log('Refresh token type:', typeof refresh_token);
-          console.log('Refresh token length:', String(refresh_token).length);
-          
-          try {
-            console.log('⏱️ Starting setSession call...');
-            
-            // Create a timeout promise
-            const timeoutPromise = new Promise((_, reject) => {
-              setTimeout(() => reject(new Error('SetSession timeout after 8 seconds')), 8000);
-            });
-            
-            // Race the session set against the timeout
-            const sessionResult = await Promise.race([
-              supabase.auth.setSession({
-                access_token: String(access_token),
-                refresh_token: String(refresh_token),
-              }),
-              timeoutPromise
-            ]).catch(err => {
-              console.error('💥 Promise.race caught error:', err);
-              return { data: null, error: err };
-            });
-
-            console.log('📦 Session result received');
-            console.log('Has data:', !!sessionResult.data);
-            console.log('Has error:', !!sessionResult.error);
-            console.log('Has session:', !!sessionResult.data?.session);
-
-            const { data, error } = sessionResult;
-
-            if (error) {
-              console.error('❌ Set session error:', error);
-              console.error('Error message:', error.message);
-              console.error('Error name:', error.name);
-              console.error('Full error:', JSON.stringify(error, null, 2));
-              router.replace('/auth?error=' + encodeURIComponent(error.message));
-              return;
-            }
-
-            if (data?.session) {
-              console.log('✅ Session created via tokens!');
-              console.log('👤 User:', data.session.user?.email);
-              console.log('🔑 Access token length:', data.session.access_token?.length);
-              console.log('🕒 Session expires at:', data.session.expires_at);
-              console.log('⏳ Waiting 500ms for AuthContext...');
-              await new Promise(resolve => setTimeout(resolve, 500));
-              console.log('🚀 About to navigate to /(tabs)');
-              router.replace('/(tabs)');
-              console.log('✅ Navigation command issued');
-              return;
-            } else {
-              console.log('⚠️ Token session set completed but no session returned');
-              console.log('Data object:', JSON.stringify(data, null, 2));
-              setShowRetry(true);
-              return;
-            }
-          } catch (error) {
-            console.error('💥 Caught exception during token session set:');
-            console.error('Error type:', error?.constructor?.name);
-            console.error('Error message:', error?.message);
-            console.error('Error stack:', error?.stack);
-            console.error('Full error:', JSON.stringify(error, null, 2));
-            setShowRetry(true);
-            return;
-          }
-        }
-
-        console.log('⚠️ No valid auth parameters found in URL');
-        console.log('Available params:', Object.keys(params));
-        setShowRetry(true);
-        
-      } catch (error) {
-        console.error('💥 Exception in createSessionFromUrl:', error);
-        console.error('Exception details:', JSON.stringify(error, null, 2));
-        router.replace('/auth?error=session_creation_failed');
+    // If nothing works after 5 seconds, show error
+    setTimeout(() => {
+      if (!error) {
+        setError('Authentication link did not open correctly. Please try signing in.');
       }
-    };
-
-    const createSessionFromUrl = async (url: string) => {
-      console.log('🚀 Creating session from URL:', url);
-      
-      try {
-        const { params: urlParams, errorCode } = QueryParams.getQueryParams(url);
-        
-        console.log('📋 Parsed URL params:', urlParams);
-        console.log('❌ Error code:', errorCode);
-        
-        if (errorCode) {
-          console.error('Error from URL:', errorCode);
-          router.replace('/auth?error=' + encodeURIComponent(errorCode));
-          return;
-        }
-
-        // Process the URL params the same way
-        await createSessionFromParams(urlParams);
-        
-      } catch (error) {
-        console.error('💥 Exception in createSessionFromUrl:', error);
-        console.error('Exception details:', JSON.stringify(error, null, 2));
-        router.replace('/auth?error=session_creation_failed');
-      }
-    };
-
-    // Handle the callback
-    const handleCallback = async () => {
-      hasProcessed.current = true;
-      
-      console.log('🔍 Processing auth callback...');
-      
-      // Method 1: Use route params directly (most reliable for Expo Router)
-      if (params && Object.keys(params).length > 0) {
-        console.log('✅ Using route params directly');
-        await createSessionFromParams(params);
-        return;
-      }
-      
-      // Method 2: Fallback to Linking API
-      console.log('🔍 Route params empty, trying Linking API...');
-      
-      // Try to get the URL that opened the app
-      let url = await Linking.getInitialURL();
-      console.log('🔗 Initial URL:', url);
-      
-      if (url) {
-        await createSessionFromUrl(url);
-        return;
-      }
-      
-      // Method 3: Listen for URL events (for when app is already running)
-      console.log('🔍 Setting up URL listener...');
-      const urlListener = Linking.addEventListener('url', (event) => {
-        console.log('📨 URL event received:', event.url);
-        if (event.url && event.url.includes('auth/callback')) {
-          urlListener?.remove();
-          createSessionFromUrl(event.url);
-        }
-      });
-      
-      // Give it a moment to receive URL events
-      setTimeout(() => {
-        console.log('⚠️ No URL received after waiting');
-        urlListener?.remove();
-        setShowRetry(true);
-      }, 3000);
-    };
-
-    handleCallback();
-  }, []);
-
-  // Timeout fallback - if we've processed the callback but nothing happens after 20 seconds
-  useEffect(() => {
-    if (!hasProcessed.current) return;
-    
-    const timeout = setTimeout(() => {
-      if (!hasProcessed.current) {
-        console.log('⏰ Auth callback timeout - showing retry option');
-        setShowRetry(true);
-      }
-    }, 20000); // 20 seconds to give exchange time to complete
-
-    return () => clearTimeout(timeout);
-  }, [hasProcessed.current]);
-
-  const handleRetry = () => {
-    console.log('User clicked Try Auto Sign-In - redirecting to sign in screen');
-    router.replace('/auth');
+    }, 5000);
   };
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton} 
+            onPress={() => router.replace('/auth')}
+          >
+            <ArrowLeft color={COLORS.text} size={24} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Authentication Error</Text>
+          <View style={styles.headerPlaceholder} />
+        </View>
+
+        <View style={styles.content}>
+          <Text style={styles.errorTitle}>Something went wrong</Text>
+          <Text style={styles.errorMessage}>{error}</Text>
+          
+          <TouchableOpacity 
+            style={styles.retryButton} 
+            onPress={() => router.replace('/auth')}
+          >
+            <Text style={styles.retryButtonText}>Back to Sign In</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header with back button */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.headerBackButton} onPress={() => router.replace('/auth')}>
-          <ArrowLeft size={24} color={COLORS.cleanGreen} />
-        </TouchableOpacity>
+        <View style={styles.headerPlaceholder} />
         <Text style={styles.headerTitle}>Email Confirmation</Text>
         <View style={styles.headerPlaceholder} />
       </View>
 
       <View style={styles.content}>
-        {!showRetry ? (
-          <>
-            <ActivityIndicator size="large" color={COLORS.cleanGreen} />
-            <Text style={styles.title}>Confirming your email...</Text>
-            <Text style={styles.subtitle}>Please wait while we verify your account.</Text>
-            
-            {/* Back button for loading state */}
-            <TouchableOpacity style={styles.loadingBackButton} onPress={() => router.replace('/auth')}>
-              <Text style={styles.loadingBackButtonText}>Back to Sign In</Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <>
-            <Text style={styles.title}>Email Confirmed!</Text>
-            <Text style={styles.subtitle}>Your email has been confirmed. You can now sign in to your account.</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
-              <Text style={styles.retryButtonText}>Try Auto Sign-In</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.backButton} onPress={() => router.replace('/auth')}>
-              <Text style={styles.backButtonText}>Sign In Manually</Text>
-            </TouchableOpacity>
-          </>
-        )}
+        <ActivityIndicator size="large" color={COLORS.cleanGreen} />
+        <Text style={styles.title}>Confirming your email...</Text>
+        <Text style={styles.subtitle}>Please wait a moment.</Text>
       </View>
     </SafeAreaView>
   );
@@ -311,20 +184,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 2,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
-    backgroundColor: COLORS.background,
   },
-  headerBackButton: {
+  backButton: {
     padding: 8,
   },
   headerTitle: {
-    fontSize: FONT_SIZES.titleSmall,
-    fontWeight: '400',
-    color: COLORS.textPrimary,
-    fontFamily: FONTS.karmaFuture,
-    lineHeight: LINE_HEIGHTS.titleSmall,
+    fontFamily: FONTS.bold,
+    fontSize: FONT_SIZES.lg,
+    color: COLORS.text,
   },
   headerPlaceholder: {
     width: 40,
@@ -333,71 +203,46 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    padding: 24,
   },
   title: {
-    fontSize: FONT_SIZES.titleMedium,
-    fontWeight: '400',
-    color: COLORS.textPrimary,
-    marginTop: 16,
-    marginBottom: 8,
+    fontFamily: FONTS.bold,
+    fontSize: FONT_SIZES.xl,
+    color: COLORS.text,
+    marginTop: 24,
     textAlign: 'center',
-    fontFamily: FONTS.karmaFuture,
-    lineHeight: LINE_HEIGHTS.titleMedium,
   },
   subtitle: {
-    fontSize: FONT_SIZES.bodyMedium,
+    fontFamily: FONTS.regular,
+    fontSize: FONT_SIZES.md,
     color: COLORS.textSecondary,
+    marginTop: 12,
     textAlign: 'center',
-    lineHeight: LINE_HEIGHTS.bodyMedium,
+  },
+  errorTitle: {
+    fontFamily: FONTS.bold,
+    fontSize: FONT_SIZES.xl,
+    color: COLORS.alertRed,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  errorMessage: {
+    fontFamily: FONTS.regular,
+    fontSize: FONT_SIZES.md,
+    color: COLORS.text,
     marginBottom: 32,
-    fontFamily: FONTS.terminalGrotesque,
-  },
-  loadingBackButton: {
-    marginTop: 24,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.background,
-  },
-  loadingBackButtonText: {
-    color: COLORS.textSecondary,
-    fontSize: FONT_SIZES.bodyMedium,
-    fontWeight: '400',
     textAlign: 'center',
-    fontFamily: FONTS.terminalGrotesque,
-    lineHeight: LINE_HEIGHTS.bodyMedium,
+    lineHeight: LINE_HEIGHTS.relaxed,
   },
   retryButton: {
     backgroundColor: COLORS.cleanGreen,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
     borderRadius: 8,
-    marginBottom: 12,
   },
   retryButtonText: {
-    color: COLORS.white,
-    fontSize: FONT_SIZES.bodyLarge,
-    fontWeight: '400',
-    textAlign: 'center',
-    fontFamily: FONTS.terminalGrotesque,
-    lineHeight: LINE_HEIGHTS.bodyLarge,
-  },
-  backButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: COLORS.border,
-  },
-  backButtonText: {
-    color: COLORS.textSecondary,
-    fontSize: FONT_SIZES.bodyMedium,
-    fontWeight: '400',
-    textAlign: 'center',
-    fontFamily: FONTS.terminalGrotesque,
-    lineHeight: LINE_HEIGHTS.bodyMedium,
+    fontFamily: FONTS.bold,
+    fontSize: FONT_SIZES.md,
+    color: COLORS.background,
   },
 });

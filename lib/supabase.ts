@@ -1,24 +1,31 @@
 import { createClient } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState } from 'react-native';
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import 'react-native-url-polyfill/auto';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
+// Required for web-based auth flows
+WebBrowser.maybeCompleteAuthSession();
+
 // Log Supabase configuration for debugging
 console.log('🔧 Supabase client configuration:');
 console.log('URL:', supabaseUrl);
 console.log('Anon key (first 10 chars):', supabaseAnonKey?.substring(0, 10) + '...');
-console.log('detectSessionInUrl:', false);
+console.log('detectSessionInUrl:', true);
 console.log('flowType:', 'pkce');
-
-// Simple Supabase configuration - no custom fetch needed
+console.log('storage:', 'AsyncStorage');
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
+    storage: AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false, // Disabled - doesn't work in React Native
-    flowType: 'pkce', // Use PKCE flow for better security
+    detectSessionInUrl: true, // Enable for deep link handling!
+    flowType: 'pkce',
   },
   global: {
     headers: {
@@ -30,6 +37,26 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       eventsPerSecond: 10,
     },
   },
+});
+
+// Manage session auto-refresh based on app state
+AppState.addEventListener('change', (state) => {
+  if (state === 'active') {
+    supabase.auth.startAutoRefresh();
+  } else {
+    supabase.auth.stopAutoRefresh();
+  }
+});
+
+// Set up deep link URL handling for Supabase auth
+Linking.addEventListener('url', async ({ url }) => {
+  console.log('🔗 [SUPABASE] Deep link received:', url);
+  
+  // Let Supabase handle auth URLs automatically
+  if (url.includes('auth/callback') || url.includes('access_token') || url.includes('code=')) {
+    console.log('🔐 [SUPABASE] Auth URL detected, letting Supabase handle it');
+    // Supabase's detectSessionInUrl will handle this automatically
+  }
 });
 
 // Database types

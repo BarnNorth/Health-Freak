@@ -8,17 +8,24 @@ export async function createUserProfile(userId: string, email: string): Promise<
     // Check current session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     console.log('🔐 Current session for profile creation:', session?.user?.id);
-    console.log('🔐 Session error:', sessionError);
+    
+    if (sessionError) {
+      console.error('❌ Session error:', sessionError.message);
+    }
     
     if (!session) {
-      console.error('❌ No active session found for profile creation');
+      console.error('❌ Cannot create profile without active session');
       return null;
     }
     
     if (session.user.id !== userId) {
-      console.error('❌ Session user ID does not match provided user ID for profile creation');
+      console.error('❌ Session user ID does not match provided user ID');
+      console.error(`   Session ID: ${session.user.id}, Provided ID: ${userId}`);
       return null;
     }
+    
+    console.log('[DATABASE] Inserting new user profile...');
+    const insertStart = Date.now();
     
     const { data, error } = await supabase
       .from('users')
@@ -30,41 +37,72 @@ export async function createUserProfile(userId: string, email: string): Promise<
       })
       .select()
       .single();
+    
+    const insertTime = Date.now() - insertStart;
+    console.log(`[DATABASE] Insert query completed in ${insertTime}ms`);
 
     if (error) {
-      // Handle duplicate key error gracefully
+      // Handle duplicate key error gracefully (profile already exists)
       if (error.code === '23505') {
-        console.log('✅ User profile already exists, fetching existing profile');
-        return await getUserProfile(userId);
+        console.log('✅ Profile already exists (likely created by another process)');
+        try {
+          const existingProfile = await getUserProfile(userId);
+          if (existingProfile) {
+            console.log('✅ Successfully fetched existing profile:', existingProfile.email);
+            return existingProfile;
+          } else {
+            console.error('❌ Failed to fetch existing profile after duplicate key error');
+            return null;
+          }
+        } catch (fetchError: any) {
+          console.error('❌ Exception fetching existing profile:', fetchError?.message || fetchError);
+          return null;
+        }
       }
-      console.error('❌ Error creating user profile:', error);
+      
+      // Log detailed error information for other errors
+      console.error('❌ Error creating user profile');
+      console.error(`   Error code: ${error.code || 'unknown'}`);
+      console.error(`   Error message: ${error.message || 'unknown'}`);
+      console.error(`   Error details:`, error.details || 'none');
       return null;
     }
 
     console.log('✅ User profile created successfully:', data);
     return data;
-  } catch (error) {
-    console.error('💥 Exception creating user profile:', error);
+  } catch (error: any) {
+    console.error('💥 Exception creating user profile');
+    console.error(`   Exception message: ${error?.message || 'unknown'}`);
+    console.error(`   Exception type: ${error?.constructor?.name || 'unknown'}`);
     return null;
   }
 }
 
 export async function getUserProfile(userId: string): Promise<User | null> {
   try {
+    console.log('[DATABASE] Fetching user profile for:', userId);
+    const startTime = Date.now();
+    
     const { data, error } = await supabase
       .from('users')
       .select('*')
       .eq('id', userId)
       .maybeSingle(); // Use maybeSingle() instead of single() to handle 0 rows gracefully
 
+    const queryTime = Date.now() - startTime;
+    console.log(`[DATABASE] getUserProfile query completed in ${queryTime}ms`);
+
     if (error) {
-      console.error('Error fetching user profile:', error);
+      console.error('[DATABASE] Error fetching user profile:', error);
+      console.error('[DATABASE] Error code:', error.code);
+      console.error('[DATABASE] Error message:', error.message);
       return null;
     }
 
+    console.log('[DATABASE] Profile fetch result:', data ? 'Found' : 'Not found');
     return data;
-  } catch (error) {
-    console.error('Error fetching user profile:', error);
+  } catch (error: any) {
+    console.error('[DATABASE] Exception fetching user profile:', error?.message || error);
     return null;
   }
 }

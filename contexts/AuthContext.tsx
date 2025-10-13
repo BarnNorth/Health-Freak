@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { redirectConfig } from '@/lib/config';
 import { createUserProfile, getUserProfile } from '@/lib/database';
@@ -32,14 +32,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [authReady, setAuthReady] = useState(false);
+  
+  // Track profile creation in progress to prevent race conditions
+  const creatingProfile = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       console.log('[AUTH] Initial session check:', session ? 'Session found' : 'No session');
       if (session?.user) {
-        await loadUserProfile(session.user.id, session.user.email || '');
+        // Load profile in background, don't block app startup
+        loadUserProfile(session.user.id, session.user.email || '').catch(error => {
+          console.error('[AUTH] Error loading user profile on init:', error);
+        });
         setAuthReady(true);
+        setInitializing(false);
       } else {
         setInitializing(false);
         setAuthReady(true);
@@ -57,16 +64,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (event === 'SIGNED_IN' && session?.user) {
           console.log('[AUTH] SIGNED_IN - Loading user profile for:', session.user.email);
-          try {
-            // Email verification triggers SIGNED_IN
-            await loadUserProfile(session.user.id, session.user.email || '');
-            setAuthReady(true);
-            console.log('[AUTH] User profile loaded and auth ready');
-          } catch (error) {
+          
+          // Load profile in background, don't block auth flow
+          loadUserProfile(session.user.id, session.user.email || '').catch(error => {
             console.error('[AUTH] Error loading user profile after SIGNED_IN:', error);
-            // Still set auth ready so the app can continue
-            setAuthReady(true);
-          }
+          });
+          
+          // Set auth ready immediately - don't wait for slow database
+          setAuthReady(true);
         } else if (event === 'SIGNED_OUT') {
           console.log('[AUTH] SIGNED_OUT');
           setUser(null);
@@ -121,37 +126,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadUserProfile = async (userId: string, email: string) => {
     try {
-      console.log('[AUTH] Loading user profile for:', userId);
+      // Try to get existing profile
+      let profile = await getUserProfile(userId);
       
-      // Add timeout to prevent hanging
-      const profilePromise = Promise.race([
-        (async () => {
-          // Try to get existing profile
-          let profile = await getUserProfile(userId);
+      // If profile doesn't exist, create it
+      if (!profile) {
+        // Check if another process is already creating this profile
+        if (creatingProfile.current.has(userId)) {
+          console.log('[AUTH] Another process is creating profile, waiting...');
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          profile = await getUserProfile(userId);
+        }
+        
+        // If profile still doesn't exist, create it
+        if (!profile) {
+          creatingProfile.current.add(userId);
           
-          // If profile doesn't exist, create it
-          if (!profile) {
-            console.log('[AUTH] Profile not found, creating new profile');
+          try {
             profile = await createUserProfile(userId, email);
+          } finally {
+            creatingProfile.current.delete(userId);
           }
-          
-          return profile;
-        })(),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Profile loading timeout')), 10000)
-        )
-      ]).catch(error => {
-        console.log('[AUTH] Profile load attempt timed out, but continuing...');
-        throw error;
-      });
-
-      const profile = await profilePromise;
+        }
+      }
       
       if (profile) {
-        console.log('[AUTH] Profile loaded successfully:', profile.email);
+        console.log('[AUTH] Profile loaded:', profile.email);
         setUser(profile);
       } else {
-        console.log('[AUTH] No profile returned, using fallback');
         // Fallback to basic user object
         const userObj = {
           id: userId,
@@ -164,8 +166,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(userObj);
       }
     } catch (error) {
-      console.error('[AUTH] Error loading user profile:', error);
-      // Fallback to basic user object
+      console.error('[AUTH] Error loading profile:', error);
+      // Use fallback user object
       const userObj = {
         id: userId,
         email: email,
