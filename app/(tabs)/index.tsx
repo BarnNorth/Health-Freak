@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, SafeAreaView, ActivityIndicator, TextInput, Modal, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, SafeAreaView, ActivityIndicator, TextInput, Modal, Image, Animated } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
-import { Camera, RotateCcw, Zap, Keyboard, X, Heart, Star, Search, Apple, Carrot, Leaf } from 'lucide-react-native';
+import { PinchGestureHandler, TapGestureHandler, State } from 'react-native-gesture-handler';
+import { Camera, RotateCcw, Zap, Keyboard, X, Heart, Star, Search, Apple, Carrot, Leaf, Flashlight, FlashlightOff, ZoomIn, ZoomOut } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { incrementAnalysisCount, checkUserLimits } from '@/lib/database';
@@ -9,7 +10,8 @@ import { analyzeIngredients } from '@/services/ingredients';
 import { saveAnalysis } from '@/lib/database';
 import { analyzePhoto as analyzePhotoWithOCR, getOCRStatus } from '@/services/photoAnalysis';
 import { testOpenAIAPIKey } from '@/services/aiAnalysis';
-import { showScanLimitReachedModal } from '@/services/subscription';
+import { showScanLimitReachedModal, showPremiumUpgradePrompt } from '@/services/subscription';
+import { startPremiumSubscription } from '@/services/stripe';
 import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
 
@@ -24,6 +26,14 @@ export default function CameraScreen() {
   const [showPreview, setShowPreview] = useState(false);
   const [ocrProgress, setOcrProgress] = useState<string>('');
   const [extractedText, setExtractedText] = useState<string>('');
+  
+  // New camera control states
+  const [zoom, setZoom] = useState(0);
+  const [flashMode, setFlashMode] = useState<'off' | 'on' | 'auto'>('off');
+  const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
+  const [showZoomControls, setShowZoomControls] = useState(false);
+  const baseZoom = useRef(0);
+  const lastScale = useRef(1);
   const [scansRemaining, setScansRemaining] = useState<number | null>(null);
   const [canScan, setCanScan] = useState(true);
   const { user, initializing, refreshUserProfile } = useAuth();
@@ -98,6 +108,65 @@ export default function CameraScreen() {
   function toggleCameraFacing() {
     setFacing(current => (current === 'back' ? 'front' : 'back'));
   }
+
+  // Zoom gesture handler
+  const onPinchGestureEvent = (event: any) => {
+    const scale = event.nativeEvent.scale;
+    const newZoom = Math.max(0, Math.min(1, baseZoom.current + (scale - lastScale.current) * 0.5));
+    setZoom(newZoom);
+  };
+
+  const onPinchHandlerStateChange = (event: any) => {
+    if (event.nativeEvent.state === State.BEGAN) {
+      baseZoom.current = zoom;
+      lastScale.current = 1;
+    } else if (event.nativeEvent.state === State.END) {
+      lastScale.current = 1;
+    }
+  };
+
+  // Tap to focus handler
+  const onTapGestureEvent = (event: any) => {
+    const { locationX, locationY } = event.nativeEvent;
+    setFocusPoint({ x: locationX, y: locationY });
+    
+    // Clear focus point after 2 seconds
+    setTimeout(() => {
+      setFocusPoint(null);
+    }, 2000);
+  };
+
+  // Zoom control functions
+  const adjustZoom = (delta: number) => {
+    const newZoom = Math.max(0, Math.min(1, zoom + delta));
+    setZoom(newZoom);
+  };
+
+  // Flash toggle
+  const toggleFlash = () => {
+    setFlashMode(current => {
+      switch (current) {
+        case 'off': return 'on';
+        case 'on': return 'auto';
+        case 'auto': return 'off';
+        default: return 'off';
+      }
+    });
+  };
+
+  // Handle subscription upgrade
+  const handleSubscribe = async () => {
+    try {
+      await startPremiumSubscription();
+    } catch (error) {
+      console.error('❌ Subscription checkout failed:', error);
+      Alert.alert(
+        'Checkout Failed',
+        'Unable to start the subscription process. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
 
   function openTextInput() {
     // Check if user has reached scan limit (Free tier only)
@@ -231,14 +300,28 @@ export default function CameraScreen() {
       
       console.log('✅ Analysis complete, navigating to results...');
       
-      // Navigate to history with latest results
-      router.push({
-        pathname: '/history',
-        params: { 
-          results: JSON.stringify(results),
-          extractedText: photoAnalysis.extractedText
-        }
-      });
+      // Navigate based on user subscription status
+      if (user?.subscription_status === 'premium') {
+        // Premium users: Navigate to history with latest results
+        console.log('👑 Premium user - navigating to history tab');
+        router.push({
+          pathname: '/history',
+          params: { 
+            results: JSON.stringify(results),
+            extractedText: photoAnalysis.extractedText
+          }
+        });
+      } else {
+        // Free users: Navigate directly to results screen
+        console.log('🆓 Free user - navigating directly to results screen');
+        router.push({
+          pathname: '/results',
+          params: { 
+            results: JSON.stringify(results),
+            extractedText: photoAnalysis.extractedText
+          }
+        });
+      }
       
     } catch (error) {
       console.error('💥 Analysis Error:', error);
@@ -324,10 +407,18 @@ export default function CameraScreen() {
           <View style={styles.scanCounter}>
             <Text style={styles.scanCounterText}>
               {scansRemaining > 0 
-                ? `⚡ ${scansRemaining} scan${scansRemaining !== 1 ? 's' : ''} remaining`
-                : '🔒 Limit reached - Upgrade to continue'
+                ? `📷 ${scansRemaining} scan${scansRemaining !== 1 ? 's' : ''} remaining`
+                : '🔒 Scan limit reached'
               }
             </Text>
+            {scansRemaining === 0 && (
+              <TouchableOpacity 
+                style={styles.upgradeButtonSmall} 
+                onPress={handleSubscribe}
+              >
+                <Text style={styles.upgradeButtonSmallText}>Upgrade Now</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
         
@@ -341,8 +432,98 @@ export default function CameraScreen() {
 
       {/* Camera - Takes most of the screen */}
       <View style={styles.cameraContainer}>
-        <CameraView ref={cameraRef} style={styles.camera} facing={facing} />
+        <PinchGestureHandler
+          onGestureEvent={onPinchGestureEvent}
+          onHandlerStateChange={onPinchHandlerStateChange}
+        >
+          <TapGestureHandler onHandlerStateChange={onTapGestureEvent}>
+            <View style={styles.cameraWrapper}>
+              <CameraView 
+                ref={cameraRef} 
+                style={styles.camera} 
+                facing={facing}
+                zoom={zoom}
+                flash={flashMode}
+              />
+              
+              {/* Focus indicator */}
+              {focusPoint && (
+                <View 
+                  style={[
+                    styles.focusIndicator,
+                    {
+                      left: focusPoint.x - 30,
+                      top: focusPoint.y - 30,
+                    }
+                  ]}
+                />
+              )}
+              
+              {/* Zoom and Flash Controls Overlay */}
+              <View style={styles.cameraOverlay}>
+                <View style={styles.zoomControls}>
+                  <TouchableOpacity 
+                    style={styles.zoomButton} 
+                    onPress={() => adjustZoom(-0.2)}
+                    disabled={zoom <= 0}
+                  >
+                    <ZoomOut size={20} color={COLORS.white} />
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.zoomButton} 
+                    onPress={() => adjustZoom(0.2)}
+                    disabled={zoom >= 1}
+                  >
+                    <ZoomIn size={20} color={COLORS.white} />
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.flashButton} 
+                    onPress={toggleFlash}
+                  >
+                    {flashMode === 'off' && (
+                      <View style={styles.flashButtonContent}>
+                        <FlashlightOff size={20} color={COLORS.white} />
+                        <Text style={styles.flashButtonText}>Off</Text>
+                      </View>
+                    )}
+                    {flashMode === 'on' && (
+                      <View style={styles.flashButtonContent}>
+                        <Flashlight size={20} color={COLORS.accentYellow} />
+                        <Text style={styles.flashButtonText}>On</Text>
+                      </View>
+                    )}
+                    {flashMode === 'auto' && (
+                      <View style={styles.flashButtonContent}>
+                        <Flashlight size={20} color={COLORS.cleanGreen} />
+                        <Text style={styles.flashButtonText}>Auto</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+              
+            </View>
+          </TapGestureHandler>
+        </PinchGestureHandler>
       </View>
+
+
+      {/* Zoom Slider (when expanded) */}
+      {showZoomControls && (
+        <View style={styles.zoomSliderContainer}>
+          <Text style={styles.zoomLabel}>Zoom: {Math.round((zoom + 1) * 100)}%</Text>
+          <View style={styles.zoomSliderTrack}>
+            <View 
+              style={[
+                styles.zoomSliderThumb,
+                { left: `${zoom * 100}%` }
+              ]} 
+            />
+          </View>
+        </View>
+      )}
 
       {/* Camera Controls - Fixed at bottom */}
       <View style={styles.controls}>
@@ -503,11 +684,13 @@ const styles = StyleSheet.create({
   scanCounter: {
     backgroundColor: COLORS.accentYellow,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingVertical: 12,
     marginTop: 8,
+    marginHorizontal: 16,
+    borderRadius: 8,
     borderWidth: 2,
     borderColor: COLORS.border,
+    alignSelf: 'stretch',
   },
   scanCounterText: {
     fontSize: FONT_SIZES.bodyMedium,
@@ -515,6 +698,27 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontFamily: FONTS.terminalGrotesque,
     lineHeight: LINE_HEIGHTS.bodyMedium,
+    textAlign: 'center',
+  },
+  upgradeButtonSmall: {
+    backgroundColor: COLORS.cleanGreen,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    marginTop: 8,
+    alignItems: 'center',
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  upgradeButtonSmallText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.bodySmall,
+    fontWeight: '400',
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodySmall,
   },
   premiumBadge: {
     backgroundColor: COLORS.cleanGreen,
@@ -546,9 +750,79 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 6,
+    position: 'relative',
+  },
+  cameraWrapper: {
+    flex: 1,
+    position: 'relative',
   },
   camera: {
     flex: 1,
+  },
+  cameraOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    pointerEvents: 'box-none',
+  },
+  focusIndicator: {
+    position: 'absolute',
+    width: 60,
+    height: 60,
+    borderWidth: 2,
+    borderColor: COLORS.accentYellow,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    zIndex: 10,
+  },
+  zoomControls: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  zoomButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    padding: 12,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: COLORS.white,
+  },
+  zoomSliderContainer: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    padding: 12,
+    borderRadius: 8,
+  },
+  zoomLabel: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.bodySmall,
+    fontWeight: '400',
+    fontFamily: FONTS.terminalGrotesque,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  zoomSliderTrack: {
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 2,
+    position: 'relative',
+  },
+  zoomSliderThumb: {
+    position: 'absolute',
+    top: -6,
+    width: 16,
+    height: 16,
+    backgroundColor: COLORS.accentYellow,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: COLORS.white,
+    transform: [{ translateX: -8 }],
   },
   controls: {
     flexDirection: 'row',
@@ -574,6 +848,26 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.8,
     shadowRadius: 0,
     elevation: 3,
+  },
+  flashButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: COLORS.white,
+  },
+  flashButtonContent: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 2,
+  },
+  flashButtonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.bodySmall,
+    fontWeight: '400',
+    fontFamily: FONTS.terminalGrotesque,
+    textAlign: 'center',
   },
   textInputButton: {
     width: 56,

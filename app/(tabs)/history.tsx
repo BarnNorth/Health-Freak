@@ -338,12 +338,11 @@ export default function HistoryScreen() {
             {user?.subscription_status === 'premium' ? 'About Your History' : 'About Your Analysis'}
           </Text>
           <Text style={styles.educationalText}>
-            📚 For educational reference only. Not medical advice.
-            {'\n\n'}
             {user?.subscription_status === 'premium' ? 
               '♾️ Premium: Unlimited scans with full history saved automatically.' :
               '⚡ Free Tier: 5 scans to try the app. History not saved - upgrade to Premium for full tracking!'
             }
+            {'\n\n'}📚 For educational reference only. Not medical advice.
             {'\n\n'}🏥 Always consult healthcare professionals for dietary decisions.
           </Text>
         </View>
@@ -373,6 +372,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     fontFamily: FONTS.karmaFuture,
     lineHeight: LINE_HEIGHTS.titleLarge,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: FONT_SIZES.titleSmall,
@@ -546,6 +546,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     fontFamily: FONTS.karmaFuture,
     lineHeight: LINE_HEIGHTS.titleMedium,
+    textAlign: 'center',
   },
   emptyText: {
     fontSize: FONT_SIZES.bodySmall,

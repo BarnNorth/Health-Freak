@@ -182,29 +182,28 @@ export default function ResultsScreen() {
           </Text>
         </View>
 
-        {/* Free Tier Subtle Upsell Banner */}
+        {/* Unified Premium Upgrade Card */}
         {!isPremium && (
-          <View style={styles.freeUpsellBanner}>
-            <Crown size={16} color={COLORS.accentYellow} />
-            <Text style={styles.freeUpsellText}>
-              Upgrade to Premium to save your scan history
-            </Text>
-            <TouchableOpacity style={styles.freeUpsellButton} onPress={showPremiumUpgradePrompt}>
-              <Text style={styles.freeUpsellButtonText}>Upgrade</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Premium Upgrade CTA for Toxic Results */}
-        {!isPremium && analysisResult.overallVerdict === 'TOXIC' && (
-          <View style={styles.upgradePrompt}>
+          <View style={styles.unifiedUpgradeCard}>
             <View style={styles.upgradeHeader}>
-              <Crown size={20} color={COLORS.accentYellow} />
-              <Text style={styles.upgradeTitle}>Get unlimited scans + scan history</Text>
+              <Crown size={24} color={COLORS.accentYellow} />
+              <Text style={styles.upgradeTitle}>🔥 Upgrade to Premium</Text>
             </View>
-            <TouchableOpacity style={styles.upgradeButton} onPress={showPremiumUpgradePrompt}>
-              <Zap size={18} color={COLORS.white} />
-              <Text style={styles.upgradeButtonText}>Upgrade to Premium - $10/month</Text>
+            
+            <View style={styles.upgradeBenefits}>
+              <View style={styles.benefitRow}>
+                <Text style={styles.benefitText}>♾️ Unlimited scans forever</Text>
+              </View>
+              <View style={styles.benefitRow}>
+                <Text style={styles.benefitText}>💾 Scan history saved</Text>
+              </View>
+              <View style={styles.benefitRow}>
+                <Text style={styles.benefitText}>🔍 See which ingredients to avoid</Text>
+              </View>
+            </View>
+            
+            <TouchableOpacity style={styles.unifiedUpgradeButton} onPress={showPremiumUpgradePrompt}>
+              <Text style={styles.unifiedUpgradeButtonText}>💵 Upgrade to Premium 💵{'\n'}$10/month</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -344,28 +343,6 @@ export default function ResultsScreen() {
           </View>
         )}
 
-        {/* Free User Comparison - Compact */}
-        {!isPremium && (
-          <View style={styles.comparisonContainer}>
-            <Text style={styles.comparisonTitle}>Free vs Premium</Text>
-            <View style={styles.comparisonGrid}>
-              <View style={styles.comparisonItem}>
-                <Text style={styles.comparisonLabel}>Product verdict</Text>
-                <Text style={styles.comparisonFree}>✓ Free</Text>
-              </View>
-              <View style={styles.comparisonItem}>
-                <Text style={styles.comparisonLabel}>Ingredient details</Text>
-                <Text style={styles.comparisonPremium}>Premium</Text>
-              </View>
-            </View>
-            <TouchableOpacity 
-              style={styles.comparisonUpgradeButton}
-              onPress={showPremiumUpgradePrompt}
-            >
-              <Text style={styles.comparisonUpgradeText}>See which ingredients to avoid - $10/month</Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
         {/* Compact Disclaimer */}
         <View style={styles.compactDisclaimer}>
@@ -467,39 +444,53 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.terminalGrotesque,
     lineHeight: LINE_HEIGHTS.bodySmall,
   },
-  upgradePrompt: {
+  unifiedUpgradeCard: {
     backgroundColor: COLORS.accentYellow,
     marginTop: 16,
-    padding: 16,
+    padding: 20,
     borderRadius: 12,
     borderWidth: 2,
     borderColor: COLORS.border,
     shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.8,
+    shadowRadius: 0,
     elevation: 3,
   },
   upgradeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   upgradeTitle: {
-    fontSize: FONT_SIZES.bodySmall,
+    fontSize: FONT_SIZES.titleSmall,
     fontWeight: '400',
     color: COLORS.textPrimary,
     marginLeft: 8,
     flex: 1,
-    fontFamily: FONTS.terminalGrotesque,
-    lineHeight: LINE_HEIGHTS.bodySmall,
+    fontFamily: FONTS.karmaFuture,
+    lineHeight: LINE_HEIGHTS.titleSmall,
   },
-  upgradeButton: {
-    backgroundColor: COLORS.accentYellow,
+  upgradeBenefits: {
+    marginBottom: 16,
+  },
+  benefitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  benefitText: {
+    fontSize: FONT_SIZES.bodyMedium,
+    color: COLORS.textPrimary,
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodyMedium,
+  },
+  unifiedUpgradeButton: {
+    backgroundColor: COLORS.cleanGreen,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
+    paddingVertical: 16,
     borderRadius: 2,
     borderWidth: 2,
     borderColor: COLORS.border,
@@ -509,119 +500,13 @@ const styles = StyleSheet.create({
     shadowRadius: 0,
     elevation: 3,
   },
-  upgradeButtonText: {
+  unifiedUpgradeButtonText: {
     color: COLORS.textPrimary,
     fontSize: FONT_SIZES.bodyLarge,
     fontWeight: '400',
-    marginLeft: 8,
     fontFamily: FONTS.terminalGrotesque,
     lineHeight: LINE_HEIGHTS.bodyLarge,
-  },
-  // Free Tier Subtle Upsell Banner
-  freeUpsellBanner: {
-    backgroundColor: COLORS.background,
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.accentYellow,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  freeUpsellText: {
-    flex: 1,
-    fontSize: FONT_SIZES.bodyMedium,
-    color: COLORS.textSecondary,
-    marginLeft: 8,
-    fontFamily: FONTS.terminalGrotesque,
-    lineHeight: LINE_HEIGHTS.bodyMedium,
-  },
-  freeUpsellButton: {
-    backgroundColor: COLORS.accentYellow,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  freeUpsellButtonText: {
-    color: COLORS.textPrimary,
-    fontSize: FONT_SIZES.bodySmall,
-    fontWeight: '400',
-    fontFamily: FONTS.terminalGrotesque,
-    lineHeight: LINE_HEIGHTS.bodySmall,
-  },
-  comparisonContainer: {
-    backgroundColor: COLORS.background,
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: COLORS.border,
-  },
-  comparisonTitle: {
-    fontSize: FONT_SIZES.bodyLarge,
-    fontWeight: '400',
-    color: COLORS.textPrimary,
-    marginBottom: 8,
     textAlign: 'center',
-    fontFamily: FONTS.terminalGrotesque,
-    lineHeight: LINE_HEIGHTS.bodyLarge,
-  },
-  comparisonGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  comparisonItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  comparisonLabel: {
-    fontSize: FONT_SIZES.bodyMedium,
-    color: COLORS.textPrimary,
-    textAlign: 'center',
-    fontFamily: FONTS.terminalGrotesque,
-    lineHeight: LINE_HEIGHTS.bodyMedium,
-  },
-  comparisonFree: {
-    fontSize: FONT_SIZES.bodyMedium,
-    color: COLORS.cleanGreen,
-    fontWeight: '400',
-    fontFamily: FONTS.terminalGrotesque,
-    lineHeight: LINE_HEIGHTS.bodyMedium,
-  },
-  comparisonPremium: {
-    fontSize: FONT_SIZES.bodyMedium,
-    color: COLORS.accentYellow,
-    fontWeight: '400',
-    fontFamily: FONTS.terminalGrotesque,
-    lineHeight: LINE_HEIGHTS.bodyMedium,
-  },
-  comparisonUpgradeButton: {
-    backgroundColor: COLORS.cleanGreen,
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 8,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  comparisonUpgradeText: {
-    color: COLORS.white,
-    fontSize: FONT_SIZES.bodyLarge,
-    fontWeight: '400',
-    textAlign: 'center',
-    fontFamily: FONTS.terminalGrotesque,
-    lineHeight: LINE_HEIGHTS.bodyLarge,
   },
   premiumContent: {
     marginTop: 12,

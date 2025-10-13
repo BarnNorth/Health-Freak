@@ -109,7 +109,7 @@ export default function ProfileScreen() {
                 {user.subscription_status === 'premium' ? (
                   <Text style={styles.premiumStatus}>👑 Premium Member</Text>
                 ) : (
-                  <Text style={styles.freeStatus}>⚡ Free Account - {user.total_scans_used} of 5 scans used</Text>
+                  <Text style={styles.freeStatus}>⚡ Free Account{'\n'}{Math.min(user.total_scans_used, 5)} of 5 scans used</Text>
                 )}
               </View>
             </View>
@@ -126,24 +126,22 @@ export default function ProfileScreen() {
         {user.subscription_status === 'free' && (
           <View style={styles.upgradeCard}>
             <View style={styles.upgradeHeader}>
-              <Crown size={24} color={COLORS.accentYellow} />
-              <Text style={styles.upgradeTitle}>Upgrade to Premium</Text>
+              <Text style={styles.upgradeTitle}>🔥 Upgrade to Premium</Text>
             </View>
             
             <Text style={styles.upgradeDescription}>
-              You've used {user.total_scans_used} of your 5 free scans. Upgrade for unlimited access!
+              Upgrade for unlimited access to all premium features!
             </Text>
             
             <View style={styles.benefitsContainer}>
               <Text style={styles.benefitTitle}>Premium Benefits:</Text>
               <Text style={styles.benefit}>• ♾️ Unlimited scans forever</Text>
-              <Text style={styles.benefit}>• 💾 Scan history saved automatically</Text>
+              <Text style={styles.benefit}>• 💾 Scan history saved</Text>
               <Text style={styles.benefit}>• 🔍 Search and filter your history</Text>
             </View>
             
             <TouchableOpacity style={styles.upgradeButton} onPress={handleSubscribe}>
-              <CreditCard size={20} color={COLORS.white} />
-              <Text style={styles.upgradeButtonText}>Upgrade to Premium - $10/month</Text>
+              <Text style={styles.upgradeButtonText}>💵 Upgrade to Premium 💵{'\n'}$10/month</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -151,14 +149,9 @@ export default function ProfileScreen() {
         {/* Premium Status Section */}
         {user.subscription_status === 'premium' && (
           <View style={styles.premiumCard}>
-            <View style={styles.premiumHeader}>
-              <Crown size={24} color={COLORS.accentYellow} />
-              <Text style={styles.premiumTitle}>Premium Member</Text>
+            <View style={styles.premiumTitleBox}>
+              <Text style={styles.premiumTitle}>🤑 Membership Benefits</Text>
             </View>
-            
-            <Text style={styles.premiumDescription}>
-              You have unlimited scans and full history tracking enabled.
-            </Text>
             
             <View style={styles.premiumFeatures}>
               <Text style={styles.premiumFeature}>✅ Unlimited ingredient scans</Text>
@@ -187,13 +180,17 @@ export default function ProfileScreen() {
             <Text style={styles.menuArrow}>›</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/privacy')}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => {
+            Alert.alert('Privacy Policy', 'Privacy policy page coming soon!', [{ text: 'OK' }]);
+          }}>
             <Shield size={20} color={COLORS.textSecondary} />
             <Text style={styles.menuText}>Privacy Policy</Text>
             <Text style={styles.menuArrow}>›</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/settings')}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => {
+            Alert.alert('App Settings', 'Settings page coming soon!', [{ text: 'OK' }]);
+          }}>
             <Settings size={20} color={COLORS.textSecondary} />
             <Text style={styles.menuText}>App Settings</Text>
             <Text style={styles.menuArrow}>›</Text>
@@ -350,13 +347,13 @@ const styles = StyleSheet.create({
   },
   // Free Tier Upgrade Card
   upgradeCard: {
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.accentYellow,
     marginHorizontal: 16,
     marginBottom: 16,
     padding: 20,
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: COLORS.accentYellow,
+    borderColor: COLORS.border,
     shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.8,
@@ -372,9 +369,9 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.titleMedium,
     fontWeight: '400',
     color: COLORS.textPrimary,
-    marginLeft: 8,
     fontFamily: FONTS.karmaFuture,
     lineHeight: LINE_HEIGHTS.titleMedium,
+    includeFontPadding: false,
   },
   upgradeDescription: {
     fontSize: FONT_SIZES.bodyLarge,
@@ -404,13 +401,13 @@ const styles = StyleSheet.create({
   },
   // Premium Status Card
   premiumCard: {
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.cleanGreen,
     marginHorizontal: 16,
     marginBottom: 16,
     padding: 20,
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: COLORS.cleanGreen,
+    borderColor: COLORS.border,
     shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.8,
@@ -422,13 +419,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
+  premiumTitleBox: {
+    backgroundColor: COLORS.accentYellow,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 16,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.8,
+    shadowRadius: 0,
+    elevation: 3,
+  },
   premiumTitle: {
-    fontSize: FONT_SIZES.titleMedium,
+    fontSize: 22,
     fontWeight: '400',
     color: COLORS.textPrimary,
-    marginLeft: 8,
     fontFamily: FONTS.karmaFuture,
-    lineHeight: LINE_HEIGHTS.titleMedium,
+    lineHeight: 28,
+    includeFontPadding: false,
+    textAlign: 'center',
+    paddingTop: 2,
   },
   premiumDescription: {
     fontSize: FONT_SIZES.bodyLarge,
@@ -449,7 +462,7 @@ const styles = StyleSheet.create({
     lineHeight: LINE_HEIGHTS.bodyMedium,
   },
   upgradeButton: {
-    backgroundColor: COLORS.accentYellow,
+    backgroundColor: COLORS.cleanGreen,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -467,9 +480,9 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontSize: FONT_SIZES.bodyLarge,
     fontWeight: '400',
-    marginLeft: 8,
     fontFamily: FONTS.terminalGrotesque,
     lineHeight: LINE_HEIGHTS.bodyLarge,
+    textAlign: 'center',
   },
   menuContainer: {
     backgroundColor: COLORS.background,

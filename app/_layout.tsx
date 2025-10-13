@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts as useCustomFonts } from 'expo-font';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { COLORS } from '@/constants/colors';
@@ -75,12 +76,14 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <RootLayoutNav />
-      <StatusBar 
-        style="dark" 
-        backgroundColor={COLORS.background}
-      />
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <RootLayoutNav />
+        <StatusBar 
+          style="dark" 
+          backgroundColor={COLORS.background}
+        />
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }

@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "sdkVersion": "54.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/AppIcons/appstore.png",
     "scheme": "healthfreak",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -48,7 +48,7 @@
         }
       ],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/icon.png",
+        "foregroundImage": "./assets/AppIcons/appstore.png",
         "backgroundColor": "#FFFFFF"
       }
     },
