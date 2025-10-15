@@ -1,5 +1,8 @@
 import Constants from 'expo-constants';
 
+// Global type declaration for development mode
+declare var __DEV__: boolean;
+
 /**
  * Redact sensitive values for logging
  */
@@ -10,11 +13,6 @@ function redactApiKey(key?: string): string {
 }
 
 export interface AppConfig {
-  googleCloud: {
-    projectId?: string;
-    apiKey?: string;
-    credentialsPath?: string;
-  };
   openai: {
     apiKey?: string;
     enabled: boolean;
@@ -29,12 +27,6 @@ export interface AppConfig {
 }
 
 export const config: AppConfig = {
-  googleCloud: {
-    projectId: Constants.expoConfig?.extra?.googleCloudProjectId || process.env.EXPO_PUBLIC_GOOGLE_CLOUD_PROJECT_ID,
-    // API keys ONLY from environment variables (never from app.json)
-    apiKey: process.env.EXPO_PUBLIC_GOOGLE_CLOUD_API_KEY,
-    credentialsPath: Constants.expoConfig?.extra?.googleCloudCredentialsPath || process.env.GOOGLE_APPLICATION_CREDENTIALS,
-  },
   openai: {
     // API keys ONLY from environment variables (never from app.json)
     apiKey: process.env.EXPO_PUBLIC_OPENAI_API_KEY,
@@ -49,54 +41,40 @@ export const config: AppConfig = {
   },
 };
 
-// Debug configuration loading (with API keys redacted for security)
-console.log('🔧 Configuration Debug:', {
-  expoConfig: Constants.expoConfig?.extra,
-  openaiEnabled: Constants.expoConfig?.extra?.openaiEnabled,
-  openaiApiKey: config.openai.apiKey ? redactApiKey(config.openai.apiKey) : 'NOT SET',
-  finalConfig: {
-    openaiEnabled: config.openai.enabled,
+// Debug configuration loading (development only)
+if (__DEV__) {
+  console.log('🔧 Configuration Debug:', {
+    expoConfig: Constants.expoConfig?.extra,
+    openaiEnabled: Constants.expoConfig?.extra?.openaiEnabled,
     openaiApiKey: config.openai.apiKey ? redactApiKey(config.openai.apiKey) : 'NOT SET',
-    ocrEnabled: config.ocr.enabled,
-    ocrApiKey: config.googleCloud.apiKey ? redactApiKey(config.googleCloud.apiKey) : 'NOT SET'
-  }
-});
-
-// Debug API key format (redacted for security)
-if (config.openai.apiKey) {
-  const key = config.openai.apiKey;
-  console.log('🔑 OpenAI API Key Debug:', {
-    length: key.length,
-    redactedKey: redactApiKey(key),
-    format: key.startsWith('sk-') ? 'VALID FORMAT' : 'INVALID FORMAT',
-    hasSpaces: key.includes(' '),
-    hasNewlines: key.includes('\n'),
-    hasQuotes: key.includes('"') || key.includes("'")
+    finalConfig: {
+      openaiEnabled: config.openai.enabled,
+      openaiApiKey: config.openai.apiKey ? redactApiKey(config.openai.apiKey) : 'NOT SET',
+      ocrEnabled: config.ocr.enabled,
+      openaiModel: config.openai.model
+    }
   });
-} else {
-  console.log('❌ OpenAI API Key: NOT FOUND (set EXPO_PUBLIC_OPENAI_API_KEY environment variable)');
-}
 
-// Warn if Google Cloud API key is missing
-if (!config.googleCloud.apiKey) {
-  console.log('❌ Google Cloud API Key: NOT FOUND (set EXPO_PUBLIC_GOOGLE_CLOUD_API_KEY environment variable)');
-}
-
-export function isGoogleCloudConfigured(): boolean {
-  return !!(config.googleCloud.projectId || config.googleCloud.apiKey || config.googleCloud.credentialsPath);
-}
-
-export function getGoogleCloudConfig() {
-  if (!isGoogleCloudConfigured()) {
-    throw new Error('Google Cloud Vision API is not configured. Please set EXPO_PUBLIC_GOOGLE_CLOUD_API_KEY environment variable.');
+  // Debug API key format (redacted for security)
+  if (config.openai.apiKey) {
+    const key = config.openai.apiKey;
+    console.log('🔑 OpenAI API Key Debug:', {
+      length: key.length,
+      redactedKey: redactApiKey(key),
+      format: key.startsWith('sk-') ? 'VALID FORMAT' : 'INVALID FORMAT',
+      hasSpaces: key.includes(' '),
+      hasNewlines: key.includes('\n'),
+      hasQuotes: key.includes('"') || key.includes("'")
+    });
   }
-  
-  return {
-    projectId: config.googleCloud.projectId,
-    apiKey: config.googleCloud.apiKey,
-    credentialsPath: config.googleCloud.credentialsPath,
-  };
 }
+
+// Always warn about missing API keys (critical for functionality)
+if (!config.openai.apiKey) {
+  console.error('❌ OpenAI API Key: NOT FOUND (set EXPO_PUBLIC_OPENAI_API_KEY environment variable)');
+}
+
+// Google Cloud Vision has been completely removed - using GPT-4 Vision instead
 
 /**
  * Redirect URL configuration for auth callbacks and payment redirects
@@ -153,10 +131,12 @@ export const redirectConfig = {
   },
 };
 
-// Debug redirect configuration
-console.log('🔗 Redirect Configuration:', {
-  baseUrl: redirectConfig.baseUrl,
-  subscriptionSuccess: redirectConfig.subscriptionSuccess(),
-  subscriptionCancel: redirectConfig.subscriptionCancel(),
-  authCallback: redirectConfig.authCallback(),
-});
+// Debug redirect configuration (development only)
+if (__DEV__) {
+  console.log('🔗 Redirect Configuration:', {
+    baseUrl: redirectConfig.baseUrl,
+    subscriptionSuccess: redirectConfig.subscriptionSuccess(),
+    subscriptionCancel: redirectConfig.subscriptionCancel(),
+    authCallback: redirectConfig.authCallback(),
+  });
+}

@@ -1,25 +1,19 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system/legacy';
 import { config } from '@/lib/config';
-import { isRetryableError, isAPIDownError, retryWithFixedDelay, logDetailedError, getUserFriendlyErrorMessage } from './errorHandling';
+import { logDetailedError, getUserFriendlyErrorMessage } from './errorHandling';
+import { withRateLimit, validateImageData, validateExtractedText } from './security';
 
-// Google Cloud Vision API configuration
-const VISION_API_URL = 'https://vision.googleapis.com/v1/images:annotate';
+// OpenAI GPT-4 Vision configuration
+const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
 /**
- * Redact API keys from URLs and logs for security
+ * Redact API keys from logs for security
  */
 function redactApiKey(value?: string): string {
   if (!value) return 'NOT SET';
   if (value.length < 8) return '***REDACTED***';
   return `${value.substring(0, 4)}...***REDACTED***`;
-}
-
-/**
- * Redact API keys from URLs
- */
-function redactUrlApiKey(url: string): string {
-  return url.replace(/([?&]key=)[^&]+/, '$1***REDACTED***');
 }
 
 export interface OCRResult {
@@ -28,13 +22,154 @@ export interface OCRResult {
   error?: string;
 }
 
+/**
+ * Quick image quality check to avoid expensive OCR on bad images
+ */
+async function quickImageQualityCheck(imageUri: string): Promise<{ shouldProcess: boolean; confidence: number; error?: string }> {
+  try {
+    const thumb = await ImageManipulator.manipulateAsync(imageUri, [{ resize: { width: 100 } }], { compress: 0.1, format: ImageManipulator.SaveFormat.JPEG });
+    if (!thumb?.uri) return { shouldProcess: false, confidence: 0, error: 'Unable to load image. Try again.' };
+    if (thumb.width < 50 || thumb.height < 50) return { shouldProcess: false, confidence: 0.2, error: 'Image too small. Get closer.' };
+    return { shouldProcess: true, confidence: 0.8 };
+  } catch (e) {
+    return { shouldProcess: true, confidence: 0.5 }; // fail open
+  }
+}
+
+/**
+ * Extract ingredients from food label using GPT-4 Vision
+ * This is simpler and more accurate than Google Vision + complex parsing
+ */
+async function extractIngredientsWithGPT4Vision(base64Image: string): Promise<OCRResult> {
+  const apiKey = config.openai.apiKey;
+  if (!apiKey) {
+    return {
+      text: '',
+      confidence: 0,
+      error: 'OpenAI API key not configured',
+    };
+  }
+
+  try {
+    const prompt = `You are analyzing a food product label. Extract ONLY the ingredients list.
+
+CRITICAL RULES:
+1. Extract ONLY the actual ingredients (after "INGREDIENTS:" label)
+2. IGNORE the Nutrition Facts table completely (all % DV values, calories, etc.)
+3. IGNORE allergen warnings (CONTAINS, MAY CONTAIN sections)
+4. Return ingredients as a clean, comma-separated list
+5. Preserve sub-ingredients in parentheses exactly as shown
+6. Remove any nutrition data that got mixed in (like "4%", "12%", etc.)
+7. Extract ALL ingredients - do not skip any - look carefully for every single ingredient
+
+MARKER EXTRACTION (CRITICAL):
+8. If you see certification markers (*, †, °, etc.) printed DIRECTLY AFTER ingredient names, preserve them EXACTLY
+9. Look VERY CAREFULLY for these markers - they are often small and easy to miss
+10. Check EVERY ingredient for markers - they may appear on many or most ingredients
+11. Example: If you see "Peanut Butter*" or "Peanut Butter *" → write "Peanut Butter*"
+12. Example: If you see just "Peanut Butter" with no marker → write "Peanut Butter"
+13. Do NOT add markers that aren't visible, but do NOT skip markers that ARE visible
+14. If "Organic" or "Fairtrade" appears as a WORD before the ingredient, keep it: "Organic Honey"
+15. Pay special attention to small superscript markers (*, †) - they're important!
+
+FOOTER NOTES:
+16. At the end of ingredients, there may be a note like "*Organic" or "†Fair Trade" - INCLUDE THIS
+17. This footer note explains what the markers mean - it's important to capture it
+
+Format: Return ONLY the comma-separated ingredient list exactly as printed, including any markers and footer notes.
+
+Example with markers: "Peanut Butter*, Dark Chocolate* (Chocolate*†, Cane Sugar*†), Organic Honey, Sea Salt, *Organic †Fair Trade"
+Example without markers: "Peanut Butter, Dark Chocolate, Honey, Sea Salt"`;
+
+    const requestBody = {
+      model: 'gpt-4o-mini', // gpt-4o-mini is 60% faster and cheaper than gpt-4o for ingredient analysis
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { 
+              type: 'image_url', 
+              image_url: { 
+                url: `data:image/jpeg;base64,${base64Image}`,
+                detail: 'high' // High detail needed for accurate extraction of all ingredients
+              } 
+            }
+          ]
+        }
+      ],
+      max_tokens: 1000,
+      temperature: 0.1, // Low temperature for consistent, accurate extraction
+    };
+
+    const response = await fetch(OPENAI_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    const extractedText = result.choices?.[0]?.message?.content?.trim() || '';
+    
+    if (!extractedText || extractedText.length < 5) {
+      return {
+        text: '',
+        confidence: 0,
+        error: 'No ingredients found in image. Please ensure the image shows a clear ingredient list.',
+      };
+    }
+
+    return {
+      text: extractedText,
+      confidence: 0.95, // GPT-4 Vision is highly accurate for this task
+    };
+
+  } catch (error) {
+    logDetailedError('GPT4V_EXTRACTION', error);
+    
+    if (error instanceof Error) {
+      if (error.message.includes('API key') || error.message.includes('401') || error.message.includes('Unauthorized')) {
+        return {
+          text: '',
+          confidence: 0,
+          error: 'OpenAI API key error. Please check configuration.',
+        };
+      }
+      
+      if (error.message.includes('quota') || error.message.includes('429')) {
+        return {
+          text: '',
+          confidence: 0,
+          error: 'OpenAI API quota exceeded. Please try again later.',
+        };
+      }
+      
+      if (error.message.includes('network') || error.message.includes('fetch')) {
+        return {
+          text: '',
+          confidence: 0,
+          error: 'Network error. Please check your internet connection.',
+        };
+      }
+    }
+
+    return {
+      text: '',
+      confidence: 0,
+      error: `Failed to extract ingredients: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    };
+  }
+}
+
 export interface ImagePreprocessingOptions {
-  enhanceContrast?: boolean;
-  correctRotation?: boolean;
-  reduceNoise?: boolean;
-  adaptiveThresholding?: boolean;
-  perspectiveCorrection?: boolean;
-  deskewing?: boolean;
   resize?: {
     width?: number;
     height?: number;
@@ -49,26 +184,11 @@ export async function preprocessImage(
   options: ImagePreprocessingOptions = {}
 ): Promise<string> {
   try {
-    let processedUri = imageUri;
-    
-    // Default preprocessing options with new enhancements
-    const {
-      enhanceContrast = true,
-      correctRotation = true,
-      reduceNoise = true,
-      adaptiveThresholding = true,
-      perspectiveCorrection = true,
-      deskewing = true,
-      resize = { width: 1200, height: 1200 }
-    } = options;
+    const { resize = { width: 800, height: 800 } } = options;
 
-    console.log('🔧 Starting enhanced image preprocessing...');
-
-    // Step 1: Resize image for better OCR performance
     if (resize.width || resize.height) {
-      console.log('📏 Resizing image for optimal OCR performance...');
-      processedUri = await ImageManipulator.manipulateAsync(
-        processedUri,
+      const result = await ImageManipulator.manipulateAsync(
+        imageUri,
         [
           {
             resize: {
@@ -78,639 +198,138 @@ export async function preprocessImage(
           },
         ],
         {
-          compress: 0.8,
+          compress: 0.6, // Optimized for speed - ingredient text is still readable
           format: ImageManipulator.SaveFormat.JPEG,
         }
-      ).then(result => result.uri);
+      );
+      return result.uri;
     }
 
-    // Step 2: Apply perspective correction for angled photos
-    if (perspectiveCorrection) {
-      console.log('🔄 Applying perspective correction...');
-      // Note: expo-image-manipulator doesn't support perspective correction
-      // This would require a more advanced image processing library
-      console.log('⚠️ Perspective correction skipped - requires advanced image processing');
-    }
-
-    // Step 3: Apply deskewing for rotated images
-    if (deskewing) {
-      console.log('📐 Applying deskewing correction...');
-      // Note: expo-image-manipulator doesn't support deskewing
-      // This would require a more advanced image processing library
-      console.log('⚠️ Deskewing skipped - requires advanced image processing');
-    }
-
-    // Step 4: Apply adaptive thresholding for varying lighting conditions
-    if (adaptiveThresholding) {
-      console.log('💡 Applying adaptive thresholding...');
-      // Note: expo-image-manipulator doesn't support adaptive thresholding
-      // This would require a more advanced image processing library
-      console.log('⚠️ Adaptive thresholding skipped - requires advanced image processing');
-    }
-
-    // Step 5: Enhance contrast for better text visibility
-    if (enhanceContrast) {
-      console.log('✨ Enhancing contrast...');
-      // Note: expo-image-manipulator doesn't support brightness/contrast adjustments
-      // We'll skip this step and rely on the resize and rotation
-      console.log('⚠️ Contrast enhancement skipped - not supported by expo-image-manipulator');
-    }
-
-    // Step 6: Apply rotation correction if needed
-    if (correctRotation) {
-      console.log('🔄 Applying rotation correction...');
-      // Note: expo-image-manipulator doesn't support automatic rotation detection
-      // This would require a more advanced image processing library
-      console.log('⚠️ Rotation correction skipped - requires advanced image processing');
-    }
-
-    console.log('✅ Enhanced image preprocessing completed');
-    return processedUri;
+    return imageUri;
   } catch (error) {
-    console.warn('Enhanced image preprocessing failed, using original image:', error);
     return imageUri;
   }
 }
 
 /**
- * Extract text from image using Google Cloud Vision API REST endpoint
+ * Extract ingredients from food label image using GPT-4 Vision
+ * Includes rate limiting and input validation for security
  */
 export async function extractTextFromImage(
   imageUri: string,
+  userId?: string,
   preprocessingOptions?: ImagePreprocessingOptions
 ): Promise<OCRResult> {
-  try {
-    console.log('🖼️ Starting OCR extraction for image:', imageUri);
-    
-    // Preprocess image for better OCR results
-    const processedImageUri = await preprocessImage(imageUri, preprocessingOptions);
-    console.log('🔧 Image preprocessing completed');
-    
-    // Read image file as base64
-    const base64Image = await FileSystem.readAsStringAsync(processedImageUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    console.log('📄 Image converted to base64, length:', base64Image.length);
-
-    // Get API key from configuration
-    const apiKey = config.googleCloud.apiKey;
-    if (!apiKey) {
-      throw new Error('Google Cloud Vision API key not configured');
-    }
-
-    // Prepare request for Vision API
-    const requestBody = {
-      requests: [
-        {
-          image: {
-            content: base64Image,
-          },
-          features: [
-            {
-              type: 'TEXT_DETECTION',
-              maxResults: 1,
-            },
-            {
-              type: 'DOCUMENT_TEXT_DETECTION',
-              maxResults: 1,
-            },
-          ],
-          imageContext: {
-            languageHints: ['en'],
-          },
-        },
-      ],
-    };
-
-    console.log('📤 Sending request to Google Cloud Vision API...');
-    console.log('[OCR] Using API key:', redactApiKey(apiKey));
-
-    // Wrap API call in retry logic for better reliability
-    let result;
+  const userIdForRateLimit = userId || 'anonymous';
+  
+  // Apply rate limiting for OCR operations
+  return await withRateLimit(userIdForRateLimit, 'ocr', async () => {
     try {
-      result = await retryWithFixedDelay(async () => {
-        const apiUrl = `${VISION_API_URL}?key=${apiKey}`;
-        console.log('[OCR] Making Vision API request to:', redactUrlApiKey(apiUrl));
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('[OCR] ❌ Vision API error:', response.status, errorText);
-          const error = new Error(`Vision API error: ${response.status} - ${errorText}`);
-          // Attach status for error classification
-          (error as any).status = response.status;
-          throw error;
-        }
-
-        const jsonResult = await response.json();
-        console.log('[OCR] 📥 Received successful response from Vision API');
-        return jsonResult;
-      }, 2, 2000); // Max 2 retries with 2 second delay for OCR
-    } catch (fetchError) {
-      logDetailedError('OCR_EXTRACTION', fetchError, {
-        imageUri: processedImageUri,
-        base64Length: base64Image.length
+      // Quick quality check to avoid expensive OCR on bad images
+      const qualityCheck = await quickImageQualityCheck(imageUri);
+      if (!qualityCheck.shouldProcess) {
+        return { text: '', confidence: qualityCheck.confidence, error: qualityCheck.error };
+      }
+      
+      // Preprocess image for better OCR results
+      const processedImageUri = await preprocessImage(imageUri, {
+        ...preprocessingOptions,
+        resize: { width: 800, height: 800 },
       });
       
-      // Re-throw to be caught by outer catch block
-      throw fetchError;
-    }
-    console.log('📥 Received response from Vision API');
+      // Read image file as base64
+      const base64Image = await FileSystem.readAsStringAsync(processedImageUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
 
-    // Extract text from results
-    let extractedText = '';
-    let confidence = 0;
+      // Validate image data size and format
+      const imageValidation = validateImageData(base64Image);
+      if (!imageValidation.valid) {
+        return { 
+          text: '', 
+          confidence: 0, 
+          error: imageValidation.error 
+        };
+      }
 
-    if (result.responses && result.responses[0]) {
-      const response = result.responses[0];
+      // Use GPT-4 Vision for ingredient extraction
+      return await extractIngredientsWithGPT4Vision(base64Image);
+    } catch (error) {
+      // If it's a rate limit error, re-throw it
+      if (error instanceof Error && error.message.includes('Rate limit')) {
+        throw error;
+      }
       
-      // Try document text detection first (better for structured text)
-      if (response.fullTextAnnotation?.text) {
-        extractedText = response.fullTextAnnotation.text;
-        confidence = 0.9; // Document detection is generally more reliable
-        console.log('📄 Using document text detection');
+      // Handle other errors normally
+      logDetailedError('OCR_EXTRACTION', error, {
+        imageUri,
+        hasPreprocessingOptions: !!preprocessingOptions
+      });
+      
+      // Handle GPT-4 Vision specific errors
+      if (error instanceof Error) {
+        // OpenAI API key errors
+        if (error.message.includes('API key') || error.message.includes('unauthorized') || error.message.includes('401')) {
+          return {
+            text: '',
+            confidence: 0,
+            error: 'OpenAI API key error. Please check configuration.',
+          };
+        }
+        
+        // OpenAI quota/rate limit errors
+        if (error.message.includes('quota') || error.message.includes('limit') || error.message.includes('429')) {
+          return {
+            text: '',
+            confidence: 0,
+            error: 'OpenAI API quota exceeded. Please try again later.',
+          };
+        }
+        
+        // Network errors
+        if (error.message.includes('network') || error.message.includes('fetch')) {
+          return {
+            text: '',
+            confidence: 0,
+            error: 'Network error. Please check your internet connection.',
+          };
+        }
+        
+        // Invalid image errors
+        if (error.message.includes('invalid') || error.message.includes('image') || error.message.includes('400')) {
+          return {
+            text: '',
+            confidence: 0,
+            error: 'Invalid image format. Please try taking a new photo.',
+          };
+        }
+        
+        // File system errors
+        if (error.message.includes('file') || error.message.includes('read')) {
+          return {
+            text: '',
+            confidence: 0,
+            error: 'Unable to read image file. Please try taking a new photo.',
+          };
+        }
       }
-      // Fallback to regular text detection
-      else if (response.textAnnotations && response.textAnnotations.length > 0) {
-        extractedText = response.textAnnotations[0].description || '';
-        confidence = 0.7; // Regular text detection confidence
-        console.log('📄 Using regular text detection');
-      }
-    }
 
-    console.log('📝 Extracted text length:', extractedText.length);
-
-    // Clean and validate extracted text
-    const cleanedText = cleanExtractedText(extractedText);
-    console.log('🧹 Cleaned text:', cleanedText);
-    
-    if (!cleanedText || cleanedText.length < 5) {
-      return {
-        text: '',
-        confidence: 0,
-        error: 'No readable text found in image. Please ensure the image contains clear, readable text.',
-      };
-    }
-
-    return {
-      text: cleanedText,
-      confidence,
-    };
-
-  } catch (error) {
-    logDetailedError('OCR_EXTRACTION', error, {
-      imageUri,
-      hasPreprocessingOptions: !!preprocessingOptions
-    });
-    
-    // Check if API is down
-    if (isAPIDownError(error)) {
+      // Generic fallback error
       const friendlyMessage = getUserFriendlyErrorMessage(error);
       return {
         text: '',
         confidence: 0,
-        error: `OCR service unavailable: ${friendlyMessage}. Please check your internet connection and try again.`,
+        error: `Failed to extract ingredients: ${friendlyMessage}. Please try again with a clearer photo.`,
       };
     }
-    
-    // Check if it's a retryable error that somehow wasn't caught
-    if (isRetryableError(error)) {
-      return {
-        text: '',
-        confidence: 0,
-        error: 'OCR service is experiencing temporary issues. Please try again in a moment.',
-      };
-    }
-    
-    // Handle specific error types
-    if (error instanceof Error) {
-      // API key errors
-      if (error.message.includes('API key') || error.message.includes('unauthorized') || error.message.includes('401')) {
-        return {
-          text: '',
-          confidence: 0,
-          error: 'OCR service configuration error. Please check API credentials.',
-        };
-      }
-      
-      // Quota/rate limit errors
-      if (error.message.includes('quota') || error.message.includes('limit') || error.message.includes('429')) {
-        return {
-          text: '',
-          confidence: 0,
-          error: 'OCR service quota exceeded. Please try again later.',
-        };
-      }
-      
-      // Invalid image errors
-      if (error.message.includes('invalid') || error.message.includes('image') || error.message.includes('400')) {
-        return {
-          text: '',
-          confidence: 0,
-          error: 'Invalid image format. Please try taking a new photo.',
-        };
-      }
-      
-      // File system errors
-      if (error.message.includes('file') || error.message.includes('read')) {
-        return {
-          text: '',
-          confidence: 0,
-          error: 'Unable to read image file. Please try taking a new photo.',
-        };
-      }
-    }
-
-    // Generic fallback error
-    const friendlyMessage = getUserFriendlyErrorMessage(error);
-    return {
-      text: '',
-      confidence: 0,
-      error: `Failed to extract text from image: ${friendlyMessage}. Please try again with a clearer photo.`,
-    };
-  }
+  });
 }
 
 /**
- * Clean and normalize extracted text for ingredient parsing
+ * Complex parsing functions removed - replaced by GPT-4 Vision
+ * GPT-4 Vision handles all text extraction and cleaning automatically
  */
-function cleanExtractedText(text: string): string {
-  if (!text) return '';
-  
-  console.log('🧹 Raw OCR text:', text);
-  
-  // First, try to find the ingredients section
-  const ingredientsSection = extractIngredientsSection(text);
-  console.log('📋 Extracted ingredients section:', ingredientsSection);
-  
-  if (ingredientsSection) {
-    return ingredientsSection;
-  }
-  
-  // Fallback: clean the entire text
-  return text
-    // Remove extra whitespace and normalize
-    .replace(/\s+/g, ' ')
-    .trim()
-    // Remove common OCR artifacts
-    .replace(/[^\w\s,;:().-]/g, ' ')
-    // Fix specific common OCR errors in ingredient names only
-    .replace(/\bfl0ur\b/gi, 'flour')
-    .replace(/\bwh0le\b/gi, 'whole')
-    .replace(/\bs0y\b/gi, 'soy')
-    .replace(/\bc0rn\b/gi, 'corn')
-    .replace(/\bsugar0se\b/gi, 'sugarose')
-    // Normalize ingredient separators
-    .replace(/[,;]\s*/g, ', ')
-    // Remove multiple consecutive commas
-    .replace(/,+/g, ',')
-    // Clean up spacing around commas
-    .replace(/\s*,\s*/g, ', ')
-    .trim();
-}
 
-/**
- * Extract only the ingredients section from OCR text with enhanced edge case handling
- */
-function extractIngredientsSection(text: string): string | null {
-  console.log('🔍 Looking for ingredients section in text with enhanced detection...');
-  
-  // Enhanced stop markers for company information
-  const stopMarkers = [
-    'CONTAINS', 'MAY CONTAIN', 'ALLERGEN', 
-    'USDA', 'ORGANIC', 'CERTIFIED',
-    'PRODUCED IN', 'DISTRIBUTED', 'MANUFACTURED',
-    'NET WT', 'NET WEIGHT', 'PACKAGED BY',
-    'NUTRITION FACTS', 'SERVING SIZE', 'CALORIES', 'DAILY VALUE', 'PER SERVING',
-    'IMPORTED BY', 'MADE IN', 'ORIGIN', 'COUNTRY OF ORIGIN',
-    'Chat with', 'talk2us', 'Distributed +', 'Manufactured by', 'CERTIFIED ORGANIC BY'
-  ];
-  
-  // Enhanced patterns for ingredients sections with better edge case handling
-  const patterns = [
-    // Most flexible: captures everything between INGREDIENTS and stop markers
-    /INGREDIENTS?[:\s]*([\s\S]*?)(?=\n\n|CONTAINS:|MAY CONTAIN:|ALLERGEN INFO|DISTRIBUTED|MANUFACTURED|PRODUCED|NUTRITION|SERVING SIZE|NET WT|$)/i,
-    
-    // Standard "INGREDIENTS:" with colon
-    /ingredients?:\s*([\s\S]*?)(?=\n(?:PRODUCED IN|DISTRIBUTED|MANUFACTURED|CONTAINS:|MAY CONTAIN|ALLERGEN|CERTIFIED|Chat with|talk2us|Distributed \+|Manufactured by|CERTIFIED ORGANIC BY|NUTRITION FACTS|SERVING SIZE|CALORIES|DAILY VALUE|PER SERVING|NET WT|NET WEIGHT|PACKAGED BY|IMPORTED BY|MADE IN|ORIGIN|COUNTRY OF ORIGIN)|$)/i,
-    
-    // "INGREDIENTS" without colon (common OCR error)
-    /ingredients?\s+([\s\S]*?)(?=\n(?:PRODUCED IN|DISTRIBUTED|MANUFACTURED|CONTAINS:|MAY CONTAIN|ALLERGEN|CERTIFIED|Chat with|talk2us|Distributed \+|Manufactured by|CERTIFIED ORGANIC BY|NUTRITION FACTS|SERVING SIZE|CALORIES|DAILY VALUE|PER SERVING|NET WT|NET WEIGHT|PACKAGED BY|IMPORTED BY|MADE IN|ORIGIN|COUNTRY OF ORIGIN)|$)/i,
-    
-    // OCR error: missing "I" - "NEDENTS"
-    /nedents?:\s*([\s\S]*?)(?=\n(?:PRODUCED IN|DISTRIBUTED|MANUFACTURED|CONTAINS:|MAY CONTAIN|ALLERGEN|CERTIFIED|Chat with|talk2us|Distributed \+|Manufactured by|CERTIFIED ORGANIC BY|NUTRITION FACTS|SERVING SIZE|CALORIES|DAILY VALUE|PER SERVING|NET WT|NET WEIGHT|PACKAGED BY|IMPORTED BY|MADE IN|ORIGIN|COUNTRY OF ORIGIN)|$)/i,
-    /nedents?\s+([\s\S]*?)(?=\n(?:PRODUCED IN|DISTRIBUTED|MANUFACTURED|CONTAINS:|MAY CONTAIN|ALLERGEN|CERTIFIED|Chat with|talk2us|Distributed \+|Manufactured by|CERTIFIED ORGANIC BY|NUTRITION FACTS|SERVING SIZE|CALORIES|DAILY VALUE|PER SERVING|NET WT|NET WEIGHT|PACKAGED BY|IMPORTED BY|MADE IN|ORIGIN|COUNTRY OF ORIGIN)|$)/i,
-    
-    // Multi-language support
-    /(ingrédients?|ingredientes?|zutaten?|ingredienti?|ингредиенты?):\s*([\s\S]*?)(?=\n(?:PRODUCED IN|DISTRIBUTED|MANUFACTURED|CONTAINS:|MAY CONTAIN|ALLERGEN|CERTIFIED|Chat with|talk2us|Distributed \+|Manufactured by|CERTIFIED ORGANIC BY|NUTRITION FACTS|SERVING SIZE|CALORIES|DAILY VALUE|PER SERVING|NET WT|NET WEIGHT|PACKAGED BY|IMPORTED BY|MADE IN|ORIGIN|COUNTRY OF ORIGIN)|$)/i,
-    
-    // "CONTAINS:" pattern
-    /contains?:\s*([\s\S]*?)(?=\n(?:PRODUCED IN|DISTRIBUTED|MANUFACTURED|CONTAINS:|MAY CONTAIN|ALLERGEN|CERTIFIED|Chat with|talk2us|Distributed \+|Manufactured by|CERTIFIED ORGANIC BY|NUTRITION FACTS|SERVING SIZE|CALORIES|DAILY VALUE|PER SERVING|NET WT|NET WEIGHT|PACKAGED BY|IMPORTED BY|MADE IN|ORIGIN|COUNTRY OF ORIGIN)|$)/i,
-    
-    // "MADE WITH:" pattern
-    /made with:\s*([\s\S]*?)(?=\n(?:PRODUCED IN|DISTRIBUTED|MANUFACTURED|CONTAINS:|MAY CONTAIN|ALLERGEN|CERTIFIED|Chat with|talk2us|Distributed \+|Manufactured by|CERTIFIED ORGANIC BY|NUTRITION FACTS|SERVING SIZE|CALORIES|DAILY VALUE|PER SERVING|NET WT|NET WEIGHT|PACKAGED BY|IMPORTED BY|MADE IN|ORIGIN|COUNTRY OF ORIGIN)|$)/i,
-    
-    // Handle ingredients with bullets or dashes
-    /ingredients?:\s*([\s\S]*?)(?=\n(?:PRODUCED IN|DISTRIBUTED|MANUFACTURED|CONTAINS:|MAY CONTAIN|ALLERGEN|CERTIFIED|Chat with|talk2us|Distributed \+|Manufactured by|CERTIFIED ORGANIC BY|NUTRITION FACTS|SERVING SIZE|CALORIES|DAILY VALUE|PER SERVING|NET WT|NET WEIGHT|PACKAGED BY|IMPORTED BY|MADE IN|ORIGIN|COUNTRY OF ORIGIN)|$)/i,
-  ];
-  
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    console.log(`🔍 Testing pattern: ${pattern}`);
-    console.log(`🔍 Match result:`, match);
-    if (match && match[1]) {
-      console.log('✅ Found ingredients section with pattern:', pattern);
-      console.log('📄 Raw match content:', match[1]);
-      
-      // After finding ingredients section, truncate at first allergen/certification marker
-      let ingredientsText = match[1];
-      for (const marker of stopMarkers) {
-        const markerIndex = ingredientsText.toUpperCase().indexOf(marker);
-        if (markerIndex !== -1) {
-          console.log(`✂️ Truncating at marker: ${marker}`);
-          ingredientsText = ingredientsText.substring(0, markerIndex).trim();
-          break;
-        }
-      }
-      
-      return cleanIngredientsList(ingredientsText);
-    }
-  }
-  
-  // Enhanced multi-line pattern handling with better edge cases
-  const multiLinePatterns = [
-    // Standard multi-line with colon
-    /ingredients?:\s*([\s\S]*?)(?=\n[A-Z][A-Z\s]*:|$)/i,
-    // Multi-line without colon
-    /ingredients?\s+([\s\S]*?)(?=\n[A-Z][A-Z\s]*:|$)/i,
-    // Multi-line with OCR errors
-    /nedents?:\s*([\s\S]*?)(?=\n[A-Z][A-Z\s]*:|$)/i,
-    /nedents?\s+([\s\S]*?)(?=\n[A-Z][A-Z\s]*:|$)/i,
-    // Multi-line with bullets or dashes
-    /ingredients?:\s*([\s\S]*?)(?=\n(?:•|\-|\*|\d+\.)|$)/i,
-  ];
-  
-  for (const pattern of multiLinePatterns) {
-    const match = text.match(pattern);
-    if (match && match[1]) {
-      console.log('✅ Found multi-line ingredients section with pattern:', pattern);
-      return cleanIngredientsList(match[1]);
-    }
-  }
-  
-  // Enhanced fallback: Look for text that starts with common ingredient words
-  const lines = text.split('\n');
-  let ingredientsStart = -1;
-  
-  // Enhanced ingredient detection patterns
-  const ingredientStartPatterns = [
-    /ingredients?/i,
-    /nedents?/i, // OCR error
-    /contains?/i,
-    /made\s+with/i,
-    /^(organic|natural|wheat|flour|sugar|salt|oil|water|milk|egg|butter|cream)/i,
-    /^(enriched|bleached|unbleached|whole\s+grain|stone\s+ground)/i,
-    /^(coconut|olive|sunflower|canola|vegetable|palm)/i,
-    /^(vanilla|chocolate|cocoa|honey|molasses|syrup)/i,
-    /^(baking|soda|powder|yeast|starch|lecithin)/i,
-    /^(preservative|color|flavor|extract|essence)/i,
-  ];
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].toLowerCase().trim();
-    
-    // Check if line matches any ingredient start pattern
-    for (const pattern of ingredientStartPatterns) {
-      if (pattern.test(line)) {
-        ingredientsStart = i;
-        console.log('✅ Found ingredients starting at line:', ingredientsStart, 'with pattern:', pattern);
-        break;
-      }
-    }
-    
-    if (ingredientsStart >= 0) break;
-  }
-  
-  if (ingredientsStart >= 0) {
-    // Take more lines for better coverage (up to 5 lines)
-    const ingredientsLines = lines.slice(ingredientsStart, ingredientsStart + 5);
-    console.log('📄 Extracted lines:', ingredientsLines);
-    return cleanIngredientsList(ingredientsLines.join(' '));
-  }
-  
-  // Enhanced manual extraction with better edge case handling
-  console.log('🔍 Trying enhanced manual extraction...');
-  const textLines = text.split('\n');
-  let ingredientsLines = [];
-  let foundIngredients = false;
-  
-  // Common ingredient words for validation
-  const commonIngredients = [
-    'organic', 'natural', 'sugar', 'salt', 'oil', 'water', 'flour', 'milk', 'egg',
-    'wheat', 'corn', 'rice', 'soy', 'coconut', 'olive', 'sunflower', 'canola',
-    'vanilla', 'cocoa', 'chocolate', 'butter', 'cream', 'cheese', 'yogurt',
-    'vinegar', 'citric', 'acid', 'lecithin', 'gum', 'xanthan', 'guar'
-  ];
-  
-  // Enhanced patterns for manual extraction
-  const manualPatterns = [
-    /ingredients?:\s*/i,
-    /nedents?:\s*/i, // OCR error
-    /ingredients?\s+/i, // Without colon
-    /nedents?\s+/i, // OCR error without colon
-    /contains?:\s*/i,
-    /made\s+with:\s*/i,
-  ];
-  
-  for (let i = 0; i < textLines.length; i++) {
-    const line = textLines[i].trim();
-    
-    // Check if line matches any manual pattern
-    for (const pattern of manualPatterns) {
-      if (pattern.test(line)) {
-        foundIngredients = true;
-        console.log('✅ Found ingredients with manual pattern:', pattern);
-        
-        // Get the rest of the line after the pattern
-        const match = line.match(pattern);
-        if (match) {
-          const afterPattern = line.substring(match.index! + match[0].length).trim();
-          if (afterPattern) {
-            ingredientsLines.push(afterPattern);
-          }
-        }
-        
-        // Continue with next lines until we hit stop markers
-        for (let j = i + 1; j < textLines.length; j++) {
-          const nextLine = textLines[j].trim();
-          
-          // Stop at section headers or stop markers
-          if (nextLine.match(/^[A-Z][A-Z\s]*:/) || 
-              stopMarkers.some(marker => nextLine.toUpperCase().includes(marker))) {
-            break;
-          }
-          
-          // Skip empty lines
-          if (!nextLine || nextLine.length < 3) continue;
-          
-          // Check if line looks like ingredients
-          const hasComma = nextLine.includes(',');
-          const hasFoodWord = commonIngredients.some(word => 
-            nextLine.toLowerCase().includes(word)
-          );
-          const hasParentheses = nextLine.includes('(');
-          
-          // Continue if it looks like ingredients
-          if (hasComma || hasFoodWord || hasParentheses) {
-            ingredientsLines.push(nextLine);
-          } else {
-            // If 2+ consecutive lines don't look like ingredients, stop
-            const nextNextLine = textLines[j + 1]?.trim() || '';
-            const nextNextLooksLikeIngredient = 
-              nextNextLine.includes(',') || 
-              commonIngredients.some(w => nextNextLine.toLowerCase().includes(w));
-            
-            if (!nextNextLooksLikeIngredient) {
-              break;
-            }
-          }
-        }
-        break;
-      }
-    }
-    
-    if (foundIngredients) break;
-  }
-  
-  if (foundIngredients && ingredientsLines.length > 0) {
-    console.log('✅ Enhanced manual extraction found ingredients:', ingredientsLines);
-    const joinedText = ingredientsLines.join(' ');
-    console.log('🔗 Joined text:', joinedText);
-    return cleanIngredientsList(joinedText);
-  }
-  
-  console.log('❌ No ingredients section found');
-  return null;
-}
-
-/**
- * Clean and format ingredients list with enhanced handling for bullets, dashes, and multi-line formatting
- */
-function cleanIngredientsList(text: string): string {
-  console.log('🧽 Cleaning ingredients list with enhanced formatting:', text);
-  
-  // Step 1: Handle multi-line formatting and bullets/dashes
-  let cleaned = text
-    // Replace line breaks with spaces for better processing
-    .replace(/\n/g, ' ')
-    // Handle bullet points and dashes
-    .replace(/[•\-\*]\s*/g, ', ')
-    // Handle numbered lists
-    .replace(/\d+\.\s*/g, ', ')
-    // Handle multiple spaces
-    .replace(/\s+/g, ' ')
-    .trim();
-  
-  console.log('🔧 After bullet/dash handling:', cleaned);
-  
-  // Remove standalone percentage lines (often listed separately)
-  // But preserve percentages within parentheses
-  cleaned = cleaned
-    .replace(/,\s*\d+%\s*or\s+less\s*,/gi, ', ')
-    .replace(/,\s*less\s+than\s+\d+%\s*,/gi, ', ')
-    .replace(/,\s*\d+%\s*,/gi, ', ')
-    // Clean up any resulting double commas
-    .replace(/,\s*,/g, ',');
-  
-  console.log('🔧 After percentage removal:', cleaned);
-  
-  // Step 2: Remove company info after C/O but preserve ingredients before it
-  const coIndex = cleaned.search(/\s+C[IT]*M?\s*\/\s*O\s+/i);
-  if (coIndex > 0) {
-    cleaned = cleaned.substring(0, coIndex).trim();
-  }
-  console.log('🔧 After C/O removal:', cleaned);
-  
-  // Step 3: Remove percentage qualifiers like "CONTAINS X% OR LESS OF"
-  cleaned = cleaned.replace(/CONTAINS\s+\d+%\s+OR\s+LESS\s+OF\s+/i, '').trim();
-  console.log('🔧 After percentage qualifier removal:', cleaned);
-  
-  // Step 4: Remove non-ingredient sections - do this FIRST before other cleaning
-  cleaned = cleaned
-    // Remove allergen warnings and everything after them
-    .replace(/(CONTAINS|MAY CONTAIN|ALLERGEN INFO)[^,]*/gi, '')
-    // Remove certifications and everything after them
-    .replace(/(USDA|ORGANIC CERTIFIED|NON-GMO|VEGAN|GLUTEN FREE|DAIRY FREE)[^,]*/gi, '')
-    // Remove company info and everything after it
-    .replace(/(PRODUCED IN|DISTRIBUTED|MANUFACTURED|CERTIFIED|PACKAGED BY|IMPORTED BY|MADE IN|ORIGIN)[^,]*/gi, '')
-    // Remove nutrition facts and everything after them
-    .replace(/(NUTRITION FACTS|SERVING SIZE|CALORIES|DAILY VALUE|PER SERVING|NET WT|NET WEIGHT)[^,]*/gi, '')
-    // Remove other non-ingredient text
-    .replace(/Chat with.*$/i, '')
-    .replace(/talk2us.*$/i, '')
-    .replace(/Distributed \+.*$/i, '')
-    .replace(/Manufactured by.*$/i, '')
-    .replace(/CERTIFIED ORGANIC BY.*$/i, '')
-    .replace(/COUNTRY OF ORIGIN.*$/i, '')
-    // Remove nutrition facts and other non-ingredient text
-    .replace(/\d+\s*calories?.*$/i, '') // Remove calorie info
-    .replace(/\d+\s*%?\s*daily\s*value.*$/i, '') // Remove daily value info
-    .replace(/nutrition\s*facts?.*$/i, '') // Remove nutrition facts
-    .replace(/serving\s*size.*$/i, '') // Remove serving size
-    .replace(/per\s*serving.*$/i, '') // Remove per serving info
-    .replace(/\d+\s*mg.*$/i, '') // Remove mg amounts
-    .replace(/\d+\s*g.*$/i, '') // Remove gram amounts
-    .replace(/\d+%.*$/i, '') // Remove percentages
-    .trim();
-  
-  // Step 5: Enhanced punctuation and formatting cleanup
-  cleaned = cleaned
-    .replace(/\s+/g, ' ') // Normalize whitespace
-    .replace(/,\s*,/g, ',') // Remove double commas
-    .replace(/^,\s*/, '') // Remove leading comma
-    .replace(/,\s*$/, '') // Remove trailing comma
-    .replace(/\.\s*$/, '') // Remove trailing period
-    
-    // ONLY remove percentage qualifiers in parentheses - preserve helpful ones
-    .replace(/\s*\(\d+%?\s*(?:or\s+)?(?:less|more)?\)/gi, '') // Remove "(5% or less)"
-    .replace(/\s*\((?:less\s+than|more\s+than)\s+\d+%?\)/gi, '') // Remove "(less than 2%)"
-    
-    // Remove only bracketed allergen info, not all brackets
-    .replace(/\s*\[(?:contains|may contain|allergen)[^\]]*\]/gi, '')
-    
-    // Keep helpful parentheticals like (Vitamin C), (for color), (natural flavor)
-    // They will be preserved
-    
-    // Fix specific case: "Organic Sourdough Starter organic wheat flour" -> separate ingredients
-    .replace(/organic sourdough starter organic wheat flour/gi, 'organic sourdough starter, organic wheat flour')
-    // Fix specific common OCR errors in ingredient names only
-    .replace(/\bfl0ur\b/gi, 'flour')
-    .replace(/\bwh0le\b/gi, 'whole')
-    .replace(/\bs0y\b/gi, 'soy')
-    .replace(/\bc0rn\b/gi, 'corn')
-    .replace(/\bsugar0se\b/gi, 'sugarose')
-    // Remove duplicate ingredients (case-insensitive)
-    .split(',')
-    .map(ingredient => ingredient.trim())
-    .filter((ingredient, index, array) => 
-      array.findIndex(item => item.toLowerCase() === ingredient.toLowerCase()) === index
-    )
-    .join(', ')
-    .trim();
-  
-  console.log('✨ Enhanced cleaned ingredients list:', cleaned);
-  return cleaned;
-}
-
-/**
- * Enhanced ingredient parsing result with confidence scores and modifiers
- */
 export interface ParsedIngredient {
   name: string;
   modifiers: string[];
@@ -723,8 +342,14 @@ export interface ParsedIngredient {
  */
 export function parseIngredientsFromText(text: string): ParsedIngredient[] {
   if (!text) return [];
-
-  console.log('🔍 Enhanced parsing ingredients from text:', text);
+  
+  // Validate and sanitize input text
+  try {
+    text = validateExtractedText(text);
+  } catch (error) {
+    console.error('❌ Invalid extracted text:', error instanceof Error ? error.message : 'Unknown error');
+    return [];
+  }
 
   // Common ingredient words to help identify valid ingredients
   const commonIngredients = [
@@ -753,16 +378,11 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
     const trimmed = rawIngredient.trim();
     if (!trimmed) continue;
     
-    console.log(`🔍 Processing ingredient: "${trimmed}"`);
-    
     // Parse the ingredient with enhanced logic
     const parsed = parseIndividualIngredient(trimmed, commonIngredients);
     
     if (parsed) {
       parsedIngredients.push(parsed);
-      console.log(`✅ Parsed ingredient:`, parsed);
-    } else {
-      console.log(`❌ Filtered out non-ingredient: "${trimmed}"`);
     }
   }
 
@@ -774,13 +394,63 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
         item.name.toLowerCase() === ingredient.name.toLowerCase()
       ) === index
     )
-    // Sort by confidence (highest first) for better quality
-    .sort((a, b) => b.confidence - a.confidence)
+    // Keep original OCR order - do not sort by confidence
     // Remove very low confidence ingredients (likely errors)
-    .filter(ingredient => ingredient.confidence > 0.2);
+    .filter(ingredient => ingredient.confidence > 0.2)
+    // Filter out footer notes like "*Organic", "†Fair Trade", etc.
+    .filter(ingredient => !isFooterNote(ingredient.name))
+    // Convert markers to Organic/Fair Trade prefixes
+    .map(ingredient => convertMarkersToPrefix(ingredient));
 
-  console.log('✅ Final parsed ingredients after cleanup:', cleanedIngredients);
   return cleanedIngredients;
+}
+
+/**
+ * Check if text is a footer note explaining markers (not an actual ingredient)
+ */
+function isFooterNote(text: string): boolean {
+  const footerPatterns = [
+    /^\*\s*organic$/i,
+    /^†\s*fair\s*trade$/i,
+    /^\*\s*organic\s*†\s*fair\s*trade/i,
+    /^†\s*fair\s*trade\s*\*\s*organic/i,
+    /^\*\s*organic\s+(ingredients?|certification)/i,
+    /^†\s*fair\s*trade\s+(ingredients?|certification)/i,
+  ];
+  
+  return footerPatterns.some(pattern => pattern.test(text.trim()));
+}
+
+/**
+ * Convert certification markers to descriptive prefixes
+ * Example: "Honey*" → "Organic Honey"
+ * Example: "Chocolate†" → "Fair Trade Chocolate"
+ */
+function convertMarkersToPrefix(ingredient: ParsedIngredient): ParsedIngredient {
+  let name = ingredient.name;
+  
+  // Check for organic marker (*)
+  if (name.includes('*')) {
+    name = name.replace(/\*/g, '').trim();
+    // Only add "Organic" prefix if it's not already there
+    if (!name.toLowerCase().startsWith('organic')) {
+      name = `Organic ${name}`;
+    }
+  }
+  
+  // Check for fair trade marker (†)
+  if (name.includes('†')) {
+    name = name.replace(/†/g, '').trim();
+    // Only add "Fair Trade" prefix if it's not already there
+    if (!name.toLowerCase().startsWith('fair trade') && !name.toLowerCase().startsWith('fairtrade')) {
+      name = `Fair Trade ${name}`;
+    }
+  }
+  
+  return {
+    ...ingredient,
+    name: name.trim()
+  };
 }
 
 /**
@@ -847,6 +517,7 @@ function parseIndividualIngredient(text: string, commonIngredients: string[]): P
     .replace(/\s+/g, ' ') // Normalize whitespace
     .replace(/^\s*,\s*/, '') // Remove leading comma
     .replace(/\s*,\s*$/, '') // Remove trailing comma
+    .replace(/\s*[.!?;:]+\s*$/, '') // Remove trailing punctuation
     .trim();
   
   // Validate ingredient
@@ -1044,119 +715,5 @@ export function validateIngredientList(text: string): {
   };
 }
 
-/**
- * Get recommendations for advanced image processing libraries
- * This function provides guidance for implementing the advanced features
- * that expo-image-manipulator doesn't support
- */
-export function getAdvancedImageProcessingRecommendations(): {
-  libraries: Array<{
-    name: string;
-    description: string;
-    features: string[];
-    pros: string[];
-    cons: string[];
-  }>;
-  implementation: {
-    adaptiveThresholding: string;
-    perspectiveCorrection: string;
-    deskewing: string;
-  };
-} {
-  return {
-    libraries: [
-      {
-        name: 'react-native-opencv',
-        description: 'OpenCV bindings for React Native',
-        features: ['Adaptive thresholding', 'Perspective correction', 'Deskewing', 'Noise reduction'],
-        pros: ['Full OpenCV functionality', 'Mature library', 'Excellent image processing'],
-        cons: ['Large bundle size', 'Complex setup', 'Native dependencies']
-      },
-      {
-        name: 'react-native-image-filter-kit',
-        description: 'Image processing library with filters',
-        features: ['Contrast adjustment', 'Brightness control', 'Noise reduction'],
-        pros: ['Easy to use', 'Good performance', 'Well documented'],
-        cons: ['Limited advanced features', 'No perspective correction']
-      },
-      {
-        name: 'react-native-image-editor',
-        description: 'Image editing capabilities',
-        features: ['Rotation', 'Cropping', 'Basic filters'],
-        pros: ['Simple API', 'Good for basic operations'],
-        cons: ['Limited advanced processing', 'No thresholding']
-      }
-    ],
-    implementation: {
-      adaptiveThresholding: `
-// Example implementation with OpenCV
-import { cv } from 'react-native-opencv';
-
-function applyAdaptiveThreshold(imageUri: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    cv.imread(imageUri, (err, img) => {
-      if (err) reject(err);
-      
-      const gray = new cv.Mat();
-      cv.cvtColor(img, gray, cv.COLOR_RGBA2GRAY);
-      
-      const thresh = new cv.Mat();
-      cv.adaptiveThreshold(gray, thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
-      
-      cv.imwrite(outputUri, thresh);
-      resolve(outputUri);
-    });
-  });
-}`,
-      perspectiveCorrection: `
-// Example implementation with OpenCV
-function correctPerspective(imageUri: string, corners: Point[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    cv.imread(imageUri, (err, img) => {
-      if (err) reject(err);
-      
-      const srcPoints = cv.matFromArray(4, 1, cv.CV_32FC2, corners);
-      const dstPoints = cv.matFromArray(4, 1, cv.CV_32FC2, [
-        0, 0, width, 0, width, height, 0, height
-      ]);
-      
-      const transform = cv.getPerspectiveTransform(srcPoints, dstPoints);
-      const corrected = new cv.Mat();
-      cv.warpPerspective(img, corrected, transform, new cv.Size(width, height));
-      
-      cv.imwrite(outputUri, corrected);
-      resolve(outputUri);
-    });
-  });
-}`,
-      deskewing: `
-// Example implementation with OpenCV
-function deskewImage(imageUri: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    cv.imread(imageUri, (err, img) => {
-      if (err) reject(err);
-      
-      const gray = new cv.Mat();
-      cv.cvtColor(img, gray, cv.COLOR_RGBA2GRAY);
-      
-      const edges = new cv.Mat();
-      cv.Canny(gray, edges, 50, 150);
-      
-      const lines = new cv.Mat();
-      cv.HoughLines(edges, lines, 1, Math.PI / 180, 100);
-      
-      // Calculate rotation angle and apply correction
-      const angle = calculateRotationAngle(lines);
-      const rotated = new cv.Mat();
-      const center = new cv.Point2f(img.cols / 2, img.rows / 2);
-      const rotationMatrix = cv.getRotationMatrix2D(center, angle, 1.0);
-      cv.warpAffine(img, rotated, rotationMatrix, new cv.Size(img.cols, img.rows));
-      
-      cv.imwrite(outputUri, rotated);
-      resolve(outputUri);
-    });
-  });
-}`
-    }
-  };
-}
+// Advanced image processing functions removed - no longer needed with GPT-4 Vision
+// GPT-4 Vision handles image analysis without requiring complex preprocessing

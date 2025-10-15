@@ -1,175 +1,87 @@
-# Health Freak - AI-Powered Ingredient Scanner
+# Health Freak 🥗
 
-An intelligent food ingredient analysis app that uses AI to classify ingredients as generally clean or potentially toxic.
+**Your AI-Powered Food Ingredient Scanner**
 
-## 🔐 Security & API Keys
+Health Freak helps you make informed food choices by instantly analyzing ingredient lists using artificial intelligence. Simply snap a photo of any food label, and get an instant breakdown of which ingredients are clean and which ones to avoid.
 
-**IMPORTANT:** This project uses environment variables for API keys. **NEVER commit API keys to version control!**
+## 📱 What is Health Freak?
 
-### Setup Environment Variables
+Health Freak is a mobile app that takes the guesswork out of reading food labels. Whether you're trying to eat cleaner, avoid certain additives, or just want to know what you're putting in your body, Health Freak gives you instant, AI-powered insights into every ingredient.
 
-1. **Copy the example environment file:**
-   ```bash
-   cp .env.example .env
-   ```
+## ✨ How It Works
 
-2. **Add your API keys to `.env`:**
-   ```bash
-   # Required API Keys
-   EXPO_PUBLIC_OPENAI_API_KEY=sk-proj-your-actual-openai-key
-   EXPO_PUBLIC_GOOGLE_CLOUD_API_KEY=AIzaSy-your-actual-google-key
-   
-   # Database & Auth
-   EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-   EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
-   
-   # Subscriptions (optional)
-   EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your-stripe-key
-   ```
+1. **📸 Snap a Photo** - Point your camera at any ingredient list on food packaging
+2. **🤖 AI Analysis** - Our GPT-4 Vision AI instantly reads and analyzes each ingredient
+3. **✅ Get Results** - See which ingredients are clean (green) and which are potentially harmful (red)
+4. **📊 Review History** - Track all your scans and revisit past analyses anytime
 
-3. **Verify `.env` is in `.gitignore`** (already configured)
+## 🎯 Features
 
-### Getting API Keys
+- **Smart AI Vision** - GPT-4 Vision automatically reads ingredient lists from any angle
+- **Instant AI Analysis** - Powered by OpenAI's advanced AI to classify ingredients
+- **Color-Coded Results** - Easy-to-understand green (clean) and red (potentially toxic) ratings
+- **Scan History** - Keep track of all the products you've scanned
+- **Works Offline** - Common ingredients are pre-analyzed for instant results
+- **Regular Updates** - Our ingredient database is constantly improving
 
-- **OpenAI API Key:** https://platform.openai.com/api-keys
-- **Google Cloud Vision API Key:** https://console.cloud.google.com/apis/credentials
-- **Supabase Credentials:** https://app.supabase.com/project/_/settings/api
-- **Stripe Keys:** https://dashboard.stripe.com/apikeys
+## 🌟 Why Health Freak?
 
-## 🚀 Quick Start
+- **Save Time** - No more Googling unfamiliar ingredients
+- **Make Better Choices** - Know exactly what you're eating
+- **Easy to Use** - Just point, shoot, and learn
+- **Science-Backed** - AI trained on nutritional research and food science
+- **Privacy First** - Your scans are stored securely and privately
 
-1. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+## 🚀 Get Started
 
-2. **Set up environment variables** (see above)
+1. Download Health Freak from the App Store or Google Play
+2. Create a free account
+3. Point your camera at any ingredient list
+4. Get instant results!
 
-3. **Run migrations** (if using Supabase):
-   ```bash
-   # Apply database migrations
-   # (Follow Supabase documentation)
-   ```
+## 📖 What Makes an Ingredient "Clean" or "Potentially Toxic"?
 
-4. **Pre-cache common ingredients** (optional but recommended):
-   ```bash
-   npm run precache
-   ```
-   This reduces API costs by 80-90% by pre-analyzing 290 common ingredients.
+Health Freak's AI analyzes ingredients based on:
+- **Scientific research** on health effects
+- **Common allergens** and sensitivities
+- **Processing methods** and artificial additives
+- **Regulatory status** across different countries
 
-5. **Start the development server:**
-   ```bash
-   npm start
-   ```
+**Note:** Health Freak provides educational information to help you make informed choices. Always consult with healthcare professionals for medical advice.
 
-## 📊 Cost Optimization
+## 💡 Tips for Best Results
 
-### Pre-Caching Common Ingredients
+- **Good lighting** - Ensure the label is well-lit for better AI vision accuracy
+- **Hold steady** - Keep your phone stable when capturing the photo
+- **Full view** - Make sure the entire ingredient list is visible
+- **Clear focus** - Tap to focus if the text appears blurry
 
-Pre-cache the 290 most common food ingredients to dramatically reduce API costs:
+## 🔐 Privacy & Security
 
-```bash
-# One-time setup (~10 minutes, ~$0.90 cost)
-npm run precache
+Your privacy matters to us:
+- All scans are stored securely in your private account
+- We never share your data with third parties
+- You can delete your scan history anytime
+- Industry-standard encryption protects your information
 
-# Check cache status anytime
-npm run precache:check
+## 📧 Support & Feedback
 
-# Re-run every 6 months to refresh
-npm run precache
-```
+We'd love to hear from you!
 
-**Savings:**
-- Without cache: $0.45 per user
-- With cache: $0.045 per user
-- **90% cost reduction!**
+- **Questions?** Check out our FAQ or contact support
+- **Found a bug?** Let us know and we'll fix it
+- **Feature ideas?** We're always looking to improve
 
-## 🛡️ Security Best Practices
+---
 
-### ✅ DO:
-- Store API keys in `.env` file
-- Use environment variables (`process.env.EXPO_PUBLIC_*`)
-- Keep `.env` in `.gitignore`
-- Use `.env.example` for documentation
-- Rotate API keys regularly
+## 👩‍💻 For Developers
 
-### ❌ DON'T:
-- Commit `.env` files
-- Hardcode API keys in source code
-- Share API keys in chat/email
-- Log full API keys to console
-- Store keys in `app.json`
-
-### API Key Redaction
-
-All console.log statements automatically redact API keys:
-```typescript
-// Logs: "sk-proj...***REDACTED***"
-console.log('API Key:', redactApiKey(apiKey));
-```
-
-## 🏗️ Project Structure
-
-```
-├── app/                    # Expo Router screens
-├── components/             # Reusable UI components
-├── constants/              # Colors, typography
-├── contexts/               # React contexts (Auth, etc.)
-├── data/                   # Static data (common ingredients)
-├── docs/                   # Documentation
-├── lib/                    # Core libraries (config, database, supabase)
-├── scripts/                # Utility scripts (pre-caching, etc.)
-├── services/               # Business logic (AI, OCR, feedback, etc.)
-└── supabase/migrations/    # Database migrations
-```
-
-## 🔧 Configuration
-
-Configuration is split between:
-
-### `app.json` - Non-sensitive settings:
-- Feature flags (`openaiEnabled`, `ocrEnabled`)
-- Model settings (`openaiModel`, `openaiMaxTokens`)
-- Image processing settings
-
-### `.env` - Sensitive API keys:
-- `EXPO_PUBLIC_OPENAI_API_KEY`
-- `EXPO_PUBLIC_GOOGLE_CLOUD_API_KEY`
-- `EXPO_PUBLIC_SUPABASE_URL`
-- `EXPO_PUBLIC_SUPABASE_ANON_KEY`
-
-## 📚 Additional Documentation
-
-- **AI Implementation:** `docs/AI_IMPLEMENTATION_SUMMARY.md`
-- **OCR Setup:** `docs/OCR_SETUP.md`
-- **Design System:** `docs/design-system.md`
-- **Production Changes:** `docs/PRODUCTION_CHANGES.md`
-
-## 🤝 Contributing
-
-When contributing:
-1. Never commit `.env` files
-2. Update `.env.example` if adding new environment variables
-3. Use the `redactApiKey()` function when logging sensitive data
-4. Test with environment variables, not hardcoded keys
+If you're a developer looking to contribute or run this project locally, check out our [Developer Guide](docs/DEVELOPER_GUIDE.md).
 
 ## 📄 License
 
-[Your license here]
+[License information]
 
-## 🆘 Troubleshooting
+---
 
-### "API key not configured" error
-- Verify `.env` file exists
-- Check environment variable names (must start with `EXPO_PUBLIC_`)
-- Restart the development server after changing `.env`
-
-### "OpenAI API key test failed"
-- Verify your OpenAI API key is valid
-- Check for extra spaces or quotes in `.env`
-- Ensure you have credits in your OpenAI account
-
-### "Vision API error"
-- Verify Google Cloud Vision API is enabled
-- Check API key permissions
-- Ensure billing is enabled in Google Cloud Console
+**Made with ❤️ for health-conscious food lovers everywhere**

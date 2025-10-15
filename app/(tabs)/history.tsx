@@ -1,5 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, RefreshControl } from 'react-native';
+
+// Global temporary storage for navigation optimization
+declare global { var tempResults: Record<string, any>; }
+if (!global.tempResults) global.tempResults = {};
+
+function cleanupTempResults() {
+  const cutoff = Date.now() - (5 * 60 * 1000); // 5 minutes
+  Object.keys(global.tempResults).forEach(key => {
+    if (parseInt(key.split('_')[1]) < cutoff) delete global.tempResults[key];
+  });
+}
+
+// Extract clean ingredient names from analysis results
+function getCleanIngredientText(results: any): string {
+  if (!results || !results.ingredients || !Array.isArray(results.ingredients)) {
+    return 'No ingredients found';
+  }
+  
+  const ingredientNames = results.ingredients
+    .map((ingredient: any) => ingredient.name)
+    .filter((name: string) => name && name.trim().length > 0)
+    .slice(0, 8); // Show first 8 ingredients to avoid too long text
+  
+  if (ingredientNames.length === 0) {
+    return 'No valid ingredients found';
+  }
+  
+  const displayText = ingredientNames.join(', ');
+  return ingredientNames.length < results.ingredients.length 
+    ? `${displayText}... (+${results.ingredients.length - ingredientNames.length} more)`
+    : displayText;
+}
 import { FileSearch, Calendar, ChevronRight, Trash2, CircleCheck, TriangleAlert, Info, Crown, Zap } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -193,7 +225,7 @@ export default function HistoryScreen() {
             <View style={styles.latestResultCard}>
               <View style={styles.latestResultContent}>
                 <Text style={styles.latestResultText} numberOfLines={2}>
-                  {latestResult.extractedText}
+                  {getCleanIngredientText(latestResult.results)}
                 </Text>
                 
                 <View style={styles.latestResultVerdict}>
@@ -239,13 +271,18 @@ export default function HistoryScreen() {
               
               <TouchableOpacity 
                 style={styles.viewLatestButton}
-                onPress={() => router.push({
-                  pathname: '/results',
-                  params: { 
-                    results: JSON.stringify(latestResult.results),
-                    extractedText: latestResult.extractedText
-                  }
-                })}
+                onPress={() => {
+                  const resultId = `result_${Date.now()}`;
+                  cleanupTempResults();
+                  global.tempResults[resultId] = { 
+                    results: latestResult.results, 
+                    extractedText: latestResult.extractedText 
+                  };
+                  router.push({
+                    pathname: '/results',
+                    params: { resultId }
+                  });
+                }}
               >
                 <Text style={styles.viewLatestButtonText}>View Full Results</Text>
                 <ChevronRight size={16} color={COLORS.textPrimary} />
@@ -290,8 +327,8 @@ export default function HistoryScreen() {
                 </TouchableOpacity>
               </View>
               
-              <Text style={styles.extractedText} numberOfLines={2}>
-                {item.extractedText}
+              <Text style={styles.ingredientText} numberOfLines={2}>
+                {getCleanIngredientText(item.results)}
               </Text>
               
               <View style={styles.resultsContainer}>
@@ -315,13 +352,18 @@ export default function HistoryScreen() {
               
               <TouchableOpacity 
                 style={styles.viewButton}
-                onPress={() => router.push({
-                  pathname: '/results',
-                  params: { 
-                    results: JSON.stringify(item.results),
-                    extractedText: item.extractedText
-                  }
-                })}
+                onPress={() => {
+                  const resultId = `result_${Date.now()}`;
+                  cleanupTempResults();
+                  global.tempResults[resultId] = { 
+                    results: item.results, 
+                    extractedText: item.extractedText 
+                  };
+                  router.push({
+                    pathname: '/results',
+                    params: { resultId }
+                  });
+                }}
               >
                 <Text style={styles.viewButtonText}>View Details</Text>
                 <ChevronRight size={16} color={COLORS.cleanGreen} />
@@ -452,7 +494,7 @@ const styles = StyleSheet.create({
   deleteButton: {
     padding: 4,
   },
-  extractedText: {
+  ingredientText: {
     fontSize: 19,
     color: COLORS.textPrimary,
     marginBottom: 12,

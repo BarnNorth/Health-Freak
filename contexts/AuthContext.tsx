@@ -35,11 +35,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   // Track profile creation in progress to prevent race conditions
   const creatingProfile = useRef<Set<string>>(new Set());
+  // Track profile loading in progress to prevent duplicate fetches
+  const loadingProfile = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      console.log('[AUTH] Initial session check:', session ? 'Session found' : 'No session');
+      if (__DEV__) {
+        console.log('[AUTH] Initial session check:', session ? 'Session found' : 'No session');
+      }
       if (session?.user) {
         // Load profile in background, don't block app startup
         loadUserProfile(session.user.id, session.user.email || '').catch(error => {
@@ -60,10 +64,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('[AUTH] Auth state changed:', event, session ? `User: ${session.user?.email}` : 'No session');
+        // Always log critical auth state changes
+        if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+          console.log('[AUTH] Auth state changed:', event, session ? `User: ${session.user?.email}` : 'No session');
+        } else if (__DEV__) {
+          console.log('[AUTH] Auth state changed:', event, session ? `User: ${session.user?.email}` : 'No session');
+        }
         
         if (event === 'SIGNED_IN' && session?.user) {
-          console.log('[AUTH] SIGNED_IN - Loading user profile for:', session.user.email);
+          if (__DEV__) {
+            console.log('[AUTH] SIGNED_IN - Loading user profile for:', session.user.email);
+          }
           
           // Load profile in background, don't block auth flow
           loadUserProfile(session.user.id, session.user.email || '').catch(error => {
@@ -73,14 +84,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Set auth ready immediately - don't wait for slow database
           setAuthReady(true);
         } else if (event === 'SIGNED_OUT') {
-          console.log('[AUTH] SIGNED_OUT');
           setUser(null);
           setInitializing(false);
           setAuthReady(true);
         } else if (event === 'TOKEN_REFRESHED') {
-          console.log('[AUTH] TOKEN_REFRESHED');
+          if (__DEV__) {
+            console.log('[AUTH] TOKEN_REFRESHED');
+          }
           // Keep existing user state on token refresh
-        } else {
+        } else if (__DEV__) {
           console.log('[AUTH] Unhandled auth event:', event);
         }
       }
@@ -106,7 +118,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           filter: `id=eq.${user.id}`,
         },
         (payload) => {
-          console.log('[AUTH] Profile updated - subscription status:', payload.new?.subscription_status);
+          if (__DEV__) {
+            console.log('[AUTH] Profile updated - subscription status:', payload.new?.subscription_status);
+          }
           refreshUserProfile();
         }
       )
@@ -125,35 +139,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 
   const loadUserProfile = async (userId: string, email: string) => {
+    // Prevent duplicate profile loading
+    if (loadingProfile.current.has(userId)) {
+      if (__DEV__) {
+        console.log('[AUTH] Profile already being loaded for user:', userId);
+      }
+      return;
+    }
+    
+    loadingProfile.current.add(userId);
+    
     try {
       // Try to get existing profile
       let profile = await getUserProfile(userId);
       
-      // If profile doesn't exist, create it
-      if (!profile) {
-        // Check if another process is already creating this profile
-        if (creatingProfile.current.has(userId)) {
-          console.log('[AUTH] Another process is creating profile, waiting...');
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          profile = await getUserProfile(userId);
-        }
-        
-        // If profile still doesn't exist, create it
+        // If profile doesn't exist, create it
         if (!profile) {
-          creatingProfile.current.add(userId);
+          // Check if another process is already creating this profile
+          if (creatingProfile.current.has(userId)) {
+            if (__DEV__) {
+              console.log('[AUTH] Another process is creating profile, waiting...');
+            }
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            profile = await getUserProfile(userId);
+          }
           
-          try {
-            profile = await createUserProfile(userId, email);
-          } finally {
-            creatingProfile.current.delete(userId);
+          // If profile still doesn't exist, create it
+          if (!profile) {
+            creatingProfile.current.add(userId);
+            
+            try {
+              profile = await createUserProfile(userId, email);
+            } finally {
+              creatingProfile.current.delete(userId);
+            }
           }
         }
-      }
-      
-      if (profile) {
-        console.log('[AUTH] Profile loaded:', profile.email);
-        setUser(profile);
-      } else {
+        
+        if (profile) {
+          if (__DEV__) {
+            console.log('[AUTH] Profile loaded:', profile.email);
+          }
+          setUser(profile);
+        } else {
         // Fallback to basic user object
         const userObj = {
           id: userId,
@@ -179,6 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(userObj);
     } finally {
       setInitializing(false);
+      loadingProfile.current.delete(userId);
     }
   };
 
@@ -226,7 +255,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (data.user && !data.session) {
-        console.log('[AUTH] Email confirmation required');
+        if (__DEV__) {
+          console.log('[AUTH] Email confirmation required');
+        }
         return { requiresConfirmation: true, user: data.user };
       }
 

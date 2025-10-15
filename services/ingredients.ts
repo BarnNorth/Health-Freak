@@ -27,21 +27,25 @@ interface AnalysisResult {
   cleanCount: number;
 }
 
-export async function analyzeIngredients(extractedText: string, isPremium: boolean = false): Promise<AnalysisResult> {
-  console.log('🧪 Starting AI-powered ingredient analysis...');
-  console.log('📄 Input text:', extractedText);
-  console.log('👑 Is premium:', isPremium);
+export async function analyzeIngredients(
+  extractedText: string, 
+  userId: string, 
+  isPremium: boolean = false,
+  onProgress?: (update: any) => void
+): Promise<AnalysisResult> {
   
   // Parse ingredient list from extracted text
   // Use the improved parsing from OCR service
   const parsedIngredients = parseIngredientsFromText(extractedText);
   const ingredients = parsedIngredients
-    .map(ingredient => ingredient.name.toLowerCase());
+    .map(ingredient => ingredient.name
+      .toLowerCase()
+      .replace(/\s*[.!?;:]+\s*$/, '') // Remove trailing punctuation
+      .trim()
+    );
 
-  console.log('🔍 Parsed ingredients:', ingredients);
 
   if (ingredients.length === 0) {
-    console.log('⚠️ No ingredients found in text');
     return {
       overallVerdict: 'TOXIC', // Conservative approach - if we can't read ingredients, assume toxic
       ingredients: isPremium ? [] : undefined,
@@ -54,51 +58,49 @@ export async function analyzeIngredients(extractedText: string, isPremium: boole
   const results: IngredientInfo[] = [];
   const unknownIngredients: string[] = [];
 
-  // Step 1: Batch check database for known ingredients with intelligent caching
-  console.log('🔍 Batch checking database for known ingredients...');
-  const cachedIngredientsMap = await getIngredientsBatch(ingredients);
+  // Step 1: Start database lookup in parallel (performance optimization)
+  const cachedIngredientsPromise = getIngredientsBatch(ingredients);
   
-  console.log(`✅ Found ${cachedIngredientsMap.size} ingredients in cache out of ${ingredients.length}`);
+  // Create a map to store results by ingredient name to preserve order
+  const resultsByName = new Map<string, IngredientInfo>();
   
-  // Process cached ingredients
+  // Wait for database lookup to complete
+  const cachedIngredientsMap = await cachedIngredientsPromise;
+  
+  // Process cached ingredients and collect unknown ones
   for (const ingredient of ingredients) {
-    const dbResult = cachedIngredientsMap.get(ingredient.toLowerCase());
+    const normalizedIngredient = ingredient.toLowerCase();
+    const dbResult = cachedIngredientsMap.get(normalizedIngredient);
     
     if (dbResult) {
-      console.log(`✅ Found in cache (expires: ${dbResult.expires_at}):`, dbResult.ingredient_name);
-      results.push({
+      resultsByName.set(normalizedIngredient, {
         name: capitalizeIngredientName(dbResult.ingredient_name),
         status: dbResult.status,
         educational_note: isPremium ? dbResult.educational_note : getBasicNote(dbResult.status, dbResult.ingredient_name),
         basic_note: getBasicNote(dbResult.status, dbResult.ingredient_name),
       });
     } else {
-      console.log(`❓ Not in cache or expired, will analyze with AI: "${ingredient}"`);
       unknownIngredients.push(ingredient);
     }
   }
 
   // Step 2: Analyze unknown ingredients with AI
   if (unknownIngredients.length > 0) {
-    console.log(`🤖 Analyzing ${unknownIngredients.length} unknown/expired ingredients with AI...`);
     
     const aiStatus = getAIAnalysisStatus();
-    console.log('🔧 AI Analysis Status:', aiStatus);
 
     if (aiStatus.configured && aiStatus.enabled) {
       try {
         // Use batch analysis for efficiency
-        const batchResult = await analyzeIngredientsBatch(unknownIngredients, isPremium);
-        console.log('✅ AI Batch Analysis Result:', batchResult);
+        const batchResult = await analyzeIngredientsBatch(unknownIngredients, userId, isPremium, onProgress);
 
         // Process AI results
         for (const item of batchResult.ingredients) {
           const aiAnalysis = item.analysis;
           const ingredientName = item.name;
+          const normalizedName = ingredientName.toLowerCase();
           
-          console.log(`🤖 AI Analysis for "${ingredientName}":`, aiAnalysis);
-          
-          results.push({
+          resultsByName.set(normalizedName, {
             name: capitalizeIngredientName(ingredientName),
             status: aiAnalysis.status,
             educational_note: isPremium ? aiAnalysis.educational_note : aiAnalysis.basic_note,
@@ -115,11 +117,10 @@ export async function analyzeIngredients(extractedText: string, isPremium: boole
           );
         }
       } catch (error) {
-        console.error('❌ AI Analysis failed, using conservative fallback:', error);
         
         // Fallback: mark all unknown ingredients as potentially toxic
         for (const ingredient of unknownIngredients) {
-          results.push({
+          resultsByName.set(ingredient.toLowerCase(), {
             name: capitalizeIngredientName(ingredient),
             status: 'potentially_toxic',
             educational_note: isPremium 
@@ -130,11 +131,10 @@ export async function analyzeIngredients(extractedText: string, isPremium: boole
         }
       }
     } else {
-      console.log('⚠️ AI Analysis not available, using conservative fallback');
       
       // Fallback: mark all unknown ingredients as potentially toxic
       for (const ingredient of unknownIngredients) {
-        results.push({
+        resultsByName.set(ingredient.toLowerCase(), {
           name: capitalizeIngredientName(ingredient),
           status: 'potentially_toxic',
           educational_note: isPremium 
@@ -146,7 +146,17 @@ export async function analyzeIngredients(extractedText: string, isPremium: boole
     }
   }
 
-  // Step 3: Calculate overall verdict (conservative approach)
+  // Step 3: Reconstruct results in original OCR order
+  for (const ingredient of ingredients) {
+    const normalizedIngredient = ingredient.toLowerCase();
+    const result = resultsByName.get(normalizedIngredient);
+    
+    if (result) {
+      results.push(result);
+    }
+  }
+
+  // Step 4: Calculate overall verdict (conservative approach)
   const toxicCount = results.filter(r => r.status === 'potentially_toxic').length;
   const cleanCount = results.filter(r => r.status === 'generally_clean').length;
   
@@ -161,8 +171,6 @@ export async function analyzeIngredients(extractedText: string, isPremium: boole
     cleanCount,
   };
 
-  console.log('🎯 Final AI-powered analysis result:', finalResult);
-  console.log(`📊 Cache performance: ${cachedIngredientsMap.size}/${ingredients.length} from cache (${Math.round((cachedIngredientsMap.size / ingredients.length) * 100)}% hit rate)`);
   
   return finalResult;
 }

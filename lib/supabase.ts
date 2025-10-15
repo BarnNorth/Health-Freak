@@ -11,13 +11,15 @@ const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 // Required for web-based auth flows
 WebBrowser.maybeCompleteAuthSession();
 
-// Log Supabase configuration for debugging
-console.log('🔧 Supabase client configuration:');
-console.log('URL:', supabaseUrl);
-console.log('Anon key (first 10 chars):', supabaseAnonKey?.substring(0, 10) + '...');
-console.log('detectSessionInUrl:', true);
-console.log('flowType:', 'pkce');
-console.log('storage:', 'AsyncStorage');
+// Log Supabase configuration for debugging (development only)
+if (__DEV__) {
+  console.log('🔧 Supabase client configuration:');
+  console.log('URL:', supabaseUrl);
+  console.log('Anon key (first 10 chars):', supabaseAnonKey?.substring(0, 10) + '...');
+  console.log('detectSessionInUrl:', true);
+  console.log('flowType:', 'pkce');
+  console.log('storage:', 'AsyncStorage');
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -50,11 +52,15 @@ AppState.addEventListener('change', (state) => {
 
 // Set up deep link URL handling for Supabase auth
 Linking.addEventListener('url', async ({ url }) => {
-  console.log('🔗 [SUPABASE] Deep link received:', url);
+  if (__DEV__) {
+    console.log('🔗 [SUPABASE] Deep link received:', url);
+  }
   
   // Let Supabase handle auth URLs automatically
   if (url.includes('auth/callback') || url.includes('access_token') || url.includes('code=')) {
-    console.log('🔐 [SUPABASE] Auth URL detected, letting Supabase handle it');
+    if (__DEV__) {
+      console.log('🔐 [SUPABASE] Auth URL detected, letting Supabase handle it');
+    }
     // Supabase's detectSessionInUrl will handle this automatically
   }
 });

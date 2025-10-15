@@ -48,7 +48,7 @@ EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
 #### [ ] 1.2 Update Supabase Stripe Secrets
 
 **Supabase Dashboard:**
-1. Go to: https://supabase.com/dashboard/project/vuiaqdkbpkbcvyrzpmzv/settings/functions
+1. Go to: https://supabase.com/dashboard/project/YOUR_PROJECT_ID/settings/functions
 2. Navigate to **"Secrets"** tab
 3. Update these secrets:
 
@@ -64,7 +64,7 @@ EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
 **Remove test mode behavior:**
 
 **Option A - Delete the variable (Recommended):**
-1. Go to: https://supabase.com/dashboard/project/vuiaqdkbpkbcvyrzpmzv/settings/functions
+1. Go to: https://supabase.com/dashboard/project/YOUR_PROJECT_ID/settings/functions
 2. Go to **"Secrets"** tab
 3. Find `STRIPE_CANCEL_MODE`
 4. Click delete/remove
@@ -120,12 +120,8 @@ EXPO_PUBLIC_APP_URL=https://yourapp.com
 **Check these in your .env file:**
 
 ```bash
-# OpenAI - Production key
+# OpenAI - Production key (handles both AI analysis and OCR)
 EXPO_PUBLIC_OPENAI_API_KEY=sk-proj-your-production-key
-
-# Google Cloud Vision - Production key  
-EXPO_PUBLIC_GOOGLE_CLOUD_API_KEY=your-production-key
-EXPO_PUBLIC_GOOGLE_CLOUD_PROJECT_ID=your-production-project
 
 # Supabase - Should already be production
 EXPO_PUBLIC_SUPABASE_URL=your-supabase-url
@@ -430,9 +426,9 @@ expo build:android
 ## 🔥 Quick Reference
 
 ### Supabase Dashboard
-- **Project:** https://supabase.com/dashboard/project/vuiaqdkbpkbcvyrzpmzv
-- **Functions:** https://supabase.com/dashboard/project/vuiaqdkbpkbcvyrzpmzv/functions
-- **Secrets:** https://supabase.com/dashboard/project/vuiaqdkbpkbcvyrzpmzv/settings/functions
+- **Project:** https://supabase.com/dashboard/project/YOUR_PROJECT_ID
+- **Functions:** https://supabase.com/dashboard/project/YOUR_PROJECT_ID/functions
+- **Secrets:** https://supabase.com/dashboard/project/YOUR_PROJECT_ID/settings/functions
 
 ### Stripe Dashboard
 - **Live Mode:** https://dashboard.stripe.com

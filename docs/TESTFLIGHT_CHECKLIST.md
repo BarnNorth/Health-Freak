@@ -30,7 +30,6 @@ All API keys are now in environment variables (never in code):
 ```bash
 # Required in .env file:
 EXPO_PUBLIC_OPENAI_API_KEY=sk-your-test-key-here
-EXPO_PUBLIC_GOOGLE_CLOUD_API_KEY=your-test-key-here
 EXPO_PUBLIC_SUPABASE_URL=your-supabase-url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-key
 ```
@@ -66,7 +65,7 @@ EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_test_key_here
 
 **In Supabase Dashboard:**
 
-1. Go to: https://supabase.com/dashboard/project/vuiaqdkbpkbcvyrzpmzv/settings/functions
+1. Go to: https://supabase.com/dashboard/project/YOUR_PROJECT_ID/settings/functions
 2. Navigate to **"Secrets"** tab
 3. Add new secret:
    - **Name:** `STRIPE_CANCEL_MODE`

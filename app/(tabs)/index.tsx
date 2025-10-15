@@ -1,5 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, SafeAreaView, ActivityIndicator, TextInput, Modal, Image, Animated } from 'react-native';
+
+// Global temporary storage for navigation optimization
+declare global { var tempResults: Record<string, any>; }
+if (!global.tempResults) global.tempResults = {};
+
+function cleanupTempResults() {
+  const cutoff = Date.now() - (5 * 60 * 1000); // 5 minutes
+  Object.keys(global.tempResults).forEach(key => {
+    if (parseInt(key.split('_')[1]) < cutoff) delete global.tempResults[key];
+  });
+}
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { PinchGestureHandler, TapGestureHandler, State } from 'react-native-gesture-handler';
 import { Camera, RotateCcw, Zap, Keyboard, X, Heart, Star, Search, Apple, Carrot, Leaf, Flashlight, FlashlightOff, ZoomIn, ZoomOut } from 'lucide-react-native';
@@ -9,11 +20,13 @@ import { incrementAnalysisCount, checkUserLimits } from '@/lib/database';
 import { analyzeIngredients } from '@/services/ingredients';
 import { saveAnalysis } from '@/lib/database';
 import { analyzePhoto as analyzePhotoWithOCR, getOCRStatus } from '@/services/photoAnalysis';
+import { parseIngredientsFromText } from '@/services/ocr';
 import { testOpenAIAPIKey } from '@/services/aiAnalysis';
 import { showScanLimitReachedModal, showPremiumUpgradePrompt } from '@/services/subscription';
 import { startPremiumSubscription } from '@/services/stripe';
 import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
+import { AIAnalysisLoadingModal, AIThought } from '@/components/AIAnalysisLoadingModal';
 
 export default function CameraScreen() {
   const [facing, setFacing] = useState<CameraType>('back');
@@ -37,11 +50,58 @@ export default function CameraScreen() {
   const [scansRemaining, setScansRemaining] = useState<number | null>(null);
   const [canScan, setCanScan] = useState(true);
   const { user, initializing, refreshUserProfile } = useAuth();
+  
+  // AI Loading Modal state
+  const [showAILoading, setShowAILoading] = useState(false);
+  const [aiThoughts, setAiThoughts] = useState<AIThought[]>([]);
+  const [aiProgress, setAiProgress] = useState(0);
+  const [ingredientCount, setIngredientCount] = useState(0);
+  
+  const addAIThought = (thought: Omit<AIThought, 'timestamp'>) => {
+    setAiThoughts(prev => [...prev, { ...thought, timestamp: Date.now() }]);
+  };
+
+  // Performance monitoring
+  interface PerfMetrics { 
+    captureStart: number; 
+    captureEnd: number; 
+    ocrStart: number; 
+    ocrEnd: number; 
+    aiStart: number; 
+    aiEnd: number; 
+    navigationStart: number; 
+  }
+  
+  const perfMetricsRef = useRef<PerfMetrics>({ 
+    captureStart: 0, 
+    captureEnd: 0, 
+    ocrStart: 0, 
+    ocrEnd: 0, 
+    aiStart: 0, 
+    aiEnd: 0, 
+    navigationStart: 0 
+  });
+  
+  const updatePerfMetric = (key: keyof PerfMetrics) => {
+    perfMetricsRef.current[key] = Date.now();
+  };
+  
+  const logPerf = () => {
+    const metrics = perfMetricsRef.current;
+    const m = { 
+      capture: metrics.captureEnd > 0 ? metrics.captureEnd - metrics.captureStart : 0,
+      ocr: metrics.ocrEnd > 0 ? metrics.ocrEnd - metrics.ocrStart : 0,
+      ai: metrics.aiEnd > 0 ? metrics.aiEnd - metrics.aiStart : 0,
+      total: metrics.navigationStart > 0 ? metrics.navigationStart - metrics.captureStart : 0
+    };
+    console.log(`⏱️ PERF: capture=${m.capture}ms ocr=${m.ocr}ms ai=${m.ai}ms total=${m.total}ms (${(m.total/1000).toFixed(1)}s) ${m.total < 5000 ? '✅' : '❌'}`);
+    return m;
+  };
 
   useEffect(() => {
     let isMounted = true;
     
-    // Test OpenAI API key
+    // Test OpenAI API key only once on component mount
     testOpenAIAPIKey().then(isValid => {
       if (isMounted) {
         if (isValid) {
@@ -55,7 +115,7 @@ export default function CameraScreen() {
     return () => {
       isMounted = false;
     };
-  }, [user]);
+  }, []); // Remove [user] dependency - API key doesn't change when user changes
 
   // Check scan limits for Free tier users
   useEffect(() => {
@@ -186,6 +246,16 @@ export default function CameraScreen() {
         return;
       }
 
+      // Reset all metrics for new capture
+      perfMetricsRef.current = {
+        captureStart: Date.now(),
+        captureEnd: 0,
+        ocrStart: 0,
+        ocrEnd: 0,
+        aiStart: 0,
+        aiEnd: 0,
+        navigationStart: 0
+      };
       setIsAnalyzing(true);
       setOcrProgress('Capturing photo...');
       
@@ -200,6 +270,7 @@ export default function CameraScreen() {
         skipProcessing: false,
       });
       
+      updatePerfMetric('captureEnd');
       setCapturedPhoto(photo.uri);
       
       // Show preview first
@@ -221,14 +292,28 @@ export default function CameraScreen() {
       console.log('🔍 Starting photo analysis...');
       console.log('📸 Captured photo URI:', capturedPhoto);
       
+      // Show AI modal immediately and close preview
+      setShowPreview(false);
+      setShowAILoading(true);
+      setAiThoughts([]);
+      setAiProgress(0);
+      setIngredientCount(0);
+      
+      // Add initial OCR thought
+      addAIThought({ message: 'Scanning photo...', emoji: '📸', type: 'ocr' });
+      
       setIsAnalyzing(true);
       setOcrProgress('Analyzing photo...');
       
       // Use the new OCR service to analyze the photo
-      const photoAnalysis = await analyzePhotoWithOCR(capturedPhoto, (progress) => {
+      updatePerfMetric('ocrStart');
+      const photoAnalysis = await analyzePhotoWithOCR(capturedPhoto, user?.id || 'anonymous', (progress) => {
         console.log('📊 OCR Progress:', progress);
         setOcrProgress(progress);
+        // Add OCR progress thoughts to AI modal
+        addAIThought({ message: progress, emoji: '🔍', type: 'ocr' });
       });
+      updatePerfMetric('ocrEnd');
       
       console.log('📝 OCR Analysis Result:', {
         success: photoAnalysis.success,
@@ -261,10 +346,23 @@ export default function CameraScreen() {
       console.log('🧪 Starting ingredient analysis...');
       console.log('📄 Text to analyze:', photoAnalysis.extractedText);
       
-      // Analyze ingredients using the extracted text
+      setIsAnalyzing(false);
+      
+      // Parse ingredients to get count for display
+      const parsedIngredients = parseIngredientsFromText(photoAnalysis.extractedText);
+      setIngredientCount(parsedIngredients.length);
+      
+      addAIThought({ message: 'Reading ingredient list...', emoji: '👀', type: 'parsing' });
+      
+      // Analyze ingredients using the extracted text with progress callbacks
       // Free users get basic analysis (overall verdict), premium users get detailed breakdown
+      updatePerfMetric('aiStart');
       const isPremium = user?.subscription_status === 'premium';
-      const results = await analyzeIngredients(photoAnalysis.extractedText, isPremium);
+      const results = await analyzeIngredients(photoAnalysis.extractedText, user?.id || 'anonymous', isPremium, (update) => {
+        if (update.current && update.total) setAiProgress((update.current / update.total) * 100);
+        addAIThought({ message: update.message, emoji: update.emoji, type: update.type });
+      });
+      updatePerfMetric('aiEnd');
       
       console.log('🎯 Ingredient Analysis Results:', {
         overallVerdict: results.overallVerdict,
@@ -274,54 +372,58 @@ export default function CameraScreen() {
         ingredients: results.ingredients
       });
       
-      // Increment scan count for all users (to track free tier limit)
-      await incrementAnalysisCount(user!.id);
+      // Add final AI thought
+      addAIThought({
+        message: results.overallVerdict === 'CLEAN' ? '🎉 Product is clean!' : '⚠️ Found concerns...',
+        emoji: results.overallVerdict === 'CLEAN' ? '✨' : '🔍',
+        type: 'complete'
+      });
       
-      // Refresh user profile to update scan count across app
-      await refreshUserProfile();
+      // Wait longer to show the final thought so users can see the verdict
+      await new Promise(r => setTimeout(r, 2000));
+      setShowAILoading(false);
       
-      // Update scan counter UI for free users
+      // Run database operations in background (non-blocking)
+      Promise.allSettled([
+        incrementAnalysisCount(user!.id),
+        user?.subscription_status === 'premium' ? saveAnalysis(user.id, photoAnalysis.extractedText, results) : Promise.resolve(),
+        refreshUserProfile()
+      ]).catch(e => console.error('Background DB operations failed:', e));
+
+      // Optimistic UI updates for free users (no waiting for DB)
       if (user?.subscription_status === 'free') {
-        const updatedLimits = await checkUserLimits(user.id);
-        setScansRemaining(updatedLimits.remaining);
-        setCanScan(updatedLimits.canAnalyze);
+        setScansRemaining(prev => Math.max(0, (prev || 0) - 1));
+        setCanScan(scansRemaining !== null ? scansRemaining > 1 : true);
       }
-      
-      // Save history only for premium users
-      if (user?.subscription_status === 'premium') {
-        console.log('💾 Saving analysis to database (Premium user)...');
-        await saveAnalysis(user.id, photoAnalysis.extractedText, results);
-      } else {
-        console.log('ℹ️ Free tier - analysis not saved to history');
-      }
-      
-      setOcrProgress('');
-      setIsAnalyzing(false);
       
       console.log('✅ Analysis complete, navigating to results...');
       
       // Navigate based on user subscription status
+      updatePerfMetric('navigationStart');
       if (user?.subscription_status === 'premium') {
         // Premium users: Navigate to history with latest results
         console.log('👑 Premium user - navigating to history tab');
+        const resultId = `result_${Date.now()}`;
+        cleanupTempResults();
+        global.tempResults[resultId] = { results, extractedText: photoAnalysis.extractedText };
         router.push({
           pathname: '/history',
-          params: { 
-            results: JSON.stringify(results),
-            extractedText: photoAnalysis.extractedText
-          }
+          params: { resultId }
         });
       } else {
         // Free users: Navigate directly to results screen
         console.log('🆓 Free user - navigating directly to results screen');
+        const resultId = `result_${Date.now()}`;
+        cleanupTempResults();
+        global.tempResults[resultId] = { results, extractedText: photoAnalysis.extractedText };
         router.push({
           pathname: '/results',
-          params: { 
-            results: JSON.stringify(results),
-            extractedText: photoAnalysis.extractedText
-          }
+          params: { resultId }
         });
       }
+      
+      // Log performance metrics
+      logPerf();
       
     } catch (error) {
       console.error('💥 Analysis Error:', error);
@@ -338,45 +440,66 @@ export default function CameraScreen() {
   async function analyzePhoto(extractedText: string) {
     try {
       setIsAnalyzing(true);
+      setShowTextInput(false);
       
-      // Analyze ingredients
+      // Show AI modal immediately
+      setShowAILoading(true);
+      setAiThoughts([]);
+      setAiProgress(0);
+      
+      // Parse ingredients to get count for display
+      const parsedIngredients = parseIngredientsFromText(extractedText);
+      setIngredientCount(parsedIngredients.length);
+      
+      addAIThought({ message: 'Reading ingredient list...', emoji: '👀', type: 'parsing' });
+      
+      // Analyze ingredients with progress callbacks
       // Free users get basic analysis (overall verdict), premium users get detailed breakdown
       const isPremium = user?.subscription_status === 'premium';
-      const results = await analyzeIngredients(extractedText, isPremium);
+      const results = await analyzeIngredients(extractedText, user?.id || 'anonymous', isPremium, (update) => {
+        if (update.current && update.total) setAiProgress((update.current / update.total) * 100);
+        addAIThought({ message: update.message, emoji: update.emoji, type: update.type });
+      });
       
-      // Increment scan count for all users (to track free tier limit)
-      await incrementAnalysisCount(user!.id);
+      // Add final AI thought
+      addAIThought({
+        message: results.overallVerdict === 'CLEAN' ? '🎉 Product is clean!' : '⚠️ Found concerns...',
+        emoji: results.overallVerdict === 'CLEAN' ? '✨' : '🔍',
+        type: 'complete'
+      });
       
-      // Refresh user profile to update scan count across app
-      await refreshUserProfile();
+      // Wait longer to show the final thought so users can see the verdict
+      await new Promise(r => setTimeout(r, 2000));
+      setShowAILoading(false);
       
-      // Update scan counter UI for free users
+      // Run database operations in background (non-blocking)
+      Promise.allSettled([
+        incrementAnalysisCount(user!.id),
+        user?.subscription_status === 'premium' ? saveAnalysis(user.id, extractedText, results) : Promise.resolve(),
+        refreshUserProfile()
+      ]).catch(e => console.error('Background DB operations failed:', e));
+
+      // Optimistic UI updates for free users (no waiting for DB)
       if (user?.subscription_status === 'free') {
-        const updatedLimits = await checkUserLimits(user.id);
-        setScansRemaining(updatedLimits.remaining);
-        setCanScan(updatedLimits.canAnalyze);
-      }
-      
-      // Save history only for premium users
-      if (user?.subscription_status === 'premium') {
-        await saveAnalysis(user.id, extractedText, results);
+        setScansRemaining(prev => Math.max(0, (prev || 0) - 1));
+        setCanScan(scansRemaining !== null ? scansRemaining > 1 : true);
       }
       
       // Navigate to history with latest results
+      const resultId = `result_${Date.now()}`;
+      cleanupTempResults();
+      global.tempResults[resultId] = { results, extractedText: extractedText };
       router.push({
         pathname: '/history',
-        params: { 
-          results: JSON.stringify(results),
-          extractedText: extractedText
-        }
+        params: { resultId }
       });
       
     } catch (error) {
+      setShowAILoading(false);
       Alert.alert('Error', 'Failed to analyze ingredients. Please try again.');
     } finally {
       setIsAnalyzing(false);
-      setShowPreview(false);
-      setCapturedPhoto(null);
+      setShowTextInput(false);
     }
   }
 
@@ -525,6 +648,35 @@ export default function CameraScreen() {
         </View>
       )}
 
+      {/* Test Button for AI Loading Modal - DEVELOPMENT ONLY */}
+      {__DEV__ && (
+        <TouchableOpacity
+          style={styles.testButton}
+          onPress={() => {
+            setShowAILoading(true);
+            setAiThoughts([]);
+            setAiProgress(0);
+            setIngredientCount(12);
+            
+            // Simulate realistic AI analysis flow with proper timing
+            setTimeout(() => addAIThought({ message: 'Scanning photo...', emoji: '📸', type: 'ocr' }), 100);
+            setTimeout(() => addAIThought({ message: 'Extracting text from image...', emoji: '🔍', type: 'ocr' }), 1000);
+            setTimeout(() => addAIThought({ message: 'Reading ingredient list...', emoji: '👀', type: 'parsing' }), 3000);
+            setTimeout(() => addAIThought({ message: 'Analyzing Organic Peanut Butter...', emoji: '🥜', type: 'analyzing' }), 4000);
+            setTimeout(() => addAIThought({ message: 'Organic Peanut Butter is clean!', emoji: '✨', type: 'classified' }), 5000);
+            setTimeout(() => addAIThought({ message: 'Analyzing Fruit Spread...', emoji: '🍓', type: 'analyzing' }), 6000);
+            setTimeout(() => addAIThought({ message: 'Fruit Spread has concerns...', emoji: '⚠️', type: 'classified' }), 7000);
+            setTimeout(() => addAIThought({ message: 'Analyzing Organic Honey...', emoji: '🍯', type: 'analyzing' }), 8000);
+            setTimeout(() => addAIThought({ message: 'Organic Honey is clean!', emoji: '✨', type: 'classified' }), 9000);
+            setTimeout(() => addAIThought({ message: '🕵️ Detective mode...', emoji: '💭', type: 'encouragement' }), 10000);
+            setTimeout(() => addAIThought({ message: '🎉 Product is clean!', emoji: '✨', type: 'complete' }), 11000);
+            setTimeout(() => setShowAILoading(false), 13000);
+          }}
+        >
+          <Text style={styles.testButtonText}>🧪 Test AI Modal</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Camera Controls - Fixed at bottom */}
       <View style={styles.controls}>
         <TouchableOpacity style={styles.flipButton} onPress={toggleCameraFacing}>
@@ -609,21 +761,12 @@ export default function CameraScreen() {
             
             <View style={styles.modalContent}>
               {capturedPhoto && (
-                <Image source={{ uri: capturedPhoto }} style={styles.previewImage} />
+                <Image 
+                  source={{ uri: capturedPhoto }} 
+                  style={styles.previewImage}
+                  resizeMode="contain"
+                />
               )}
-              
-              <Text style={styles.extractedTitle}>Extracted Text:</Text>
-              <View style={styles.extractedTextContainer}>
-                <Text style={styles.extractedText}>
-                  {extractedText || 'Text will be extracted when you analyze the photo...'}
-                </Text>
-              </View>
-              
-              <View style={styles.previewDisclaimer}>
-                <Text style={styles.previewDisclaimerText}>
-                  📚 This analysis is for educational purposes only and does not constitute medical advice.
-                </Text>
-              </View>
               
               <View style={styles.previewButtons}>
                 <TouchableOpacity 
@@ -653,6 +796,14 @@ export default function CameraScreen() {
             </View>
           </SafeAreaView>
         </Modal>
+        
+        {/* AI Analysis Loading Modal */}
+        <AIAnalysisLoadingModal 
+          visible={showAILoading} 
+          thoughts={aiThoughts} 
+          progress={aiProgress} 
+          ingredientCount={ingredientCount} 
+        />
     </SafeAreaView>
   );
 }
@@ -1056,7 +1207,7 @@ const styles = StyleSheet.create({
   },
   previewImage: {
     width: '100%',
-    height: 200,
+    height: 500,
     borderRadius: 4,
     marginBottom: 16,
     backgroundColor: COLORS.background,
@@ -1170,5 +1321,22 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontFamily: FONTS.terminalGrotesque,
     lineHeight: LINE_HEIGHTS.bodyMicro,
+  },
+  testButton: {
+    position: 'absolute',
+    top: 100,
+    right: 20,
+    backgroundColor: COLORS.accentYellow,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    zIndex: 1000,
+  },
+  testButtonText: {
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    fontFamily: FONTS.terminalGrotesque,
+    fontWeight: '400',
   },
 });

@@ -1,4 +1,4 @@
-import { parseIngredientsFromText, parseIngredientsFromTextLegacy, validateIngredientList, cleanExtractedText } from '../ocr';
+import { parseIngredientsFromText, parseIngredientsFromTextLegacy, validateIngredientList } from '../ocr';
 
 describe('OCR Service', () => {
   describe('parseIngredientsFromText (Enhanced)', () => {
@@ -215,40 +215,6 @@ describe('OCR Service', () => {
     });
   });
 
-  describe('cleanExtractedText', () => {
-    it('should normalize whitespace', () => {
-      const text = 'Sugar,   Salt,    Water';
-      const cleaned = cleanExtractedText(text);
-      
-      expect(cleaned).toBe('Sugar, Salt, Water');
-    });
-
-    it('should fix common OCR mistakes', () => {
-      const text = 'Sug0r, l, 1, Water';
-      const cleaned = cleanExtractedText(text);
-      
-      expect(cleaned).toBe('Sugar, I, I, Water');
-    });
-
-    it('should normalize separators', () => {
-      const text = 'Sugar;Salt,Water';
-      const cleaned = cleanExtractedText(text);
-      
-      expect(cleaned).toBe('Sugar, Salt, Water');
-    });
-
-    it('should remove OCR artifacts', () => {
-      const text = 'Sugar@#$%^&*()Salt Water';
-      const cleaned = cleanExtractedText(text);
-      
-      expect(cleaned).toBe('Sugar Salt Water');
-    });
-
-    it('should handle empty text', () => {
-      const text = '';
-      const cleaned = cleanExtractedText(text);
-      
-      expect(cleaned).toBe('');
-    });
-  });
+  // cleanExtractedText() tests removed - function deprecated with GPT-4 Vision migration
+  // GPT-4 Vision handles all text cleaning automatically
 });

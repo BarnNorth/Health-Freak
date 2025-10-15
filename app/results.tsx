@@ -30,24 +30,31 @@ export default function ResultsScreen() {
   const [feedbackSubmitted, setFeedbackSubmitted] = useState<Set<string>>(new Set());
   const [loadingAccuracy, setLoadingAccuracy] = useState(false);
   const { user } = useAuth();
-  const { results: resultsParam, extractedText: extractedTextParam } = useLocalSearchParams();
+  const { resultId } = useLocalSearchParams<{ resultId: string }>();
+  
+  // Get data from global temp storage
+  const cachedData = global.tempResults?.[resultId];
+  const results = cachedData?.results;
+  const extractedTextData = cachedData?.extractedText;
 
   useEffect(() => {
-    if (resultsParam && extractedTextParam) {
-      try {
-        const parsedResults = JSON.parse(resultsParam as string);
-        setAnalysisResult(parsedResults);
-        setExtractedText(extractedTextParam as string);
-        
-        // Load community accuracy data for ingredients
-        if (parsedResults.ingredients && parsedResults.ingredients.length > 0) {
-          loadCommunityAccuracy(parsedResults.ingredients.map((i: any) => i.name));
-        }
-      } catch (error) {
-        console.error('Error parsing results:', error);
+    // Cleanup temp storage when component unmounts
+    return () => { 
+      if (resultId) delete global.tempResults?.[resultId]; 
+    };
+  }, [resultId]);
+
+  useEffect(() => {
+    if (results && extractedTextData) {
+      setAnalysisResult(results);
+      setExtractedText(extractedTextData);
+      
+      // Load community accuracy data for ingredients
+      if (results.ingredients && results.ingredients.length > 0) {
+        loadCommunityAccuracy(results.ingredients.map((i: any) => i.name));
       }
     }
-  }, [resultsParam, extractedTextParam]);
+  }, [results, extractedTextData]);
 
   // Load community accuracy data for ingredients
   const loadCommunityAccuracy = async (ingredientNames: string[]) => {
@@ -125,12 +132,12 @@ export default function ResultsScreen() {
 
   const isPremium = user?.subscription_status === 'premium';
 
-  if (!analysisResult) {
+  if (!results || !analysisResult) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.emptyContainer}>
           <Info size={64} color={COLORS.textSecondary} />
-          <Text style={styles.emptyTitle}>No Results Yet</Text>
+          <Text style={styles.emptyTitle}>Results not found</Text>
           <Text style={styles.emptyText}>
             Take a photo of an ingredient list to see your educational analysis.
           </Text>
@@ -142,8 +149,11 @@ export default function ResultsScreen() {
     );
   }
 
-  const cleanIngredients = analysisResult.ingredients?.filter(r => r.status === 'generally_clean').sort((a, b) => a.name.localeCompare(b.name)) || [];
-  const toxicIngredients = analysisResult.ingredients?.filter(r => r.status === 'potentially_toxic').sort((a, b) => a.name.localeCompare(b.name)) || [];
+  const cleanIngredients = analysisResult.ingredients?.filter(r => r.status === 'generally_clean') || [];
+  const toxicIngredients = analysisResult.ingredients?.filter(r => r.status === 'potentially_toxic') || [];
+  
+  // All ingredients in original OCR order (no separation by clean/toxic)
+  const allIngredients = analysisResult.ingredients || [];
   return (
     <SafeAreaView style={styles.container}>
       {/* Bold Header */}
@@ -178,7 +188,7 @@ export default function ResultsScreen() {
           </View>
           
           <Text style={styles.verdictSummary}>
-            {analysisResult.totalIngredients} ingredients: {analysisResult.cleanCount} clean, {analysisResult.toxicCount} toxic
+            {analysisResult.totalIngredients} ingredients
           </Text>
         </View>
 
@@ -223,77 +233,14 @@ export default function ResultsScreen() {
               </View>
             </View>
 
-            {/* Clean Ingredients Section */}
-            {cleanIngredients.length > 0 && (
+            {/* All Ingredients in Original OCR Order */}
+            {allIngredients.length > 0 && (
               <View style={styles.ingredientSection}>
-                <View style={styles.sectionHeader}>
-                  <CheckCircle size={20} color={COLORS.cleanGreen} />
-                  <Text style={styles.sectionTitle}>Clean Ingredients</Text>
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{cleanIngredients.length}</Text>
-                  </View>
-                </View>
-                {cleanIngredients.map((ingredient, index) => (
-                  <View key={index} style={[styles.ingredientCard, styles.cleanCard]}>
-                    <Text style={styles.ingredientName}>{ingredient.name}</Text>
-                    <Text style={styles.ingredientNote}>{ingredient.educational_note}</Text>
-                    
-                    {/* Feedback section */}
-                    {user && (
-                      <View style={styles.feedbackSection}>
-                        <Text style={styles.feedbackQuestion}>Is this accurate?</Text>
-                        <View style={styles.feedbackButtons}>
-                          <TouchableOpacity 
-                            style={[
-                              styles.feedbackButton,
-                              feedbackSubmitted.has(ingredient.name) && styles.feedbackButtonDisabled
-                            ]}
-                            onPress={() => handleFeedback(ingredient.name, ingredient.status, true, ingredient.confidence)}
-                            disabled={feedbackSubmitted.has(ingredient.name)}
-                          >
-                            <ThumbsUp size={14} color={COLORS.white} />
-                            <Text style={styles.feedbackButtonText}>Yes</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity 
-                            style={[
-                              styles.feedbackButton,
-                              feedbackSubmitted.has(ingredient.name) && styles.feedbackButtonDisabled
-                            ]}
-                            onPress={() => handleFeedback(ingredient.name, ingredient.status, false, ingredient.confidence)}
-                            disabled={feedbackSubmitted.has(ingredient.name)}
-                          >
-                            <ThumbsDown size={14} color={COLORS.white} />
-                            <Text style={styles.feedbackButtonText}>No</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    )}
-                    
-                    {/* Show community accuracy if available */}
-                    {ingredient.communityAccuracy !== undefined && ingredient.totalFeedback && ingredient.totalFeedback > 0 && (
-                      <View style={styles.communityAccuracySection}>
-                        <Text style={styles.communityAccuracyText}>
-                          📊 {ingredient.communityAccuracy}% community agreement ({ingredient.totalFeedback} {ingredient.totalFeedback === 1 ? 'vote' : 'votes'})
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {/* Toxic Ingredients Section */}
-            {toxicIngredients.length > 0 && (
-              <View style={styles.ingredientSection}>
-                <View style={styles.sectionHeader}>
-                  <AlertTriangle size={20} color={COLORS.toxicRed} />
-                  <Text style={[styles.sectionTitle, styles.toxicTitle]}>Toxic Ingredients</Text>
-                  <View style={[styles.badge, styles.toxicBadge]}>
-                    <Text style={styles.badgeText}>{toxicIngredients.length}</Text>
-                  </View>
-                </View>
-                {toxicIngredients.map((ingredient, index) => (
-                  <View key={index} style={[styles.ingredientCard, styles.toxicCard]}>
+                {allIngredients.map((ingredient, index) => (
+                  <View key={index} style={[
+                    styles.ingredientCard, 
+                    ingredient.status === 'generally_clean' ? styles.cleanCard : styles.toxicCard
+                  ]}>
                     <Text style={styles.ingredientName}>{ingredient.name}</Text>
                     <Text style={styles.ingredientNote}>{ingredient.educational_note}</Text>
                     

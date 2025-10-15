@@ -5,13 +5,13 @@
     "version": "1.0.0",
     "sdkVersion": "54.0.0",
     "orientation": "portrait",
-    "icon": "./assets/AppIcons/appstore.png",
+    "icon": "./assets/AppIcons v2/appstore.png",
     "scheme": "healthfreak",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "bundleIdentifier": "com.tommymulder.healthfreak",
-      "buildNumber": "6",
+      "bundleIdentifier": "com.healthfreak.app",
+      "buildNumber": "4",
       "supportsTablet": true,
       "associatedDomains": [
         "applinks:vuiaqdkbpkbcvyrzpmzv.supabase.co"
@@ -23,7 +23,7 @@
       }
     },
     "android": {
-      "package": "com.tommymulder.healthfreak",
+      "package": "com.healthfreak.app",
       "versionCode": 1,
       "permissions": [
         "CAMERA",
@@ -48,7 +48,7 @@
         }
       ],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/AppIcons/appstore.png",
+        "foregroundImage": "./assets/AppIcons v2/playstore.png",
         "backgroundColor": "#FFFFFF"
       }
     },
