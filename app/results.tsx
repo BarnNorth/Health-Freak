@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Alert } from 'react-native';
-import { CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, Info, ArrowLeft, Crown, Zap, ThumbsUp, ThumbsDown } from 'lucide-react-native';
+import { CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, Info, ArrowLeft, Crown, Zap, ThumbsUp, ThumbsDown, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { showPremiumUpgradePrompt, getIngredientCounts } from '@/services/subscription';
@@ -17,6 +17,7 @@ interface AnalysisResult {
     communityAccuracy?: number;
     totalFeedback?: number;
     confidence?: number;
+    isMinorIngredient?: boolean;
   }>;
   totalIngredients: number;
   toxicCount: number;
@@ -29,6 +30,7 @@ export default function ResultsScreen() {
   const [extractedText, setExtractedText] = useState('');
   const [feedbackSubmitted, setFeedbackSubmitted] = useState<Set<string>>(new Set());
   const [loadingAccuracy, setLoadingAccuracy] = useState(false);
+  const [expandedCards, setExpandedCards] = useState<Set<number>>(new Set());
   const { user } = useAuth();
   const { resultId } = useLocalSearchParams<{ resultId: string }>();
   
@@ -36,6 +38,19 @@ export default function ResultsScreen() {
   const cachedData = global.tempResults?.[resultId];
   const results = cachedData?.results;
   const extractedTextData = cachedData?.extractedText;
+
+  // Toggle card expansion
+  const toggleCard = (index: number) => {
+    setExpandedCards(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(index)) {
+        newSet.delete(index);
+      } else {
+        newSet.add(index);
+      }
+      return newSet;
+    });
+  };
 
   useEffect(() => {
     // Cleanup temp storage when component unmounts
@@ -175,9 +190,9 @@ export default function ResultsScreen() {
         ]}>
           <View style={styles.verdictHeader}>
             {analysisResult.overallVerdict === 'CLEAN' ? (
-              <CheckCircle size={48} color={COLORS.cleanGreen} />
+              <CheckCircle size={75} color={COLORS.white} />
             ) : (
-              <AlertTriangle size={48} color={COLORS.toxicRed} />
+              <AlertTriangle size={75} color={COLORS.white} />
             )}
             <Text style={[
               styles.verdictText,
@@ -187,7 +202,7 @@ export default function ResultsScreen() {
             </Text>
           </View>
           
-          <Text style={styles.verdictSummary}>
+          <Text style={[styles.verdictSummary, { color: COLORS.white }]}>
             {analysisResult.totalIngredients} ingredients
           </Text>
         </View>
@@ -236,55 +251,84 @@ export default function ResultsScreen() {
             {/* All Ingredients in Original OCR Order */}
             {allIngredients.length > 0 && (
               <View style={styles.ingredientSection}>
-                {allIngredients.map((ingredient, index) => (
-                  <View key={index} style={[
-                    styles.ingredientCard, 
-                    ingredient.status === 'generally_clean' ? styles.cleanCard : styles.toxicCard
-                  ]}>
-                    <Text style={styles.ingredientName}>{ingredient.name}</Text>
-                    <Text style={styles.ingredientNote}>{ingredient.educational_note}</Text>
-                    
-                    {/* Feedback section */}
-                    {user && (
-                      <View style={styles.feedbackSection}>
-                        <Text style={styles.feedbackQuestion}>Is this accurate?</Text>
-                        <View style={styles.feedbackButtons}>
-                          <TouchableOpacity 
-                            style={[
-                              styles.feedbackButton,
-                              feedbackSubmitted.has(ingredient.name) && styles.feedbackButtonDisabled
-                            ]}
-                            onPress={() => handleFeedback(ingredient.name, ingredient.status, true, ingredient.confidence)}
-                            disabled={feedbackSubmitted.has(ingredient.name)}
-                          >
-                            <ThumbsUp size={14} color={COLORS.white} />
-                            <Text style={styles.feedbackButtonText}>Yes</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity 
-                            style={[
-                              styles.feedbackButton,
-                              feedbackSubmitted.has(ingredient.name) && styles.feedbackButtonDisabled
-                            ]}
-                            onPress={() => handleFeedback(ingredient.name, ingredient.status, false, ingredient.confidence)}
-                            disabled={feedbackSubmitted.has(ingredient.name)}
-                          >
-                            <ThumbsDown size={14} color={COLORS.white} />
-                            <Text style={styles.feedbackButtonText}>No</Text>
-                          </TouchableOpacity>
+                {allIngredients.map((ingredient, index) => {
+                  const isExpanded = expandedCards.has(index);
+                  
+                  return (
+                    <View key={index} style={[
+                      styles.ingredientCard, 
+                      ingredient.status === 'generally_clean' ? styles.cleanCard : styles.toxicCard
+                    ]}>
+                      {/* Clickable ingredient name header */}
+                      <TouchableOpacity 
+                        onPress={() => toggleCard(index)}
+                        style={styles.ingredientHeader}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.ingredientName}>{ingredient.name}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          {ingredient.isMinorIngredient && (
+                            <View style={styles.minorBadge}>
+                              <Text style={styles.minorBadgeText}>{'< 2%'}</Text>
+                            </View>
+                          )}
+                          {isExpanded ? (
+                            <ChevronUp size={20} color={COLORS.white} />
+                          ) : (
+                            <ChevronDown size={20} color={COLORS.white} />
+                          )}
                         </View>
-                      </View>
-                    )}
-                    
-                    {/* Show community accuracy if available */}
-                    {ingredient.communityAccuracy !== undefined && ingredient.totalFeedback && ingredient.totalFeedback > 0 && (
-                      <View style={styles.communityAccuracySection}>
-                        <Text style={styles.communityAccuracyText}>
-                          📊 {ingredient.communityAccuracy}% community agreement ({ingredient.totalFeedback} {ingredient.totalFeedback === 1 ? 'vote' : 'votes'})
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                ))}
+                      </TouchableOpacity>
+                      
+                      {/* Collapsible content */}
+                      {isExpanded && (
+                        <>
+                          <Text style={styles.ingredientNote}>{ingredient.educational_note}</Text>
+                          
+                          {/* Feedback section */}
+                          {user && (
+                            <View style={styles.feedbackSection}>
+                              <Text style={styles.feedbackQuestion}>Is this accurate?</Text>
+                              <View style={styles.feedbackButtons}>
+                                <TouchableOpacity 
+                                  style={[
+                                    styles.feedbackButton,
+                                    feedbackSubmitted.has(ingredient.name) && styles.feedbackButtonDisabled
+                                  ]}
+                                  onPress={() => handleFeedback(ingredient.name, ingredient.status, true, ingredient.confidence)}
+                                  disabled={feedbackSubmitted.has(ingredient.name)}
+                                >
+                                  <ThumbsUp size={14} color={COLORS.white} />
+                                  <Text style={styles.feedbackButtonText}>Yes</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity 
+                                  style={[
+                                    styles.feedbackButton,
+                                    feedbackSubmitted.has(ingredient.name) && styles.feedbackButtonDisabled
+                                  ]}
+                                  onPress={() => handleFeedback(ingredient.name, ingredient.status, false, ingredient.confidence)}
+                                  disabled={feedbackSubmitted.has(ingredient.name)}
+                                >
+                                  <ThumbsDown size={14} color={COLORS.white} />
+                                  <Text style={styles.feedbackButtonText}>No</Text>
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          )}
+                          
+                          {/* Show community accuracy if available */}
+                          {ingredient.communityAccuracy !== undefined && ingredient.totalFeedback && ingredient.totalFeedback > 0 && (
+                            <View style={styles.communityAccuracySection}>
+                              <Text style={styles.communityAccuracyText}>
+                                📊 {ingredient.communityAccuracy}% community agreement ({ingredient.totalFeedback} {ingredient.totalFeedback === 1 ? 'vote' : 'votes'})
+                              </Text>
+                            </View>
+                          )}
+                        </>
+                      )}
+                    </View>
+                  );
+                })}
               </View>
             )}
           </View>
@@ -358,11 +402,11 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   cleanVerdict: {
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.cleanGreen,
     borderColor: COLORS.cleanGreen,
   },
   toxicVerdict: {
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.toxicRed,
     borderColor: COLORS.toxicRed,
   },
   verdictHeader: {
@@ -370,26 +414,26 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   verdictText: {
-    fontSize: 32,
+    fontSize: 50,
     fontWeight: '400',
     marginTop: 12,
     textAlign: 'center',
     fontFamily: FONTS.karmaFuture,
-    lineHeight: 36,
+    lineHeight: 56,
   },
   cleanVerdictText: {
-    color: COLORS.cleanGreen,
+    color: COLORS.white,
   },
   toxicVerdictText: {
-    color: COLORS.toxicRed,
+    color: COLORS.white,
   },
   verdictSummary: {
-    fontSize: FONT_SIZES.bodySmall,
-    color: COLORS.textSecondary,
+    fontSize: 22.5,
+    color: COLORS.white,
     textAlign: 'center',
     fontWeight: '400',
     fontFamily: FONTS.terminalGrotesque,
-    lineHeight: LINE_HEIGHTS.bodySmall,
+    lineHeight: 28,
   },
   unifiedUpgradeCard: {
     backgroundColor: COLORS.accentYellow,
@@ -541,13 +585,33 @@ const styles = StyleSheet.create({
     borderColor: COLORS.toxicRed,
     backgroundColor: COLORS.toxicRed,
   },
+  ingredientHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  minorBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  minorBadgeText: {
+    fontSize: 12,
+    color: COLORS.white,
+    fontFamily: FONTS.terminalGrotesque,
+    fontWeight: '600',
+  },
   ingredientName: {
     fontSize: FONT_SIZES.bodySmall,
     fontWeight: '400',
     color: COLORS.white,
-    marginBottom: 10,
     fontFamily: FONTS.terminalGrotesque,
     lineHeight: LINE_HEIGHTS.bodySmall,
+    flex: 1,
   },
   ingredientNote: {
     fontSize: FONT_SIZES.bodySmall,
@@ -555,6 +619,7 @@ const styles = StyleSheet.create({
     lineHeight: LINE_HEIGHTS.bodySmall,
     fontWeight: '400',
     fontFamily: FONTS.terminalGrotesque,
+    marginTop: 10,
   },
   feedbackSection: {
     marginTop: 12,

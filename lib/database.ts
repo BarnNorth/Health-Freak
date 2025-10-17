@@ -1,4 +1,4 @@
-import { supabase, User, IngredientCache, AnalysisHistory, Scan } from './supabase';
+import { supabase, User, IngredientCache, AnalysisHistory } from './supabase';
 
 // User management functions
 export async function createUserProfile(userId: string, email: string): Promise<User | null> {
@@ -414,58 +414,6 @@ export async function deleteAnalysis(userId: string, analysisId: string): Promis
   } catch (error) {
     console.error('Error deleting analysis:', error);
     return false;
-  }
-}
-
-// Scan management functions for Premium users
-export async function addUserScan(
-  userId: string,
-  productName: string,
-  result: any,
-  barcode?: string
-): Promise<Scan | null> {
-  try {
-    console.log('💾 Adding scan for user:', userId);
-    
-    const { data, error } = await supabase
-      .rpc('add_user_scan', {
-        user_uuid: userId,
-        p_product_name: productName,
-        p_result: result,
-        p_barcode: barcode
-      });
-
-    if (error) {
-      console.error('❌ Error adding scan:', error);
-      return null;
-    }
-
-    console.log('✅ Scan added successfully:', data);
-    return data;
-  } catch (error) {
-    console.error('💥 Exception adding scan:', error);
-    return null;
-  }
-}
-
-export async function getUserScans(userId: string): Promise<Scan[]> {
-  try {
-    console.log('📚 Fetching scans for user:', userId);
-    
-    const { data, error } = await supabase
-      .from('user_scan_history')
-      .select('*');
-
-    if (error) {
-      console.error('[DATABASE] Error fetching user scans:', error);
-      return [];
-    }
-
-    console.log('[DATABASE] Found', data?.length || 0, 'scans for user');
-    return data || [];
-  } catch (error) {
-    console.error('[DATABASE] Exception fetching user scans:', error);
-    return [];
   }
 }
 

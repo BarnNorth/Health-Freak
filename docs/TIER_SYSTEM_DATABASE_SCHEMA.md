@@ -1,8 +1,10 @@
 # Database Schema for Simplified Tier System
 
-**Date:** October 12, 2025  
-**Status:** ✅ Ready for Deployment  
-**Migration File:** `20251012000000_simplify_tier_system.sql`
+**Date:** October 16, 2025 (Updated)  
+**Status:** ✅ Production Ready  
+**Migration Files:** 
+- `20251012000000_simplify_tier_system.sql`
+- `20251016000000_cleanup_unused_scans_table.sql` (cleanup)
 
 ## Overview
 
@@ -34,32 +36,32 @@ CREATE TABLE users (
 - ✅ **Removed:** `terms_accepted` (unused)
 - ✅ **Indexes:** Added for Stripe field lookups
 
-### **2. Scans Table - NEW** 🆕
+### **2. Analyses History Table - Active** ✅
 
 ```sql
-CREATE TABLE scans (
+CREATE TABLE analyses_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
-  barcode TEXT NULL,
-  product_name TEXT NOT NULL,
-  scan_date TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-  result JSONB NOT NULL,
+  extracted_text TEXT NOT NULL,
+  results_json JSONB NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
 
 **Purpose:**
-- 📱 **Premium-only scan history storage**
-- 🔒 **Database-level enforcement** via RLS policies
-- 📊 **Rich scan data** with JSON results
+- 📱 **Scan/Analysis history storage for Premium users**
+- 🔒 **Access controlled** via RLS policies
+- 📊 **Full analysis results** with JSON storage
 
-### **3. Existing Tables - Preserved** ✅
+**Note:** The `scans` table was created but never implemented. We use `analyses_history` instead.
 
-- `ingredients_cache` - Unchanged
-- `analyses_history` - Preserved for backward compatibility
-- `stripe_customers` - Unchanged  
-- `stripe_subscriptions` - Unchanged
-- `stripe_orders` - Unchanged
+### **3. Other Core Tables** ✅
+
+- `ingredients_cache` - Ingredient analysis caching
+- `stripe_customers` - Stripe payment integration
+- `stripe_subscriptions` - Subscription management
+- `stripe_orders` - Order history (for future use)
+- `subscription_audit` - Subscription change tracking (for future use)
 
 ---
 
@@ -67,67 +69,78 @@ CREATE TABLE scans (
 
 ### **Row Level Security Policies**
 
-#### **Scans Table - Premium Only:**
+#### **Analyses History Table:**
 ```sql
--- Only Premium users can read their scans
-CREATE POLICY "Premium users can read own scans"
-  ON scans FOR SELECT TO authenticated
-  USING (
-    auth.uid() = user_id 
-    AND EXISTS (
-      SELECT 1 FROM users 
-      WHERE id = auth.uid() 
-      AND subscription_status = 'premium'
-    )
-  );
+-- Users can read their own analyses
+CREATE POLICY "Users can read own analyses"
+  ON analyses_history FOR SELECT TO authenticated
+  USING (auth.uid() = user_id);
+
+-- Users can insert their own analyses  
+CREATE POLICY "Users can insert own analyses"
+  ON analyses_history FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() = user_id);
+
+-- Users can delete their own analyses
+CREATE POLICY "Users can delete own analyses"
+  ON analyses_history FOR DELETE TO authenticated
+  USING (auth.uid() = user_id);
 ```
 
-#### **Database Triggers:**
-```sql
--- Enforce Premium constraint on INSERT
-CREATE TRIGGER enforce_premium_scans_only
-  BEFORE INSERT ON scans
-  FOR EACH ROW
-  EXECUTE FUNCTION enforce_premium_scan_constraint();
-```
-
-**Result:** ❌ Free users **cannot** save scan history at database level
+**Application Logic:**
+- ✅ Free users: Get full analysis but history is NOT saved
+- ✅ Premium users: Full analysis AND history saved automatically
+- 🔒 Enforcement happens at the **application layer**, not database layer
 
 ---
 
-## 🛠️ New Database Functions
+## 🛠️ Database Functions
 
-### **1. Premium Check Functions**
-
-```sql
--- Check if user is Premium
-is_user_premium(user_uuid UUID) RETURNS BOOLEAN
-
--- Get remaining scans for Free users (999 for Premium)
-get_user_remaining_scans(user_uuid UUID) RETURNS INTEGER
-```
-
-### **2. Scan Management Functions**
+### **1. User Statistics Functions**
 
 ```sql
--- Safely add scan (Premium users only)
-add_user_scan(
-  user_uuid UUID,
-  p_barcode TEXT,
-  p_product_name TEXT,
-  p_result JSONB
-) RETURNS UUID
-```
-
-### **3. Updated Statistics Functions**
-
-```sql
--- Updated to use new column name
+-- Get user analysis/scan statistics
 get_user_analysis_stats(user_id UUID) 
 -- Returns: total_used, subscription_status, can_analyze
 
+-- Increment user's scan count
 increment_analysis_count(user_id UUID)
 -- Updates: total_scans_used column
+```
+
+### **2. Ingredient Cache Functions**
+
+```sql
+-- Get fresh (non-expired) ingredient from cache
+get_fresh_ingredient(ingredient_name_param TEXT)
+
+-- Get multiple ingredients in batch
+get_fresh_ingredients_batch(ingredient_names TEXT[])
+
+-- Get ingredients expiring soon
+get_expiring_ingredients(expiry_threshold_days INT)
+
+-- Get cache statistics
+get_cache_statistics()
+
+-- Clean up expired ingredients
+cleanup_expired_ingredients()
+```
+
+### **3. Calibration Functions**
+
+```sql
+-- Get overall AI calibration statistics
+get_calibration_stats()
+
+-- Get accuracy for specific ingredient
+get_ingredient_accuracy(ingredient_name_param TEXT)
+
+-- Get accuracy trends over time
+get_accuracy_trends(days_back INT)
+
+-- Get confidence calibration data
+get_confidence_calibration()
 ```
 
 ---
@@ -148,15 +161,13 @@ export interface User {
 }
 ```
 
-### **New Scan Interface:**
+### **Analysis History Interface:**
 ```typescript
-export interface Scan {
+export interface AnalysisHistory {
   id: string;
   user_id: string;
-  barcode?: string;
-  product_name: string;
-  scan_date: string;
-  result: any; // JSON scan results
+  extracted_text: string;
+  results_json: any; // JSON analysis results
   created_at: string;
 }
 ```
@@ -168,14 +179,16 @@ export interface Scan {
 ### **Free Tier (5 scans):**
 - ✅ Can use app and scan products
 - ✅ Gets full analysis during scan
-- ❌ **NO scan history saved** (enforced by database)
+- ❌ **NO scan history saved** (app logic)
 - ✅ Scan count tracked in `total_scans_used`
+- ✅ Can see latest result in history tab
 
 ### **Premium Tier (Unlimited):**
 - ✅ Unlimited scans 
-- ✅ **Scan history automatically saved**
-- ✅ Access to scan history via `user_scan_history` view
-- ✅ Full search and export capabilities
+- ✅ **Scan history automatically saved** to `analyses_history`
+- ✅ Access to full scan history in app
+- ✅ Delete individual analyses
+- ✅ Future: Search and export capabilities
 
 ---
 
@@ -194,7 +207,8 @@ npx tsx scripts/applyTierSystemMigration.ts
 
 ### **3. Expected Results:**
 - ✅ Users table updated with new columns
-- ✅ Scans table created with RLS policies
+- ✅ Unused scans table removed (cleanup migration)
+- ✅ Analyses history table actively used
 - ✅ Database functions working
 - ✅ All user data preserved and validated
 - ✅ No linter errors in TypeScript code
@@ -219,16 +233,18 @@ npx tsx scripts/applyTierSystemMigration.ts
 
 ### **1. Clear Separation:**
 - **Scan counting** (all users) vs **Scan history** (Premium only)
-- **Database enforces** Premium benefits automatically
+- **Application enforces** Premium benefits for history saving
+- **Database enforces** security via RLS policies
 
 ### **2. Better Performance:**
-- **Dedicated scans table** optimized for Premium users
-- **Proper indexes** for common queries
-- **Efficient RLS policies**
+- **Single analyses_history table** with proper indexes
+- **Efficient queries** for history retrieval
+- **RLS policies** ensure data security
 
 ### **3. Future-Ready:**
 - **Stripe integration** fields ready for payment flow
 - **Scalable design** supports additional Premium features
+- **Audit tables** ready for admin features
 - **Clean data model** aligns with business logic
 
 ---

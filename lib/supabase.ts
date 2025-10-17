@@ -89,16 +89,6 @@ export interface IngredientCache {
   updated_at: string;
 }
 
-export interface Scan {
-  id: string;
-  user_id: string;
-  barcode?: string;
-  product_name: string;
-  scan_date: string;
-  result: any; // JSON data containing scan results
-  created_at: string;
-}
-
 export interface AnalysisHistory {
   id: string;
   user_id: string;

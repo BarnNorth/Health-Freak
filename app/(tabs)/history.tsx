@@ -209,7 +209,6 @@ export default function HistoryScreen() {
         {/* Bold Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Health Freak</Text>
-          <Text style={styles.subtitle}>Your ingredient analyses</Text>
         </View>
 
         {/* Latest Result Section */}
@@ -310,7 +309,7 @@ export default function HistoryScreen() {
         {/* History List */}
         {history.length > 0 && (
           <View style={styles.historySection}>
-            <Text style={styles.historySectionTitle}>Previous Analyses</Text>
+            <Text style={styles.historySectionTitle}>Previous Ingredient Analyses</Text>
             <View style={styles.historyContainer}>
               {history.map((item) => (
             <View key={item.id} style={styles.historyCard}>
@@ -408,12 +407,11 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   title: {
-    fontSize: FONT_SIZES.titleLarge,
+    fontSize: FONT_SIZES.titleXL,
     fontWeight: '400',
     color: COLORS.textSecondary,
-    marginBottom: 4,
     fontFamily: FONTS.karmaFuture,
-    lineHeight: LINE_HEIGHTS.titleLarge,
+    lineHeight: LINE_HEIGHTS.titleXL,
     textAlign: 'center',
   },
   subtitle: {
@@ -822,26 +820,5 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     lineHeight: LINE_HEIGHTS.bodyLarge,
     fontFamily: FONTS.terminalGrotesque,
-  },
-  upgradeButton: {
-    backgroundColor: COLORS.cleanGreen,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: COLORS.border,
-    alignItems: 'center',
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.8,
-    shadowRadius: 0,
-    elevation: 3,
-  },
-  upgradeButtonText: {
-    color: COLORS.textPrimary,
-    fontSize: FONT_SIZES.bodyLarge,
-    fontWeight: '400',
-    fontFamily: FONTS.terminalGrotesque,
-    lineHeight: LINE_HEIGHTS.bodyLarge,
   },
 });

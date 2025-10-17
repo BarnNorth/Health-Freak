@@ -94,7 +94,6 @@ export default function ProfileScreen() {
         {/* Bold Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Health Freak</Text>
-          <Text style={styles.subtitle}>Your Health Journey</Text>
         </View>
 
         {/* User Info */}
@@ -240,12 +239,12 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   title: {
-    fontSize: FONT_SIZES.titleLarge,
+    fontSize: FONT_SIZES.titleXL,
     fontWeight: '400',
     color: COLORS.textSecondary,
-    marginBottom: 4,
     fontFamily: FONTS.karmaFuture,
-    lineHeight: LINE_HEIGHTS.titleLarge,
+    lineHeight: LINE_HEIGHTS.titleXL,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: FONT_SIZES.titleSmall,

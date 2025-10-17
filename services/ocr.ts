@@ -335,6 +335,73 @@ export interface ParsedIngredient {
   modifiers: string[];
   confidence: number;
   originalText: string;
+  isMinorIngredient?: boolean; // true if ingredient appears after "contains X% or less" marker
+}
+
+/**
+ * Extract and remove footnote definitions from ingredient text (Industry Best Practice: Two-Pass Parsing)
+ * Example input: "Flour, Sugar, Butter*. * Organic" 
+ * Returns: { cleanedText: "Flour, Sugar, Butter*", footnotes: { '*': 'Organic' } }
+ */
+function extractAndCleanFootnotes(text: string): { cleanedText: string; footnotes: Record<string, string> } {
+  const footnotes: Record<string, string> = {};
+  let cleanedText = text;
+  
+  // Pattern 1: Standalone footnotes at end (". * Organic" or ". † Fair Trade")
+  const standalonePattern = /\.\s*([*†‡§¶#]+)\s+([A-Z][^.*†‡§¶#]+?)(?=\s*[.*†‡§¶#]|$)/g;
+  
+  let match;
+  const footnotesToRemove: string[] = [];
+  
+  while ((match = standalonePattern.exec(text)) !== null) {
+    const symbol = match[1].trim();
+    const meaning = match[2].trim();
+    
+    // Only store meaningful footnotes (not ingredient fragments)
+    if (meaning.length > 3 && 
+        (meaning.toLowerCase().includes('organic') || 
+         meaning.toLowerCase().includes('fair trade') ||
+         meaning.toLowerCase().includes('trivial') ||
+         meaning.toLowerCase().includes('cholesterol') ||
+         meaning.toLowerCase().includes('source'))) {
+      
+      footnotes[symbol] = meaning;
+      footnotesToRemove.push(match[0]); // Save full match to remove later
+    }
+  }
+  
+  // Remove footnote definitions from text
+  for (const footnoteText of footnotesToRemove) {
+    cleanedText = cleanedText.replace(footnoteText, '.');
+  }
+  
+  // Pattern 2: Note/Footnote sections (common variations)
+  const noteSectionPatterns = [
+    /note:\s*[*†‡§¶#]+\s+[^.]+\./gi,
+    /\*+\s+(organic|fair\s*trade|fairtrade)(\s+ingredients?)?\.?$/gi,
+    /†+\s+(organic|fair\s*trade|fairtrade)(\s+ingredients?)?\.?$/gi,
+  ];
+  
+  for (const pattern of noteSectionPatterns) {
+    const noteMatch = cleanedText.match(pattern);
+    if (noteMatch) {
+      const noteText = noteMatch[0];
+      
+      // Extract symbol and meaning
+      if (noteText.includes('*')) {
+        if (noteText.toLowerCase().includes('organic')) footnotes['*'] = 'Organic';
+        if (noteText.toLowerCase().includes('fair trade')) footnotes['*'] = 'Fair Trade';
+      }
+      if (noteText.includes('†')) {
+        if (noteText.toLowerCase().includes('organic')) footnotes['†'] = 'Organic';
+        if (noteText.toLowerCase().includes('fair trade')) footnotes['†'] = 'Fair Trade';
+      }
+      
+      cleanedText = cleanedText.replace(noteText, '');
+    }
+  }
+  
+  return { cleanedText: cleanedText.trim(), footnotes };
 }
 
 /**
@@ -351,6 +418,10 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
     return [];
   }
 
+  // PASS 1: Extract and remove footnote definitions from text
+  const { cleanedText, footnotes } = extractAndCleanFootnotes(text);
+  text = cleanedText; // Use cleaned text for ingredient parsing
+
   // Common ingredient words to help identify valid ingredients
   const commonIngredients = [
     'organic', 'natural', 'sugar', 'salt', 'oil', 'water', 'flour', 'milk', 'egg',
@@ -366,6 +437,50 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
   // Expand "and/or" to separate ingredients before parsing
   text = text.replace(/\s+and\/or\s+/gi, ', ');
 
+  // PASS 2: Detect and mark minor ingredient sections, then remove the marker from text
+  const minorIngredientPatterns = [
+    /contains?\s+(?:2%|less\s+than\s+2%|\d+%)\s+or\s+less\s+of\s+(?:each\s+of\s+)?(?:the\s+following:\s*)?/gi,
+    /contains?\s+less\s+than\s+(?:2%|\d+%)\s+of\s+(?:each\s+of\s+)?(?:the\s+following:\s*)?/gi,
+    /less\s+than\s+(?:2%|\d+%)\s*(?:of\s+)?(?:each\s+of\s+)?(?:the\s+following:\s*)?/gi,
+    /(?:2%|\d+%)\s+or\s+less\s*(?:of\s+)?(?:each\s+of\s+)?(?:the\s+following:\s*)?/gi,
+  ];
+
+  let hasMinorSection = false;
+  let minorMarkerIndex = -1; // Index in the split array where minor section starts
+
+  // Find and mark the minor ingredient marker, then remove it
+  for (const pattern of minorIngredientPatterns) {
+    const match = pattern.exec(text);
+    if (match) {
+      hasMinorSection = true;
+      
+      // Count commas BEFORE the marker (excluding commas inside parentheses)
+      // This must match the split logic: /,(?![^()]*\))/g
+      const textBeforeMarker = text.substring(0, match.index);
+      const commasBeforeMarker = (textBeforeMarker.match(/,(?![^()]*\))/g) || []).length;
+      
+      // The minor section starts at the next ingredient after this comma count
+      // Since commas separate ingredients, index N follows comma N-1
+      // So if there are 3 commas before marker, the first minor ingredient is at index 3
+      minorMarkerIndex = commasBeforeMarker - 1; // Subtract 1 because we want > comparison
+      
+      // Remove the marker from the text
+      // Check if there's already a comma before the marker
+      const textBeforeTrimmed = text.substring(0, match.index).trimEnd();
+      const hasCommaBeforeMarker = textBeforeTrimmed.endsWith(',');
+      const textAfterMarker = text.substring(match.index + match[0].length).trim();
+      
+      if (hasCommaBeforeMarker) {
+        // Already has comma, just remove marker
+        text = textBeforeTrimmed + ' ' + textAfterMarker;
+      } else {
+        // Add comma to separate
+        text = textBeforeTrimmed + ', ' + textAfterMarker;
+      }
+      break;
+    }
+  }
+
   // Enhanced regex to split ingredients while preserving parentheses and handling edge cases
   const ingredientSplitRegex = /,(?![^()]*\))/g; // Split on commas not inside parentheses
   
@@ -374,14 +489,19 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
   
   const parsedIngredients: ParsedIngredient[] = [];
   
-  for (const rawIngredient of rawIngredients) {
-    const trimmed = rawIngredient.trim();
+  for (let i = 0; i < rawIngredients.length; i++) {
+    const trimmed = rawIngredients[i].trim();
     if (!trimmed) continue;
+    
+    // Determine if this ingredient is in the minor section based on array index
+    const isMinor = hasMinorSection && i > minorMarkerIndex;
     
     // Parse the ingredient with enhanced logic
     const parsed = parseIndividualIngredient(trimmed, commonIngredients);
     
     if (parsed) {
+      // Mark as minor based on array index
+      parsed.isMinorIngredient = isMinor;
       parsedIngredients.push(parsed);
     }
   }
@@ -399,8 +519,8 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
     .filter(ingredient => ingredient.confidence > 0.2)
     // Filter out footer notes like "*Organic", "†Fair Trade", etc.
     .filter(ingredient => !isFooterNote(ingredient.name))
-    // Convert markers to Organic/Fair Trade prefixes
-    .map(ingredient => convertMarkersToPrefix(ingredient));
+    // Convert markers to Organic/Fair Trade prefixes (using actual footnote meanings)
+    .map(ingredient => convertMarkersToPrefix(ingredient, footnotes));
 
   return cleanedIngredients;
 }
@@ -422,30 +542,38 @@ function isFooterNote(text: string): boolean {
 }
 
 /**
- * Convert certification markers to descriptive prefixes
- * Example: "Honey*" → "Organic Honey"
- * Example: "Chocolate†" → "Fair Trade Chocolate"
+ * Convert certification markers to descriptive prefixes based on actual footnote meanings
+ * Example: "Honey*" → "Organic Honey" (if footnote says "* Organic")
+ * Example: "Butter*" → "Butter" (if footnote says "* A Trivial Source of Cholesterol")
  */
-function convertMarkersToPrefix(ingredient: ParsedIngredient): ParsedIngredient {
+function convertMarkersToPrefix(ingredient: ParsedIngredient, footnotes: Record<string, string>): ParsedIngredient {
   let name = ingredient.name;
   
   // Check for organic marker (*)
   if (name.includes('*')) {
+    const footnoteMeaning = footnotes['*'] || '';
     name = name.replace(/\*/g, '').trim();
-    // Only add "Organic" prefix if it's not already there
-    if (!name.toLowerCase().startsWith('organic')) {
+    
+    // Only add "Organic" prefix if the footnote actually means "organic"
+    if (footnoteMeaning.toLowerCase().includes('organic') && !name.toLowerCase().startsWith('organic')) {
       name = `Organic ${name}`;
     }
   }
   
   // Check for fair trade marker (†)
   if (name.includes('†')) {
+    const footnoteMeaning = footnotes['†'] || '';
     name = name.replace(/†/g, '').trim();
-    // Only add "Fair Trade" prefix if it's not already there
-    if (!name.toLowerCase().startsWith('fair trade') && !name.toLowerCase().startsWith('fairtrade')) {
+    
+    // Only add "Fair Trade" prefix if the footnote actually means "fair trade"
+    if ((footnoteMeaning.toLowerCase().includes('fair trade') || footnoteMeaning.toLowerCase().includes('fairtrade')) 
+        && !name.toLowerCase().startsWith('fair trade') && !name.toLowerCase().startsWith('fairtrade')) {
       name = `Fair Trade ${name}`;
     }
   }
+  
+  // Handle other symbols (‡, §, ¶, #, etc.) - just strip them
+  name = name.replace(/[‡§¶#]+/g, '').trim();
   
   return {
     ...ingredient,
@@ -566,7 +694,7 @@ function isValidIngredient(ingredient: string, commonIngredients: string[]): boo
   
   // Check for non-ingredient patterns
   const nonIngredientPatterns = [
-    /^\d+\s*(?:mg|g|ml|mcg|iu)$/i, // Just measurements like "100mg" or "5g"
+    /^\d+\s*(?:mg|g|ml|mcg|iu)$/i, // Just measurements
     /^(mg|g|ml|l|oz|lb|kg)$/i, // Just units
     /calories?/i, // Calorie info
     /daily\s*value/i, // Daily value
@@ -575,26 +703,16 @@ function isValidIngredient(ingredient: string, commonIngredients: string[]): boo
     /^\d+\s*(mg|g|ml|l|oz|lb|kg)/i, // Measurements
     /^\d+%/, // Percentages
     /^\d+\s*calories?/i, // Calorie amounts
-    // Address patterns
-    /\d+\s+(eagle|main|oak|pine|elm|maple|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\s+(rd|road|st|street|ave|avenue|blvd|boulevard|dr|drive|ln|lane|ct|court|pl|place|way|circle|cir)/i,
-    // State+ZIP+country patterns
-    /^[A-Z]{2}\s+\d{4,5}(\s+(USA|US))?$/i,
-    // Company info
-    /^(produced|distributed|manufactured|certified|chat|talk)/i,
-    // Company name patterns
-    /(COMPANY|CORPORATION|LLC|INC|LTD|CO\.|CORP\.)/i
+    /\d+\s+(eagle|main|oak|pine|elm|maple|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\s+(rd|road|st|street|ave|avenue|blvd|boulevard|dr|drive|ln|lane|ct|court|pl|place|way|circle|cir)/i, // Address
+    /^[A-Z]{2}\s+\d{4,5}(\s+(USA|US))?$/i, // State+ZIP
+    /^(produced|distributed|manufactured|certified|chat|talk)/i, // Company info
+    /(COMPANY|CORPORATION|LLC|INC|LTD|CO\.|CORP\.)/i // Company name
   ];
   
   for (const pattern of nonIngredientPatterns) {
     if (pattern.test(ingredient)) {
       return false;
     }
-  }
-  
-  // Check for single capitalized words that aren't common ingredients
-  if (ingredient.match(/^[A-Z][a-z]+$/) && 
-      !commonIngredients.some(common => ingredient.toLowerCase().includes(common.toLowerCase()))) {
-    return false;
   }
   
   // Must contain at least one letter

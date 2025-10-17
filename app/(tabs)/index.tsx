@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, SafeAreaView, ActivityIndicator, TextInput, Modal, Image, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, SafeAreaView, ActivityIndicator, TextInput, Modal, Image, Animated, KeyboardAvoidingView, Platform, ScrollView, TouchableWithoutFeedback, Keyboard } from 'react-native';
 
 // Global temporary storage for navigation optimization
 declare global { var tempResults: Record<string, any>; }
@@ -13,7 +13,7 @@ function cleanupTempResults() {
 }
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { PinchGestureHandler, TapGestureHandler, State } from 'react-native-gesture-handler';
-import { Camera, RotateCcw, Zap, Keyboard, X, Heart, Star, Search, Apple, Carrot, Leaf, Flashlight, FlashlightOff, ZoomIn, ZoomOut } from 'lucide-react-native';
+import { Camera, RotateCcw, Zap, Keyboard as KeyboardIcon, X, Heart, Star, Search, Apple, Carrot, Leaf, Flashlight, FlashlightOff, ZoomIn, ZoomOut } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { incrementAnalysisCount, checkUserLimits } from '@/lib/database';
@@ -358,9 +358,16 @@ export default function CameraScreen() {
       // Free users get basic analysis (overall verdict), premium users get detailed breakdown
       updatePerfMetric('aiStart');
       const isPremium = user?.subscription_status === 'premium';
+      let processedCount = 0;
+      const totalIngredients = parseIngredientsFromText(photoAnalysis.extractedText).length;
+      
       const results = await analyzeIngredients(photoAnalysis.extractedText, user?.id || 'anonymous', isPremium, (update) => {
-        if (update.current && update.total) setAiProgress((update.current / update.total) * 100);
-        addAIThought({ message: update.message, emoji: update.emoji, type: update.type });
+        // Track overall progress across all batches
+        if (update.type === 'classified') {
+          processedCount++;
+          setAiProgress(Math.min((processedCount / totalIngredients) * 100, 100));
+        }
+        addAIThought({ message: update.message, emoji: update.emoji, type: update.type, isToxic: update.isToxic });
       });
       updatePerfMetric('aiEnd');
       
@@ -372,11 +379,16 @@ export default function CameraScreen() {
         ingredients: results.ingredients
       });
       
+      // Ensure progress reaches 100%
+      setAiProgress(100);
+      
       // Add final AI thought
       addAIThought({
         message: results.overallVerdict === 'CLEAN' ? '🎉 Product is clean!' : '⚠️ Found concerns...',
         emoji: results.overallVerdict === 'CLEAN' ? '✨' : '🔍',
-        type: 'complete'
+        type: 'complete',
+        isComplete: true,
+        isToxic: results.overallVerdict === 'TOXIC'
       });
       
       // Wait longer to show the final thought so users can see the verdict
@@ -398,29 +410,15 @@ export default function CameraScreen() {
       
       console.log('✅ Analysis complete, navigating to results...');
       
-      // Navigate based on user subscription status
+      // Navigate to results screen with latest results
       updatePerfMetric('navigationStart');
-      if (user?.subscription_status === 'premium') {
-        // Premium users: Navigate to history with latest results
-        console.log('👑 Premium user - navigating to history tab');
-        const resultId = `result_${Date.now()}`;
-        cleanupTempResults();
-        global.tempResults[resultId] = { results, extractedText: photoAnalysis.extractedText };
-        router.push({
-          pathname: '/history',
-          params: { resultId }
-        });
-      } else {
-        // Free users: Navigate directly to results screen
-        console.log('🆓 Free user - navigating directly to results screen');
-        const resultId = `result_${Date.now()}`;
-        cleanupTempResults();
-        global.tempResults[resultId] = { results, extractedText: photoAnalysis.extractedText };
-        router.push({
-          pathname: '/results',
-          params: { resultId }
-        });
-      }
+      const resultId = `result_${Date.now()}`;
+      cleanupTempResults();
+      global.tempResults[resultId] = { results, extractedText: photoAnalysis.extractedText };
+      router.push({
+        pathname: '/results',
+        params: { resultId }
+      });
       
       // Log performance metrics
       logPerf();
@@ -456,16 +454,33 @@ export default function CameraScreen() {
       // Analyze ingredients with progress callbacks
       // Free users get basic analysis (overall verdict), premium users get detailed breakdown
       const isPremium = user?.subscription_status === 'premium';
+      let processedCount = 0;
+      const totalIngredients = parseIngredientsFromText(extractedText).length;
+      
       const results = await analyzeIngredients(extractedText, user?.id || 'anonymous', isPremium, (update) => {
-        if (update.current && update.total) setAiProgress((update.current / update.total) * 100);
-        addAIThought({ message: update.message, emoji: update.emoji, type: update.type });
+        // Track overall progress across all batches
+        if (update.type === 'classified') {
+          processedCount++;
+          setAiProgress(Math.min((processedCount / totalIngredients) * 100, 100));
+        }
+        addAIThought({ 
+          message: update.message, 
+          emoji: update.emoji, 
+          type: update.type,
+          isToxic: update.isToxic 
+        });
       });
+      
+      // Ensure progress reaches 100%
+      setAiProgress(100);
       
       // Add final AI thought
       addAIThought({
         message: results.overallVerdict === 'CLEAN' ? '🎉 Product is clean!' : '⚠️ Found concerns...',
         emoji: results.overallVerdict === 'CLEAN' ? '✨' : '🔍',
-        type: 'complete'
+        type: 'complete',
+        isComplete: true,
+        isToxic: results.overallVerdict === 'TOXIC'
       });
       
       // Wait longer to show the final thought so users can see the verdict
@@ -485,12 +500,12 @@ export default function CameraScreen() {
         setCanScan(scansRemaining !== null ? scansRemaining > 1 : true);
       }
       
-      // Navigate to history with latest results
+      // Navigate to results screen with latest results
       const resultId = `result_${Date.now()}`;
       cleanupTempResults();
       global.tempResults[resultId] = { results, extractedText: extractedText };
       router.push({
-        pathname: '/history',
+        pathname: '/results',
         params: { resultId }
       });
       
@@ -542,13 +557,6 @@ export default function CameraScreen() {
                 <Text style={styles.upgradeButtonSmallText}>Upgrade Now</Text>
               </TouchableOpacity>
             )}
-          </View>
-        )}
-        
-        {/* Premium Badge */}
-        {user?.subscription_status === 'premium' && (
-          <View style={styles.premiumBadge}>
-            <Text style={styles.premiumBadgeText}>👑 Unlimited Scans</Text>
           </View>
         )}
       </View>
@@ -648,34 +656,6 @@ export default function CameraScreen() {
         </View>
       )}
 
-      {/* Test Button for AI Loading Modal - DEVELOPMENT ONLY */}
-      {__DEV__ && (
-        <TouchableOpacity
-          style={styles.testButton}
-          onPress={() => {
-            setShowAILoading(true);
-            setAiThoughts([]);
-            setAiProgress(0);
-            setIngredientCount(12);
-            
-            // Simulate realistic AI analysis flow with proper timing
-            setTimeout(() => addAIThought({ message: 'Scanning photo...', emoji: '📸', type: 'ocr' }), 100);
-            setTimeout(() => addAIThought({ message: 'Extracting text from image...', emoji: '🔍', type: 'ocr' }), 1000);
-            setTimeout(() => addAIThought({ message: 'Reading ingredient list...', emoji: '👀', type: 'parsing' }), 3000);
-            setTimeout(() => addAIThought({ message: 'Analyzing Organic Peanut Butter...', emoji: '🥜', type: 'analyzing' }), 4000);
-            setTimeout(() => addAIThought({ message: 'Organic Peanut Butter is clean!', emoji: '✨', type: 'classified' }), 5000);
-            setTimeout(() => addAIThought({ message: 'Analyzing Fruit Spread...', emoji: '🍓', type: 'analyzing' }), 6000);
-            setTimeout(() => addAIThought({ message: 'Fruit Spread has concerns...', emoji: '⚠️', type: 'classified' }), 7000);
-            setTimeout(() => addAIThought({ message: 'Analyzing Organic Honey...', emoji: '🍯', type: 'analyzing' }), 8000);
-            setTimeout(() => addAIThought({ message: 'Organic Honey is clean!', emoji: '✨', type: 'classified' }), 9000);
-            setTimeout(() => addAIThought({ message: '🕵️ Detective mode...', emoji: '💭', type: 'encouragement' }), 10000);
-            setTimeout(() => addAIThought({ message: '🎉 Product is clean!', emoji: '✨', type: 'complete' }), 11000);
-            setTimeout(() => setShowAILoading(false), 13000);
-          }}
-        >
-          <Text style={styles.testButtonText}>🧪 Test AI Modal</Text>
-        </TouchableOpacity>
-      )}
 
       {/* Camera Controls - Fixed at bottom */}
       <View style={styles.controls}>
@@ -696,7 +676,7 @@ export default function CameraScreen() {
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.textInputButton} onPress={openTextInput}>
-          <Keyboard size={20} color={COLORS.textPrimary} />
+          <KeyboardIcon size={20} color={COLORS.textPrimary} />
         </TouchableOpacity>
       </View>
 
@@ -713,35 +693,54 @@ export default function CameraScreen() {
           animationType="slide"
           presentationStyle="pageSheet"
         >
-          <SafeAreaView style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={() => setShowTextInput(false)}>
-                <X size={24} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-              <Text style={styles.modalTitle}>Enter Ingredients</Text>
-              <View style={styles.placeholder} />
-            </View>
-            
-            <View style={styles.modalContent}>
-              <Text style={styles.inputLabel}>
-                Type or paste ingredient list:
-              </Text>
-              <TextInput
-                style={styles.textInput}
-                multiline
-                numberOfLines={8}
-                value={manualText}
-                onChangeText={setManualText}
-                placeholder="Example: Organic cane sugar, high fructose corn syrup, natural flavors, sea salt..."
-                placeholderTextColor={COLORS.textSecondary}
-                textAlignVertical="top"
-              />
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+          >
+            <SafeAreaView style={styles.modalContainer}>
+              <View style={styles.modalHeader}>
+                <TouchableOpacity onPress={() => {
+                  Keyboard.dismiss();
+                  setShowTextInput(false);
+                }}>
+                  <X size={24} color={COLORS.textSecondary} />
+                </TouchableOpacity>
+                <Text style={styles.modalTitle}>Enter Ingredients</Text>
+                <TouchableOpacity onPress={Keyboard.dismiss}>
+                  <Text style={styles.doneButton}>Done</Text>
+                </TouchableOpacity>
+              </View>
               
-              <TouchableOpacity onPress={analyzeManualText} style={styles.analyzeButtonContainer}>
-                <Text style={styles.analyzeButton}>Analyze Ingredients</Text>
-              </TouchableOpacity>
-            </View>
-          </SafeAreaView>
+              <ScrollView 
+                style={styles.modalContent}
+                keyboardShouldPersistTaps="handled"
+              >
+                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                  <View>
+                    <Text style={styles.inputLabel}>
+                      Type or paste ingredient list:
+                    </Text>
+                    <TextInput
+                      style={styles.textInput}
+                      multiline
+                      numberOfLines={8}
+                      value={manualText}
+                      onChangeText={setManualText}
+                      placeholder="Example: Organic cane sugar, high fructose corn syrup, natural flavors, sea salt..."
+                      placeholderTextColor={COLORS.textSecondary}
+                      textAlignVertical="top"
+                      returnKeyType="done"
+                      blurOnSubmit={true}
+                    />
+                    
+                    <TouchableOpacity onPress={analyzeManualText} style={styles.analyzeButtonContainer}>
+                      <Text style={styles.analyzeButton}>Analyze Ingredients</Text>
+                    </TouchableOpacity>
+                  </View>
+                </TouchableWithoutFeedback>
+              </ScrollView>
+            </SafeAreaView>
+          </KeyboardAvoidingView>
         </Modal>
 
         {/* Photo Preview Modal */}
@@ -815,10 +814,10 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    paddingTop: 20,
-    paddingBottom: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
     paddingHorizontal: 8,
-    backgroundColor: COLORS.background, // single background
+    backgroundColor: COLORS.background,
   },
   title: {
     fontSize: FONT_SIZES.titleXL,
@@ -870,22 +869,6 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontFamily: FONTS.terminalGrotesque,
     lineHeight: LINE_HEIGHTS.bodySmall,
-  },
-  premiumBadge: {
-    backgroundColor: COLORS.cleanGreen,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginTop: 8,
-    borderWidth: 2,
-    borderColor: COLORS.border,
-  },
-  premiumBadgeText: {
-    fontSize: FONT_SIZES.bodyMedium,
-    fontWeight: '400',
-    color: COLORS.textPrimary,
-    fontFamily: FONTS.terminalGrotesque,
-    lineHeight: LINE_HEIGHTS.bodyMedium,
   },
   cameraContainer: {
     flex: 1,
@@ -1056,6 +1039,12 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     width: 48,
+  },
+  doneButton: {
+    fontSize: FONT_SIZES.bodyMedium,
+    fontWeight: '600',
+    color: COLORS.cleanGreen,
+    fontFamily: FONTS.terminalGrotesque,
   },
   analyzingContainer: {
     alignItems: 'center',
@@ -1321,22 +1310,5 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontFamily: FONTS.terminalGrotesque,
     lineHeight: LINE_HEIGHTS.bodyMicro,
-  },
-  testButton: {
-    position: 'absolute',
-    top: 100,
-    right: 20,
-    backgroundColor: COLORS.accentYellow,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: COLORS.border,
-    zIndex: 1000,
-  },
-  testButtonText: {
-    fontSize: 14,
-    color: COLORS.textPrimary,
-    fontFamily: FONTS.terminalGrotesque,
-    fontWeight: '400',
   },
 });

@@ -17,6 +17,7 @@ interface IngredientInfo {
   status: 'generally_clean' | 'potentially_toxic';
   educational_note: string;
   basic_note?: string; // Short version for free users
+  isMinorIngredient?: boolean; // true if ingredient is < 2% of total product
 }
 
 interface AnalysisResult {
@@ -37,6 +38,16 @@ export async function analyzeIngredients(
   // Parse ingredient list from extracted text
   // Use the improved parsing from OCR service
   const parsedIngredients = parseIngredientsFromText(extractedText);
+  
+  // Create a map to track which ingredients are minor
+  const minorIngredientsMap = new Map<string, boolean>();
+  parsedIngredients.forEach(parsed => {
+    const normalizedName = parsed.name.toLowerCase().replace(/\s*[.!?;:]+\s*$/, '').trim();
+    if (parsed.isMinorIngredient) {
+      minorIngredientsMap.set(normalizedName, true);
+    }
+  });
+  
   const ingredients = parsedIngredients
     .map(ingredient => ingredient.name
       .toLowerCase()
@@ -78,6 +89,7 @@ export async function analyzeIngredients(
         status: dbResult.status,
         educational_note: isPremium ? dbResult.educational_note : getBasicNote(dbResult.status, dbResult.ingredient_name),
         basic_note: getBasicNote(dbResult.status, dbResult.ingredient_name),
+        isMinorIngredient: minorIngredientsMap.get(normalizedIngredient) || false,
       });
     } else {
       unknownIngredients.push(ingredient);
@@ -105,6 +117,7 @@ export async function analyzeIngredients(
             status: aiAnalysis.status,
             educational_note: isPremium ? aiAnalysis.educational_note : aiAnalysis.basic_note,
             basic_note: aiAnalysis.basic_note,
+            isMinorIngredient: minorIngredientsMap.get(normalizedName) || false,
           });
 
           // Cache the AI result with 180-day expiration (6 months)
@@ -120,13 +133,15 @@ export async function analyzeIngredients(
         
         // Fallback: mark all unknown ingredients as potentially toxic
         for (const ingredient of unknownIngredients) {
-          resultsByName.set(ingredient.toLowerCase(), {
+          const normalized = ingredient.toLowerCase();
+          resultsByName.set(normalized, {
             name: capitalizeIngredientName(ingredient),
             status: 'potentially_toxic',
             educational_note: isPremium 
               ? 'Unable to analyze this ingredient with AI. For safety, we recommend caution and consulting with healthcare providers about potential concerns.'
               : 'Unknown ingredient - upgrade for detailed analysis',
             basic_note: 'Unknown ingredient - upgrade for detailed analysis',
+            isMinorIngredient: minorIngredientsMap.get(normalized) || false,
           });
         }
       }
@@ -134,13 +149,15 @@ export async function analyzeIngredients(
       
       // Fallback: mark all unknown ingredients as potentially toxic
       for (const ingredient of unknownIngredients) {
-        resultsByName.set(ingredient.toLowerCase(), {
+        const normalized = ingredient.toLowerCase();
+        resultsByName.set(normalized, {
           name: capitalizeIngredientName(ingredient),
           status: 'potentially_toxic',
           educational_note: isPremium 
             ? 'Unable to analyze this ingredient with AI. For safety, we recommend caution and consulting with healthcare providers about potential concerns.'
             : 'Unknown ingredient - upgrade for detailed analysis',
           basic_note: 'Unknown ingredient - upgrade for detailed analysis',
+          isMinorIngredient: minorIngredientsMap.get(normalized) || false,
         });
       }
     }
