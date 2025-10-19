@@ -3,6 +3,23 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { config } from '@/lib/config';
 import { logDetailedError, getUserFriendlyErrorMessage } from './errorHandling';
 import { withRateLimit, validateImageData, validateExtractedText } from './security';
+import { AI_VISION_MODEL } from './aiAnalysis';
+
+/**
+ * OCR and Ingredient Parsing Service
+ * 
+ * Uses GPT-4 Vision (gpt-4o-mini) for accurate text extraction from food labels,
+ * followed by sophisticated parsing to identify individual ingredients with their
+ * modifiers, certifications, and minor ingredient markers.
+ * 
+ * Key Features:
+ * - GPT-4 Vision OCR for high accuracy
+ * - Footnote detection (*, †, numbered, lettered)
+ * - Minor ingredient detection ("contains 2% or less")
+ * - Compound ingredient handling (brand products with sub-ingredients)
+ * - OCR artifact cleaning
+ * - Allergen/company info filtering
+ */
 
 // OpenAI GPT-4 Vision configuration
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
@@ -82,7 +99,7 @@ Example with markers: "Peanut Butter*, Dark Chocolate* (Chocolate*†, Cane Suga
 Example without markers: "Peanut Butter, Dark Chocolate, Honey, Sea Salt"`;
 
     const requestBody = {
-      model: 'gpt-4o-mini', // gpt-4o-mini is 60% faster and cheaper than gpt-4o for ingredient analysis
+      model: AI_VISION_MODEL, // GPT-4o-mini for vision/OCR tasks
       messages: [
         {
           role: 'user',
@@ -601,7 +618,7 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
 
   // PASS 1: Extract and remove footnote definitions from text
   const { cleanedText, footnotes } = extractAndCleanFootnotes(text);
-  text = cleanedText; // Use cleaned text for ingredient parsing
+  text = cleanedText;
 
   // Common ingredient words to help identify valid ingredients
   const commonIngredients = [
@@ -685,8 +702,8 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
     // Find which minor section this ingredient belongs to (if any)
     // Get the most recent section that starts before or at this index
     const applicableSection = minorSections
-      .filter(section => i >= section.startIndex) // Fixed: >= instead of >
-      .sort((a, b) => b.startIndex - a.startIndex)[0]; // Get most recent section
+      .filter(section => i >= section.startIndex)
+      .sort((a, b) => b.startIndex - a.startIndex)[0];
     
     // Parse the ingredient with enhanced logic
     const parsed = parseIndividualIngredient(trimmed, commonIngredients);
@@ -709,7 +726,6 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
         item.name.toLowerCase() === ingredient.name.toLowerCase()
       ) === index
     )
-    // Keep original OCR order - do not sort by confidence
     // Remove very low confidence ingredients (likely errors)
     .filter(ingredient => ingredient.confidence > 0.2)
     // Filter out footer notes like "*Organic", "†Fair Trade", etc.
@@ -813,20 +829,31 @@ function parseIndividualIngredient(text: string, commonIngredients: string[]): P
     // Extract the actual ingredient from parentheses (brand vs actual)
     const parenthesesMatch = ingredient.match(/\(([^)]+)\)/);
     if (parenthesesMatch) {
-      const potentialIngredient = parenthesesMatch[1].trim();
+      const parentheticalContent = parenthesesMatch[1].trim();
       
-      // Verify it's an actual ingredient (not "formerly known as" or similar)
-      if (!potentialIngredient.toLowerCase().includes('formerly') && 
-          !potentialIngredient.toLowerCase().includes('also known') &&
-          !potentialIngredient.toLowerCase().includes('aka') &&
-          potentialIngredient.length > 2) {
-        // Keep brand as modifier, use actual ingredient as name
-        const brandName = ingredient.replace(/\([^)]*\)/g, '').replace(/[®™©]/g, '').trim();
-        if (brandName) {
-          modifiers.push(brandName);
+      // Check if parenthetical contains sub-ingredients (has commas = list of ingredients)
+      const hasMultipleItems = parentheticalContent.includes(',');
+      
+      if (hasMultipleItems) {
+        // This is a compound ingredient list - keep brand name, store list as modifiers
+        // Example: "Good Seed® grain mix (flax seeds, sunflower seeds)" → "Good Seed grain mix"
+        const brandProductName = ingredient.replace(/\([^)]*\)/g, '').replace(/[®™©]/g, '').trim();
+        ingredient = brandProductName;
+        modifiers.push(parentheticalContent);
+      } else {
+        // Single item in parentheses - use existing logic
+        // (handles cases like "Brand® (actual ingredient name)")
+        if (!parentheticalContent.toLowerCase().includes('formerly') && 
+            !parentheticalContent.toLowerCase().includes('also known') &&
+            !parentheticalContent.toLowerCase().includes('aka') &&
+            parentheticalContent.length > 2) {
+          const brandName = ingredient.replace(/\([^)]*\)/g, '').replace(/[®™©]/g, '').trim();
+          if (brandName) {
+            modifiers.push(brandName);
+          }
+          // Use the parenthetical name as the actual ingredient
+          ingredient = parentheticalContent;
         }
-        // Use the parenthetical name as the actual ingredient
-        ingredient = potentialIngredient;
       }
     }
     

@@ -20,7 +20,6 @@ import { incrementAnalysisCount, checkUserLimits } from '@/lib/database';
 import { analyzeIngredients } from '@/services/ingredients';
 import { saveAnalysis } from '@/lib/database';
 import { analyzePhoto as analyzePhotoWithOCR, getOCRStatus } from '@/services/photoAnalysis';
-import { parseIngredientsFromText } from '@/services/ocr';
 import { testOpenAIAPIKey } from '@/services/aiAnalysis';
 import { showScanLimitReachedModal, showPremiumUpgradePrompt } from '@/services/subscription';
 import { startPremiumSubscription } from '@/services/stripe';
@@ -348,10 +347,6 @@ export default function CameraScreen() {
       
       setIsAnalyzing(false);
       
-      // Parse ingredients to get count for display
-      const parsedIngredients = parseIngredientsFromText(photoAnalysis.extractedText);
-      setIngredientCount(parsedIngredients.length);
-      
       addAIThought({ message: 'Reading ingredient list...', emoji: '👀', type: 'parsing' });
       
       // Analyze ingredients using the extracted text with progress callbacks
@@ -359,16 +354,19 @@ export default function CameraScreen() {
       updatePerfMetric('aiStart');
       const isPremium = user?.subscription_status === 'premium';
       let processedCount = 0;
-      const totalIngredients = parseIngredientsFromText(photoAnalysis.extractedText).length;
       
+      // PERFORMANCE FIX: Parse only once in analyzeIngredients, get count from results
       const results = await analyzeIngredients(photoAnalysis.extractedText, user?.id || 'anonymous', isPremium, (update) => {
         // Track overall progress across all batches
         if (update.type === 'classified') {
           processedCount++;
-          setAiProgress(Math.min((processedCount / totalIngredients) * 100, 100));
+          setAiProgress(Math.min((processedCount / results.totalIngredients) * 100, 100));
         }
         addAIThought({ message: update.message, emoji: update.emoji, type: update.type, isToxic: update.isToxic });
       });
+      
+      // Set ingredient count from results (parsing happens once in analyzeIngredients)
+      setIngredientCount(results.totalIngredients);
       updatePerfMetric('aiEnd');
       
       console.log('🎯 Ingredient Analysis Results:', {
@@ -445,23 +443,19 @@ export default function CameraScreen() {
       setAiThoughts([]);
       setAiProgress(0);
       
-      // Parse ingredients to get count for display
-      const parsedIngredients = parseIngredientsFromText(extractedText);
-      setIngredientCount(parsedIngredients.length);
-      
       addAIThought({ message: 'Reading ingredient list...', emoji: '👀', type: 'parsing' });
       
       // Analyze ingredients with progress callbacks
       // Free users get basic analysis (overall verdict), premium users get detailed breakdown
       const isPremium = user?.subscription_status === 'premium';
       let processedCount = 0;
-      const totalIngredients = parseIngredientsFromText(extractedText).length;
       
+      // PERFORMANCE FIX: Parse only once in analyzeIngredients, get count from results
       const results = await analyzeIngredients(extractedText, user?.id || 'anonymous', isPremium, (update) => {
         // Track overall progress across all batches
         if (update.type === 'classified') {
           processedCount++;
-          setAiProgress(Math.min((processedCount / totalIngredients) * 100, 100));
+          setAiProgress(Math.min((processedCount / results.totalIngredients) * 100, 100));
         }
         addAIThought({ 
           message: update.message, 
@@ -470,6 +464,9 @@ export default function CameraScreen() {
           isToxic: update.isToxic 
         });
       });
+      
+      // Set ingredient count from results (parsing happens once in analyzeIngredients)
+      setIngredientCount(results.totalIngredients);
       
       // Ensure progress reaches 100%
       setAiProgress(100);

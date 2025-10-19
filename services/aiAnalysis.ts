@@ -3,10 +3,29 @@ import { config } from '../lib/config';
 import { isRetryableError, isAPIDownError, retryWithBackoff, logDetailedError, getUserFriendlyErrorMessage } from './errorHandling';
 import { withRateLimit, validateIngredientName } from './security';
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * AI MODEL CONFIGURATION
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * We use different models optimized for different tasks:
+ * - GPT-4o-mini: Vision tasks (OCR, image analysis) - better accuracy for visual tasks
+ * - GPT-3.5-turbo: Text analysis - 10x faster for ingredient analysis with good accuracy
+ * 
+ * Note: All AI calls throughout the app should use these constants
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+export const AI_VISION_MODEL = 'gpt-4o-mini'; // For OCR and vision tasks
+export const AI_TEXT_MODEL = 'gpt-3.5-turbo'; // For text analysis - optimized for speed
+export const AI_MODEL_CONTEXT_WINDOW = 128000;
+export const AI_MODEL_MAX_TOKENS = 16000;
+
 // Initialize OpenAI client
 console.log('🔧 Initializing OpenAI client...');
 console.log('🔧 API Key from config:', config.openai?.apiKey ? 'SET' : 'NOT SET');
 console.log('🔧 API Key from env:', process.env.EXPO_PUBLIC_OPENAI_API_KEY ? 'SET' : 'NOT SET');
+console.log('🤖 Vision Model:', AI_VISION_MODEL);
+console.log('🤖 Text Model:', AI_TEXT_MODEL);
 
 const openai = new OpenAI({
   apiKey: config.openai?.apiKey || process.env.EXPO_PUBLIC_OPENAI_API_KEY,
@@ -69,7 +88,7 @@ export async function testOpenAIAPIKey(): Promise<boolean> {
   try {
     console.log('🧪 Testing OpenAI API key...');
     const testResponse = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: AI_TEXT_MODEL,
       messages: [{ role: 'user', content: 'Say "API key is working"' }],
       max_tokens: 10,
     });
@@ -226,7 +245,7 @@ export async function analyzeIngredientWithAI(
       console.log(`👑 Premium user: ${isPremium}`);
       console.log(`🔧 OpenAI API Key configured: ${!!config.openai?.apiKey}`);
       console.log(`🔧 OpenAI API Key value: ${config.openai?.apiKey ? 'SET' : 'NOT SET'}`);
-      console.log(`⚙️ Model: ${config.openai?.model || 'gpt-4o-mini'}`);
+      console.log(`⚙️ Model: ${AI_TEXT_MODEL}`);
       console.log(`🔧 OpenAI enabled: ${config.openai?.enabled}`);
 
       if (!config.openai?.apiKey) {
@@ -238,7 +257,7 @@ export async function analyzeIngredientWithAI(
       }
 
       const requestPayload = {
-        model: "gpt-3.5-turbo", // Optimized for speed - 10x faster than gpt-4o-mini for ingredient analysis
+        model: AI_TEXT_MODEL, // GPT-3.5-turbo optimized for speed
         messages: [
           {
             role: "system" as const,
@@ -358,7 +377,7 @@ export async function analyzeSingleBatch(
       console.log(`🤖 Starting batch AI analysis for ${sanitizedNames.length} ingredients:`, sanitizedNames);
       console.log(`👑 Premium user: ${isPremium}`);
       console.log(`🔧 OpenAI API Key configured: ${!!config.openai?.apiKey}`);
-      console.log(`⚙️ Model: ${config.openai?.model || 'gpt-4o-mini'}`);
+      console.log(`⚙️ Model: ${AI_TEXT_MODEL}`);
 
     const batchPrompt = `Analyze these food ingredients and classify each one. Return a JSON array with analysis for each ingredient.
 
@@ -381,7 +400,7 @@ Return format:
 }`;
 
     const requestPayload = {
-      model: "gpt-3.5-turbo", // Optimized for speed - 10x faster than gpt-4o-mini for ingredient analysis
+      model: AI_TEXT_MODEL, // GPT-3.5-turbo optimized for speed
       messages: [
         {
           role: "system" as const,
@@ -561,7 +580,7 @@ Return format:
   ]
 }`;
           const retryPayload = {
-            model: "gpt-3.5-turbo", // Optimized for speed - 10x faster than gpt-4o-mini for ingredient analysis
+            model: AI_TEXT_MODEL, // GPT-3.5-turbo optimized for speed
             messages: [
               {
                 role: "system" as const,
@@ -767,7 +786,7 @@ export function getAIAnalysisStatus(): {
 } {
   const configured = !!(config.openai?.apiKey || process.env.EXPO_PUBLIC_OPENAI_API_KEY);
   const enabled = config.openai?.enabled !== false;
-  const model = 'gpt-3.5-turbo'; // Optimized default model for speed
+  const model = AI_TEXT_MODEL;
 
   let message = '';
   if (!enabled) {
@@ -885,7 +904,7 @@ Rules:
 Return ONLY the product identification string, nothing else.`;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: AI_VISION_MODEL, // Use vision model for product identification
       messages: [
         { role: 'system', content: 'You are a product identification expert. Return only the product name or category.' },
         { role: 'user', content: prompt }
