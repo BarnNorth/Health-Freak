@@ -179,9 +179,7 @@ export default function ProfileScreen() {
             <Text style={styles.menuArrow}>›</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuItem} onPress={() => {
-            Alert.alert('Privacy Policy', 'Privacy policy page coming soon!', [{ text: 'OK' }]);
-          }}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/privacy')}>
             <Shield size={20} color={COLORS.textSecondary} />
             <Text style={styles.menuText}>Privacy Policy</Text>
             <Text style={styles.menuArrow}>›</Text>

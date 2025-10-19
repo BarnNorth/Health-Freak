@@ -65,7 +65,7 @@ export default function TermsScreen() {
 
           <Text style={styles.sectionTitle}>5. Subscription Terms</Text>
           <Text style={styles.sectionText}>
-            Free users receive 10 analyses total with full ingredient analysis. Premium subscription ($9.99/month) provides:
+            Free users receive 10 analyses total with full ingredient analysis. Premium subscription ($10/month) provides:
             {'\n'}• Unlimited analyses
             {'\n'}• Complete analysis history
             {'\n'}• Priority support
@@ -73,14 +73,22 @@ export default function TermsScreen() {
             {'\n\n'}Subscriptions auto-renew monthly unless cancelled. Cancel anytime in your account settings.
           </Text>
 
-          <Text style={styles.sectionTitle}>6. Data Privacy</Text>
+          <Text style={styles.sectionTitle}>6. Privacy and Data Protection</Text>
           <Text style={styles.sectionText}>
-            We collect minimal data necessary for app functionality. Photos are processed for OCR 
-            text extraction but not stored permanently. Analysis history is stored securely and 
-            associated with your account. See our Privacy Policy for complete details.
+            Our collection, use, and protection of your personal information is governed by our Privacy Policy. 
+            Please review our Privacy Policy to understand how we handle your data. By using this app, you 
+            also agree to our Privacy Policy.
           </Text>
 
-          <Text style={styles.sectionTitle}>7. Disclaimers and Limitations</Text>
+          <Text style={styles.sectionTitle}>7. Refund Policy</Text>
+          <Text style={styles.sectionText}>
+            Premium subscriptions are billed monthly at $10. You may cancel your subscription at any time 
+            through your account settings, and you will retain premium access until the end of your current 
+            billing period. Refunds are handled according to Apple App Store and Google Play Store policies. 
+            For refund requests or billing questions, contact healthfreak.ai@gmail.com within 7 days of purchase.
+          </Text>
+
+          <Text style={styles.sectionTitle}>8. Disclaimers and Limitations</Text>
           <Text style={styles.sectionText}>
             This app is provided "as is" without warranties. We disclaim liability for:
             {'\n'}• Accuracy of ingredient information
@@ -89,22 +97,22 @@ export default function TermsScreen() {
             {'\n'}• Technical issues or service interruptions
           </Text>
 
-          <Text style={styles.sectionTitle}>8. Acceptance of Terms</Text>
+          <Text style={styles.sectionTitle}>9. Acceptance of Terms</Text>
           <Text style={styles.sectionText}>
             Continued use of this app constitutes acceptance of these terms. We may update these 
             terms periodically, and continued use implies acceptance of any changes.
           </Text>
 
-          <Text style={styles.sectionTitle}>9. Contact Information</Text>
+          <Text style={styles.sectionTitle}>10. Contact Information</Text>
           <Text style={styles.sectionText}>
-            Questions about these terms? Contact us at support@ingredientanalyzer.com
+            Questions about these terms? Contact us at healthfreak.ai@gmail.com
           </Text>
         </View>
 
         {/* Bottom Notice */}
         <View style={styles.bottomNotice}>
           <Text style={styles.bottomNoticeText}>
-            Last updated: January 24, 2025
+            Last updated: October 18, 2025
             {'\n\n'}Remember: This app provides educational information only. 
             Always consult healthcare professionals for dietary and health decisions.
           </Text>

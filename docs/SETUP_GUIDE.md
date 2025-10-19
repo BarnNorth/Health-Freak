@@ -157,7 +157,7 @@ supabase migration up
    - Name: "Health Freak Premium"
    - Description: "Unlimited scans and detailed analysis"
    - Pricing: Recurring
-   - Price: $9.99 (or your price)
+   - Price: $10 (or your price)
    - Billing period: Monthly
 3. Click "Save product"
 4. Copy the **Price ID** (starts with `price_`)
