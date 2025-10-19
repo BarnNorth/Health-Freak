@@ -18,6 +18,7 @@ interface AnalysisResult {
     totalFeedback?: number;
     confidence?: number;
     isMinorIngredient?: boolean;
+    minorThreshold?: number;
   }>;
   totalIngredients: number;
   toxicCount: number;
@@ -254,7 +255,9 @@ export default function ResultsScreen() {
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                           {ingredient.isMinorIngredient && (
                             <View style={styles.minorBadge}>
-                              <Text style={styles.minorBadgeText}>{'< 2%'}</Text>
+                              <Text style={styles.minorBadgeText}>
+                                {'< ' + (ingredient.minorThreshold || 2) + '%'}
+                              </Text>
                             </View>
                           )}
                           {isExpanded ? (

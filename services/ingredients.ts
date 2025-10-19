@@ -17,7 +17,8 @@ interface IngredientInfo {
   status: 'generally_clean' | 'potentially_toxic';
   educational_note: string;
   basic_note?: string; // Short version for free users
-  isMinorIngredient?: boolean; // true if ingredient is < 2% of total product
+  isMinorIngredient?: boolean; // true if ingredient is < X% of total product
+  minorThreshold?: number; // Actual percentage threshold (e.g., 1.5, 2)
 }
 
 interface AnalysisResult {
@@ -40,12 +41,15 @@ export async function analyzeIngredients(
   // Use the improved parsing from OCR service
   const parsedIngredients = parseIngredientsFromText(extractedText);
   
-  // Create a map to track which ingredients are minor
-  const minorIngredientsMap = new Map<string, boolean>();
+  // Create a map to track which ingredients are minor and their thresholds
+  const minorIngredientsMap = new Map<string, { isMinor: boolean; threshold?: number }>();
   parsedIngredients.forEach(parsed => {
     const normalizedName = parsed.name.toLowerCase().replace(/\s*[.!?;:]+\s*$/, '').trim();
     if (parsed.isMinorIngredient) {
-      minorIngredientsMap.set(normalizedName, true);
+      minorIngredientsMap.set(normalizedName, { 
+        isMinor: true, 
+        threshold: parsed.minorThreshold 
+      });
     }
   });
   
@@ -88,12 +92,14 @@ export async function analyzeIngredients(
     const dbResult = cachedIngredientsMap.get(normalizedIngredient);
     
     if (dbResult) {
+      const minorInfo = minorIngredientsMap.get(normalizedIngredient);
       resultsByName.set(normalizedIngredient, {
         name: capitalizeIngredientName(dbResult.ingredient_name),
         status: dbResult.status,
         educational_note: dbResult.educational_note,
         basic_note: getBasicNote(dbResult.status, dbResult.ingredient_name),
-        isMinorIngredient: minorIngredientsMap.get(normalizedIngredient) || false,
+        isMinorIngredient: minorInfo?.isMinor || false,
+        minorThreshold: minorInfo?.threshold,
       });
     } else {
       unknownIngredients.push(ingredient);
@@ -115,13 +121,15 @@ export async function analyzeIngredients(
           const aiAnalysis = item.analysis;
           const ingredientName = item.name;
           const normalizedName = ingredientName.toLowerCase();
+          const minorInfo = minorIngredientsMap.get(normalizedName);
           
           resultsByName.set(normalizedName, {
             name: capitalizeIngredientName(ingredientName),
             status: aiAnalysis.status,
             educational_note: aiAnalysis.educational_note,
             basic_note: aiAnalysis.basic_note,
-            isMinorIngredient: minorIngredientsMap.get(normalizedName) || false,
+            isMinorIngredient: minorInfo?.isMinor || false,
+            minorThreshold: minorInfo?.threshold,
           });
 
           // Cache the AI result with 180-day expiration (6 months)
