@@ -7,9 +7,7 @@
     "start": "EXPO_NO_TELEMETRY=1 expo start",
     "dev": "EXPO_NO_TELEMETRY=1 expo start",
     "build:web": "expo export --platform web",
-    "lint": "expo lint",
-    "precache": "ts-node --transpile-only scripts/precacheCommonIngredients.ts",
-    "precache:check": "ts-node --transpile-only scripts/checkCacheStatus.ts"
+    "lint": "expo lint"
   },
   "dependencies": {
     "@expo-google-fonts/press-start-2p": "^0.4.1",

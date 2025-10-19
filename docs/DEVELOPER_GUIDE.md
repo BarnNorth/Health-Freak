@@ -56,11 +56,7 @@ Complete technical documentation for setting up and developing Health Freak.
    npm run migrate
    ```
 
-5. **Pre-cache common ingredients** (optional but recommended):
-   ```bash
-   npm run precache
-   ```
-   This reduces API costs by 80-90% by pre-analyzing 290 common ingredients.
+5. **Start developing!** The app is ready to use. Ingredient cache will build automatically as you scan products.
 
 6. **Start the development server:**
    ```bash
@@ -139,25 +135,16 @@ Configuration is split between:
 
 ## 📊 Cost Optimization
 
-### Pre-Caching Common Ingredients
+### Ingredient Caching
 
-Pre-cache the 290 most common food ingredients to dramatically reduce API costs:
+The app automatically caches ingredient analyses to reduce API costs:
 
-```bash
-# One-time setup (~10 minutes, ~$0.90 cost)
-npm run precache
+- **Automatic caching:** Every ingredient analyzed is cached in Supabase for 180 days
+- **Instant lookups:** Cached ingredients return instantly without API calls
+- **Growing coverage:** Cache builds organically as you use the app
+- **Cost savings:** Typical 80-90% reduction in API costs after initial testing
 
-# Check cache status anytime
-npm run precache:check
-
-# Re-run every 6 months to refresh
-npm run precache
-```
-
-**Savings:**
-- Without cache: $0.45 per user
-- With cache: $0.045 per user
-- **90% cost reduction!**
+**No manual pre-caching needed** - just use the app normally and the cache grows!
 
 ## 🏗️ Project Structure
 
@@ -194,12 +181,6 @@ npm run type-check
 
 # Lint code
 npm run lint
-
-# Pre-cache ingredients
-npm run precache
-
-# Check cache status
-npm run precache:check
 
 # Run database migrations
 npm run migrate
@@ -304,8 +285,8 @@ When contributing:
 6. Apply "any toxic = product toxic" rule
 
 **Cost optimization:**
-- Pre-cache 290 common ingredients (~$0.90 one-time)
-- Use cheaper GPT-3.5-turbo for text analysis
+- Automatic caching of all analyzed ingredients
+- Use cheaper GPT-3.5-turbo for text analysis  
 - Batch processing for multiple ingredients
 - Smart caching avoids repeat analysis
 - Reduces cost from $0.45 to $0.045 per user
