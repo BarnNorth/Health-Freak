@@ -22,7 +22,7 @@ interface AnalysisResult {
   totalIngredients: number;
   toxicCount: number;
   cleanCount: number;
-  productName?: string;
+  productIdentification?: string;
 }
 
 export default function ResultsScreen() {
@@ -127,7 +127,7 @@ export default function ResultsScreen() {
         ingredientStatus,
         userFeedback,
         confidence,
-        analysisResult?.productName
+        analysisResult?.productIdentification
       );
 
       // Mark as submitted
@@ -190,54 +190,27 @@ export default function ResultsScreen() {
         ]}>
           <View style={styles.verdictHeader}>
             {analysisResult.overallVerdict === 'CLEAN' ? (
-              <CheckCircle size={75} color={COLORS.white} />
+              <CheckCircle size={75} color={COLORS.cleanGreen} />
             ) : (
-              <AlertTriangle size={75} color={COLORS.white} />
+              <AlertTriangle size={75} color={COLORS.toxicRed} />
             )}
             <Text style={[
               styles.verdictText,
               analysisResult.overallVerdict === 'CLEAN' ? styles.cleanVerdictText : styles.toxicVerdictText
             ]}>
-              {analysisResult.overallVerdict}
+              {analysisResult.overallVerdict === 'CLEAN' ? 'CLEAN' : 'POTENTIALLY TOXIC'}
             </Text>
           </View>
-          
-          <Text style={[styles.verdictSummary, { color: COLORS.white }]}>
-            {analysisResult.totalIngredients} ingredients
-          </Text>
         </View>
 
-        {/* Unified Premium Upgrade Card */}
-        {!isPremium && (
-          <View style={styles.unifiedUpgradeCard}>
-            <View style={styles.upgradeHeader}>
-              <Crown size={24} color={COLORS.accentYellow} />
-              <Text style={styles.upgradeTitle}>🔥 Upgrade to Premium</Text>
-            </View>
-            
-            <View style={styles.upgradeBenefits}>
-              <View style={styles.benefitRow}>
-                <Text style={styles.benefitText}>♾️ Unlimited scans forever</Text>
-              </View>
-              <View style={styles.benefitRow}>
-                <Text style={styles.benefitText}>💾 Scan history saved</Text>
-              </View>
-              <View style={styles.benefitRow}>
-                <Text style={styles.benefitText}>🔍 See which ingredients to avoid</Text>
-              </View>
-            </View>
-            
-            <TouchableOpacity style={styles.unifiedUpgradeButton} onPress={showPremiumUpgradePrompt}>
-              <Text style={styles.unifiedUpgradeButtonText}>💵 Upgrade to Premium 💵{'\n'}$10/month</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Premium Features - Individual Ingredient Cards */}
-        {isPremium && analysisResult.ingredients && (
+        {/* Individual Ingredient Cards */}
+        {analysisResult.ingredients && (
           <View style={styles.premiumContent}>
             {/* Ingredient Summary */}
             <View style={styles.ingredientSummary}>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryText}>Total: {analysisResult.totalIngredients}</Text>
+              </View>
               <View style={styles.summaryRow}>
                 <CheckCircle size={16} color={COLORS.cleanGreen} />
                 <Text style={styles.summaryText}>Clean: {cleanIngredients.length}</Text>
@@ -247,6 +220,18 @@ export default function ResultsScreen() {
                 <Text style={styles.summaryText}>Toxic: {toxicIngredients.length}</Text>
               </View>
             </View>
+
+            {/* Product Identification Card */}
+            {analysisResult.productIdentification && (
+              <View style={styles.productIdentificationCard}>
+                <View style={styles.productIdentificationContent}>
+                  <Text style={styles.productIdentificationIcon}>🔍</Text>
+                  <Text style={styles.productIdentificationText}>
+                    {analysisResult.productIdentification}
+                  </Text>
+                </View>
+              </View>
+            )}
 
             {/* All Ingredients in Original OCR Order */}
             {allIngredients.length > 0 && (
@@ -391,49 +376,34 @@ const styles = StyleSheet.create({
   },
   verdictContainer: {
     marginTop: 16,
-    padding: 24,
+    paddingVertical: 0,
+    paddingHorizontal: 24,
     borderRadius: 8,
-    borderWidth: 2,
     alignItems: 'center',
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.8,
-    shadowRadius: 0,
-    elevation: 3,
   },
   cleanVerdict: {
-    backgroundColor: COLORS.cleanGreen,
-    borderColor: COLORS.cleanGreen,
+    backgroundColor: COLORS.background,
   },
   toxicVerdict: {
-    backgroundColor: COLORS.toxicRed,
-    borderColor: COLORS.toxicRed,
+    backgroundColor: COLORS.background,
   },
   verdictHeader: {
     alignItems: 'center',
     marginBottom: 12,
   },
   verdictText: {
-    fontSize: 50,
+    fontSize: 36,
     fontWeight: '400',
     marginTop: 12,
     textAlign: 'center',
     fontFamily: FONTS.karmaFuture,
-    lineHeight: 56,
+    lineHeight: 42,
   },
   cleanVerdictText: {
-    color: COLORS.white,
+    color: COLORS.cleanGreen,
   },
   toxicVerdictText: {
-    color: COLORS.white,
-  },
-  verdictSummary: {
-    fontSize: 22.5,
-    color: COLORS.white,
-    textAlign: 'center',
-    fontWeight: '400',
-    fontFamily: FONTS.terminalGrotesque,
-    lineHeight: 28,
+    color: COLORS.toxicRed,
   },
   unifiedUpgradeCard: {
     backgroundColor: COLORS.accentYellow,
@@ -500,7 +470,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   premiumContent: {
-    marginTop: 12,
+    marginTop: 16,
   },
   ingredientSummary: {
     flexDirection: 'row',
@@ -829,5 +799,30 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontFamily: FONTS.terminalGrotesque,
     lineHeight: LINE_HEIGHTS.bodyLarge,
+  },
+  productIdentificationCard: {
+    backgroundColor: COLORS.accentYellow,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+  },
+  productIdentificationContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  productIdentificationIcon: {
+    fontSize: 20,
+  },
+  productIdentificationText: {
+    fontSize: FONT_SIZES.bodySmall,
+    fontFamily: FONTS.terminalGrotesque,
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+    lineHeight: LINE_HEIGHTS.bodySmall,
+    fontWeight: '400',
   },
 });

@@ -1,5 +1,5 @@
 import { getIngredientInfo, getIngredientsBatch, cacheIngredientInfo } from '@/lib/database';
-import { analyzeIngredientWithAI, analyzeIngredientsBatch, getAIAnalysisStatus } from './aiAnalysis';
+import { analyzeIngredientWithAI, analyzeIngredientsBatch, getAIAnalysisStatus, identifyProductFromIngredients } from './aiAnalysis';
 import { parseIngredientsFromText } from './ocr';
 
 /**
@@ -22,10 +22,11 @@ interface IngredientInfo {
 
 interface AnalysisResult {
   overallVerdict: 'CLEAN' | 'TOXIC';
-  ingredients?: IngredientInfo[]; // Only for premium users
+  ingredients?: IngredientInfo[];
   totalIngredients: number;
   toxicCount: number;
   cleanCount: number;
+  productIdentification?: string;  // NEW: AI-identified product name
 }
 
 export async function analyzeIngredients(
@@ -48,6 +49,9 @@ export async function analyzeIngredients(
     }
   });
   
+  // Start product identification in parallel (don't await yet!)
+  const productIdentificationPromise = identifyProductFromIngredients(extractedText);
+  
   const ingredients = parsedIngredients
     .map(ingredient => ingredient.name
       .toLowerCase()
@@ -59,7 +63,7 @@ export async function analyzeIngredients(
   if (ingredients.length === 0) {
     return {
       overallVerdict: 'TOXIC', // Conservative approach - if we can't read ingredients, assume toxic
-      ingredients: isPremium ? [] : undefined,
+      ingredients: [],
       totalIngredients: 0,
       toxicCount: 0,
       cleanCount: 0,
@@ -87,7 +91,7 @@ export async function analyzeIngredients(
       resultsByName.set(normalizedIngredient, {
         name: capitalizeIngredientName(dbResult.ingredient_name),
         status: dbResult.status,
-        educational_note: isPremium ? dbResult.educational_note : getBasicNote(dbResult.status, dbResult.ingredient_name),
+        educational_note: dbResult.educational_note,
         basic_note: getBasicNote(dbResult.status, dbResult.ingredient_name),
         isMinorIngredient: minorIngredientsMap.get(normalizedIngredient) || false,
       });
@@ -115,7 +119,7 @@ export async function analyzeIngredients(
           resultsByName.set(normalizedName, {
             name: capitalizeIngredientName(ingredientName),
             status: aiAnalysis.status,
-            educational_note: isPremium ? aiAnalysis.educational_note : aiAnalysis.basic_note,
+            educational_note: aiAnalysis.educational_note,
             basic_note: aiAnalysis.basic_note,
             isMinorIngredient: minorIngredientsMap.get(normalizedName) || false,
           });
@@ -137,9 +141,7 @@ export async function analyzeIngredients(
           resultsByName.set(normalized, {
             name: capitalizeIngredientName(ingredient),
             status: 'potentially_toxic',
-            educational_note: isPremium 
-              ? 'Unable to analyze this ingredient with AI. For safety, we recommend caution and consulting with healthcare providers about potential concerns.'
-              : 'Unknown ingredient - upgrade for detailed analysis',
+            educational_note: 'Unable to analyze this ingredient with AI. For safety, we recommend caution and consulting with healthcare providers about potential concerns.',
             basic_note: 'Unknown ingredient - upgrade for detailed analysis',
             isMinorIngredient: minorIngredientsMap.get(normalized) || false,
           });
@@ -153,9 +155,7 @@ export async function analyzeIngredients(
         resultsByName.set(normalized, {
           name: capitalizeIngredientName(ingredient),
           status: 'potentially_toxic',
-          educational_note: isPremium 
-            ? 'Unable to analyze this ingredient with AI. For safety, we recommend caution and consulting with healthcare providers about potential concerns.'
-            : 'Unknown ingredient - upgrade for detailed analysis',
+          educational_note: 'Unable to analyze this ingredient with AI. For safety, we recommend caution and consulting with healthcare providers about potential concerns.',
           basic_note: 'Unknown ingredient - upgrade for detailed analysis',
           isMinorIngredient: minorIngredientsMap.get(normalized) || false,
         });
@@ -180,12 +180,16 @@ export async function analyzeIngredients(
   // If ANY ingredient is potentially toxic, mark product as TOXIC
   const overallVerdict = toxicCount > 0 ? 'TOXIC' : 'CLEAN';
 
+  // Await product identification (started earlier in parallel)
+  const productIdentification = await productIdentificationPromise;
+
   const finalResult = {
     overallVerdict,
-    ingredients: isPremium ? results : undefined,
+    ingredients: results,
     totalIngredients: results.length,
     toxicCount,
     cleanCount,
+    productIdentification,
   };
 
   

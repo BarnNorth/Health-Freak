@@ -92,8 +92,8 @@ export async function showPremiumUpgradePrompt(): Promise<void> {
 
 export async function showScanLimitReachedModal(): Promise<void> {
   Alert.alert(
-    'You\'ve Used All 5 Free Scans',
-    'Upgrade to Premium for unlimited scanning and automatic scan history tracking.\n\n• ♾️ Unlimited scans forever\n• 💾 Scan history saved automatically\n• 🔍 Search and export features\n\n$10/month',
+    'You\'ve Used All 10 Free Scans',
+    'You\'ve used your 10 free scans with full ingredient analysis.\n\nUpgrade to Premium for unlimited scanning and automatic scan history.\n\n• ♾️ Unlimited scans forever\n• 💾 Scan history saved automatically\n• 🔍 Search and export features\n\n$10/month',
     [
       { text: 'Learn More', style: 'default', onPress: () => {
         // Navigate to profile/upgrade section

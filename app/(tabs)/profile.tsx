@@ -108,7 +108,7 @@ export default function ProfileScreen() {
                 {user.subscription_status === 'premium' ? (
                   <Text style={styles.premiumStatus}>👑 Premium Member</Text>
                 ) : (
-                  <Text style={styles.freeStatus}>⚡ Free Account{'\n'}{Math.min(user.total_scans_used, 5)} of 5 scans used</Text>
+                  <Text style={styles.freeStatus}>⚡ Free Account{'\n'}{Math.min(user.total_scans_used, 10)} of 10 scans used</Text>
                 )}
               </View>
             </View>

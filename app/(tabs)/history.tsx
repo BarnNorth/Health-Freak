@@ -108,11 +108,17 @@ export default function HistoryScreen() {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
+    const dateStr = date.toLocaleDateString('en-US', { 
       month: 'short', 
       day: 'numeric',
       year: 'numeric'
     });
+    const timeStr = date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+    return `${dateStr} at ${timeStr}`;
   };
 
   const handleDeleteAnalysis = async (id: string) => {
@@ -154,19 +160,16 @@ export default function HistoryScreen() {
     );
   }
 
-  // Free tier users don't have saved history
-  if (user?.subscription_status === 'free' && !latestResult) {
+  // Free tier users with no saved history
+  if (user?.subscription_status === 'free' && history.length === 0 && !latestResult) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.emptyContainer}>
           <FileSearch size={64} color={COLORS.textSecondary} />
-          <Text style={styles.emptyTitle}>History Saved with Premium</Text>
+          <Text style={styles.emptyTitle}>No Scans Yet</Text>
           <Text style={styles.emptyText}>
-            Free tier gives you 5 scans to try the app, but history isn't saved. Upgrade to Premium for unlimited scans and full history tracking.
+            Free tier gives you 10 scans with full ingredient analysis and saved history. Start scanning to see your results here!
           </Text>
-          <TouchableOpacity style={styles.upgradePromptButton} onPress={() => router.push('/profile')}>
-            <Text style={styles.upgradePromptButtonText}>View Premium Benefits</Text>
-          </TouchableOpacity>
           <TouchableOpacity style={styles.cameraButton} onPress={() => router.push('/')}>
             <Text style={styles.cameraButtonText}>Start Scanning</Text>
           </TouchableOpacity>
@@ -223,9 +226,19 @@ export default function HistoryScreen() {
             
             <View style={styles.latestResultCard}>
               <View style={styles.latestResultContent}>
-                <Text style={styles.latestResultText} numberOfLines={2}>
-                  {getCleanIngredientText(latestResult.results)}
-                </Text>
+                {/* Show product name if available, otherwise show ingredients */}
+                {latestResult.results?.productIdentification ? (
+                  <View style={styles.productNameContainer}>
+                    <Text style={styles.productNameIcon}>🔍</Text>
+                    <Text style={styles.productNameText} numberOfLines={2}>
+                      {latestResult.results.productIdentification}
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.latestResultText} numberOfLines={2}>
+                    {getCleanIngredientText(latestResult.results)}
+                  </Text>
+                )}
                 
                 <View style={styles.latestResultVerdict}>
                   {(() => {
@@ -252,20 +265,6 @@ export default function HistoryScreen() {
                     );
                   })()}
                 </View>
-
-                {/* Free User Upgrade Prompt */}
-                {user?.subscription_status === 'free' && latestResult && (
-                  <View style={styles.upgradePrompt}>
-                    <View style={styles.upgradeHeader}>
-                      <Crown size={14} color={COLORS.accentYellow} />
-                      <Text style={styles.upgradeTitle}>Upgrade to save your scan history</Text>
-                    </View>
-                    <TouchableOpacity style={styles.upgradeButton} onPress={showPremiumUpgradePrompt}>
-                      <Zap size={16} color={COLORS.white} />
-                      <Text style={styles.upgradeButtonText}>Upgrade to Premium - $10/month</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
               </View>
               
               <TouchableOpacity 
@@ -295,9 +294,9 @@ export default function HistoryScreen() {
           <View style={styles.freeTierNotice}>
             <Text style={styles.freeTierNoticeTitle}>⚡ Free Tier Limits</Text>
             <Text style={styles.freeTierNoticeText}>
-              • 5 total scans to try the app{'\n'}
-              • Full analysis during each scan{'\n'}
-              • History NOT saved{'\n\n'}
+              • 10 total scans with full ingredient analysis{'\n'}
+              • Complete breakdown during each scan{'\n'}
+              • History saved for all your scans{'\n\n'}
               Upgrade to Premium for unlimited scans and full history tracking!
             </Text>
             <TouchableOpacity style={styles.upgradeButton} onPress={() => router.push('/profile')}>
@@ -326,9 +325,19 @@ export default function HistoryScreen() {
                 </TouchableOpacity>
               </View>
               
-              <Text style={styles.ingredientText} numberOfLines={2}>
-                {getCleanIngredientText(item.results)}
-              </Text>
+              {/* Show product name if available, otherwise show ingredients */}
+              {item.results?.productIdentification ? (
+                <View style={styles.productNameContainer}>
+                  <Text style={styles.productNameIcon}>🔍</Text>
+                  <Text style={styles.productNameText} numberOfLines={2}>
+                    {item.results.productIdentification}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.ingredientText} numberOfLines={2}>
+                  {getCleanIngredientText(item.results)}
+                </Text>
+              )}
               
               <View style={styles.resultsContainer}>
                 {(() => {
@@ -381,7 +390,7 @@ export default function HistoryScreen() {
           <Text style={styles.educationalText}>
             {user?.subscription_status === 'premium' ? 
               '♾️ Premium: Unlimited scans with full history saved automatically.' :
-              '⚡ Free Tier: 5 scans to try the app. History not saved - upgrade to Premium for full tracking!'
+              '⚡ Free Tier: 10 scans with full ingredient analysis and saved history. Upgrade to Premium for unlimited scans!'
             }
             {'\n\n'}📚 For educational reference only. Not medical advice.
             {'\n\n'}🏥 Always consult healthcare professionals for dietary decisions.
@@ -820,5 +829,22 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     lineHeight: LINE_HEIGHTS.bodyLarge,
     fontFamily: FONTS.terminalGrotesque,
+  },
+  productNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  productNameIcon: {
+    fontSize: 16,
+  },
+  productNameText: {
+    fontSize: 19,
+    fontFamily: FONTS.terminalGrotesque,
+    color: COLORS.textPrimary,
+    fontWeight: '400',
+    flex: 1,
+    lineHeight: 23,
   },
 });

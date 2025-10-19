@@ -138,14 +138,14 @@ export default function EmailConfirmationScreen() {
         <View style={styles.welcomeContainer}>
           <Text style={styles.welcomeTitle}>🎉 Welcome to Health Freak!</Text>
           <Text style={styles.welcomeDescription}>
-            You now have 5 free scans to try the app and evaluate toxic ingredients in your products.
+            You now have 10 free scans with full ingredient analysis to try the app and evaluate toxic ingredients in your products.
           </Text>
           
           <View style={styles.benefitsContainer}>
             <Text style={styles.benefitsTitle}>What's included in your free account:</Text>
             <View style={styles.benefitItem}>
               <CheckCircle size={16} color={COLORS.cleanGreen} />
-              <Text style={styles.benefitText}>5 ingredient scans to try the app</Text>
+              <Text style={styles.benefitText}>10 ingredient scans with full analysis</Text>
             </View>
             <View style={styles.benefitItem}>
               <CheckCircle size={16} color={COLORS.cleanGreen} />
@@ -158,7 +158,7 @@ export default function EmailConfirmationScreen() {
           </View>
           
           <Text style={styles.upgradeHint}>
-            💡 Upgrade to Premium anytime for unlimited scans + scan history!
+            💡 Upgrade to Premium anytime for unlimited scans!
           </Text>
         </View>
 

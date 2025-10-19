@@ -861,3 +861,43 @@ export async function testAIAnalysis(): Promise<{
     };
   }
 }
+
+/**
+ * Identify product from ingredient list using AI
+ */
+export async function identifyProductFromIngredients(
+  ingredientList: string
+): Promise<string> {
+  try {
+    const prompt = `Based on this ingredient list, identify the product.
+
+Ingredient list:
+"${ingredientList}"
+
+Rules:
+1. If you can identify a specific product with high confidence, return: "[Brand] [Product Name]"
+   Example: "Dave's Killer Bread - 21 Whole Grains & Seeds"
+2. If you recognize the category but not the exact product, return: "A [category] product"
+   Example: "An organic bread product" or "A protein bar"
+3. Keep it concise (under 50 characters)
+4. Don't include unnecessary words like "This is" or "Appears to be"
+
+Return ONLY the product identification string, nothing else.`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'You are a product identification expert. Return only the product name or category.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 50,
+    });
+
+    const identification = completion.choices[0]?.message?.content?.trim();
+    return identification || 'A packaged food product';
+  } catch (error) {
+    console.error('Error identifying product:', error);
+    return 'A packaged food product'; // Fallback
+  }
+}

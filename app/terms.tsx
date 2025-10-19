@@ -65,7 +65,7 @@ export default function TermsScreen() {
 
           <Text style={styles.sectionTitle}>5. Subscription Terms</Text>
           <Text style={styles.sectionText}>
-            Free users receive 5 analyses per month. Premium subscription ($9.99/month) provides:
+            Free users receive 10 analyses total with full ingredient analysis. Premium subscription ($9.99/month) provides:
             {'\n'}• Unlimited analyses
             {'\n'}• Complete analysis history
             {'\n'}• Priority support

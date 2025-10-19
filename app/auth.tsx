@@ -82,7 +82,7 @@ export default function AuthScreen() {
 
         <Text style={styles.subtitle}>
           {isSignUp 
-            ? 'Get 5 free scans to try the app'
+            ? 'Get 10 free scans with full ingredient analysis'
             : 'Sign in to continue scanning'
           }
         </Text>

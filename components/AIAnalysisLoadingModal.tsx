@@ -350,15 +350,6 @@ export function AIAnalysisLoadingModal({ visible, thoughts, progress, ingredient
             }}>
               AI Analysis Lab
             </Text>
-            <Text style={{ 
-              fontSize: FONT_SIZES.bodyMedium, 
-              color: COLORS.textSecondary, 
-              fontFamily: FONTS.terminalGrotesque, 
-              marginTop: 8, 
-              textAlign: 'center' 
-            }}>
-              Analyzing {ingredientCount} ingredient{ingredientCount !== 1 ? 's' : ''}...
-            </Text>
           </View>
           
           {/* Beaker Progress Bar */}

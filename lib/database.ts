@@ -309,8 +309,9 @@ function getBasicNoteForCache(status: 'generally_clean' | 'potentially_toxic'): 
 
 
 // Analysis history functions
-// Note: Only Premium users have their history saved
-// Free tier users (5 scans) do NOT save history - they only get real-time analysis
+// Note: All users have their history saved
+// Free tier users: 10 scans with full features including saved history
+// Premium users: Unlimited scans with saved history
 export async function saveAnalysis(
   userId: string,
   extractedText: string,
@@ -419,7 +420,7 @@ export async function deleteAnalysis(userId: string, analysisId: string): Promis
 
 // Usage tracking functions
 // Note: This tracks scans for ALL users (both Free and Premium)
-// Free tier: Limited to 5 scans total
+// Free tier: Limited to 10 scans total with full premium features
 // Premium tier: Unlimited scans
 export async function incrementAnalysisCount(userId: string): Promise<boolean> {
   try {
@@ -477,21 +478,21 @@ export async function checkUserLimits(userId: string): Promise<{
         console.log('[LIMITS] Profile not ready yet, defaulting to free tier');
         return {
           canAnalyze: true,
-          remaining: 5,
+          remaining: 10,
           totalUsed: 0,
           subscriptionStatus: 'free'
         };
       }
       console.error('[LIMITS] Error checking user limits:', error);
       // Default to allowing analysis on error
-      return { canAnalyze: true, totalUsed: 0, subscriptionStatus: 'free', remaining: 5 };
+      return { canAnalyze: true, totalUsed: 0, subscriptionStatus: 'free', remaining: 10 };
     }
 
     const result = {
       canAnalyze: data.can_analyze,
       totalUsed: data.total_used,
       subscriptionStatus: data.subscription_status,
-      remaining: data.subscription_status === 'premium' ? 999 : Math.max(0, 5 - data.total_used)
+      remaining: data.subscription_status === 'premium' ? 999 : Math.max(0, 10 - data.total_used)
     };
 
     console.log('[LIMITS] Scan limit check result:', result);
@@ -499,7 +500,7 @@ export async function checkUserLimits(userId: string): Promise<{
   } catch (error) {
     console.error('[LIMITS] Exception checking user limits:', error);
     // Default to allowing analysis on exception
-    return { canAnalyze: true, totalUsed: 0, subscriptionStatus: 'free', remaining: 5 };
+    return { canAnalyze: true, totalUsed: 0, subscriptionStatus: 'free', remaining: 10 };
   }
 }
 

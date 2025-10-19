@@ -398,7 +398,7 @@ export default function CameraScreen() {
       // Run database operations in background (non-blocking)
       Promise.allSettled([
         incrementAnalysisCount(user!.id),
-        user?.subscription_status === 'premium' ? saveAnalysis(user.id, photoAnalysis.extractedText, results) : Promise.resolve(),
+        saveAnalysis(user!.id, photoAnalysis.extractedText, results),
         refreshUserProfile()
       ]).catch(e => console.error('Background DB operations failed:', e));
 
@@ -490,7 +490,7 @@ export default function CameraScreen() {
       // Run database operations in background (non-blocking)
       Promise.allSettled([
         incrementAnalysisCount(user!.id),
-        user?.subscription_status === 'premium' ? saveAnalysis(user.id, extractedText, results) : Promise.resolve(),
+        saveAnalysis(user!.id, extractedText, results),
         refreshUserProfile()
       ]).catch(e => console.error('Background DB operations failed:', e));
 
