@@ -81,7 +81,7 @@ Welcome to the Health Freak documentation! Everything has been organized for cla
 - ~~EMAIL_AUTH_IMPLEMENTATION.md~~ → **DEVELOPER_GUIDE.md**
 - ~~SECURITY.md~~ → **DEVELOPER_GUIDE.md**
 - ~~AI_SETUP.md~~ → **SETUP_GUIDE.md**
-- ~~OCR_SETUP.md~~ → **SETUP_GUIDE.md** (now GPT-4 Vision)
+- ~~OCR_SETUP.md~~ → **SETUP_GUIDE.md**
 
 ### ✅ Kept (Active):
 - **DEVELOPER_GUIDE.md** - Enhanced with implementation details

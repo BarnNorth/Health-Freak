@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Alert } from 'react-native';
-import { User, Crown, FileText, Shield, Settings, LogOut, CreditCard, RefreshCw } from 'lucide-react-native';
+import { User, Crown, FileText, Shield, LogOut, CreditCard, RefreshCw } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { startPremiumSubscription } from '@/services/stripe';
@@ -182,14 +182,6 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/privacy')}>
             <Shield size={20} color={COLORS.textSecondary} />
             <Text style={styles.menuText}>Privacy Policy</Text>
-            <Text style={styles.menuArrow}>›</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.menuItem} onPress={() => {
-            Alert.alert('App Settings', 'Settings page coming soon!', [{ text: 'OK' }]);
-          }}>
-            <Settings size={20} color={COLORS.textSecondary} />
-            <Text style={styles.menuText}>App Settings</Text>
             <Text style={styles.menuArrow}>›</Text>
           </TouchableOpacity>
         </View>

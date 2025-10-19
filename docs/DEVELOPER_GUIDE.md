@@ -19,7 +19,7 @@ Complete technical documentation for setting up and developing Health Freak.
 ## 🛠️ Tech Stack
 
 - **Frontend:** React Native + Expo
-- **AI & OCR:** OpenAI GPT-4 Vision
+- **AI & OCR:** OpenAI (GPT-4o-mini + GPT-3.5-turbo)
 - **Database:** Supabase (PostgreSQL)
 - **Auth:** Supabase Auth
 - **Payments:** Stripe
@@ -257,7 +257,7 @@ See [TESTFLIGHT_CHECKLIST.md](TESTFLIGHT_CHECKLIST.md) for detailed deployment s
 - Check for extra spaces or quotes in `.env`
 - Ensure you have credits in your OpenAI account
 
-### "GPT-4 Vision API error"
+### "OpenAI API error"
 - Verify OpenAI API key is valid
 - Check you have credits in OpenAI account
 - Ensure billing is enabled in OpenAI account
@@ -288,39 +288,42 @@ When contributing:
 
 ### AI Analysis System
 
-**Architecture:**
-- **Model:** GPT-4o-mini for cost-effective analysis
-- **Pipeline:** Parse → Database Check → AI Analysis → Cache → Verdict
+**Two-Model Architecture:**
+- **OCR Model:** GPT-4o-mini (vision) for text extraction from photos
+- **Analysis Model:** GPT-3.5-turbo for ingredient classification (10x faster)
+- **Pipeline:** OCR → Parse → Database Check → AI Analysis → Cache → Verdict
 - **Classification:** Conservative approach - when in doubt, mark as potentially toxic
 - **Caching:** Hybrid system reduces API costs by 80-90%
 
 **How it works:**
-1. Parse ingredients from OCR text
-2. Check database for known ingredients (fast)
-3. Use AI for unknown ingredients (~1-3 seconds)
-4. Cache results for future use
-5. Apply "any toxic = product toxic" rule
+1. Extract text from photo using GPT-4o-mini (vision)
+2. Parse ingredients from extracted text
+3. Check database for known ingredients (fast)
+4. Use GPT-3.5-turbo for unknown ingredients (~1-3 seconds)
+5. Cache results for future use
+6. Apply "any toxic = product toxic" rule
 
 **Cost optimization:**
 - Pre-cache 290 common ingredients (~$0.90 one-time)
+- Use cheaper GPT-3.5-turbo for text analysis
 - Batch processing for multiple ingredients
 - Smart caching avoids repeat analysis
 - Reduces cost from $0.45 to $0.045 per user
 
 ### OCR Implementation
 
-**OpenAI GPT-4 Vision integration:**
-- **Multimodal AI** for both text extraction and understanding
+**GPT-4o-mini (Vision Model):**
+- **Multimodal AI** for extracting text from food label images
 - **Intelligent parsing** with context awareness
-- **High accuracy** for ingredient lists and food labels
+- **High accuracy** for ingredient lists and curved packaging
 - **Built-in validation** and cleaning
 
 **Processing pipeline:**
 1. Capture photo with camera
 2. Preprocess: enhance, resize, optimize
-3. OCR: extract text via GPT-4 Vision
+3. OCR: extract text via GPT-4o-mini (vision)
 4. Parse: AI identifies and separates ingredients
-5. Validate: AI filters non-ingredients
+5. Analyze: GPT-3.5-turbo classifies each ingredient
 6. Clean: normalize and format ingredient names
 
 **Error handling:**

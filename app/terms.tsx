@@ -8,16 +8,16 @@ import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
 export default function TermsScreen() {
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <ArrowLeft size={24} color={COLORS.cleanGreen} />
-          </TouchableOpacity>
-          <Text style={styles.title}>Terms of Service</Text>
-          <View style={styles.placeholder} />
-        </View>
+      {/* Fixed Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <ArrowLeft size={24} color={COLORS.cleanGreen} />
+        </TouchableOpacity>
+        <Text style={styles.title}>Terms of Service</Text>
+        <View style={styles.placeholder} />
+      </View>
 
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
         {/* Important Notice */}
         <View style={styles.noticeContainer}>
           <Text style={styles.noticeText}>
@@ -84,8 +84,9 @@ export default function TermsScreen() {
           <Text style={styles.sectionText}>
             Premium subscriptions are billed monthly at $10. You may cancel your subscription at any time 
             through your account settings, and you will retain premium access until the end of your current 
-            billing period. Refunds are handled according to Apple App Store and Google Play Store policies. 
-            For refund requests or billing questions, contact healthfreak.ai@gmail.com within 7 days of purchase.
+            billing period.
+            {'\n\n'}Refund requests must be submitted to healthfreak.ai@gmail.com within 7 days of purchase. Approved refunds will be processed within 5-10 business days and issued to your original payment method. Prorated refunds are not available for partial months of service.
+            {'\n\n'}Important: Subscriptions purchased through the Apple App Store or Google Play Store are subject to their respective refund policies. You may also request refunds directly through Apple or Google using their standard refund request processes.
           </Text>
 
           <Text style={styles.sectionTitle}>8. Disclaimers and Limitations</Text>
@@ -103,7 +104,14 @@ export default function TermsScreen() {
             terms periodically, and continued use implies acceptance of any changes.
           </Text>
 
-          <Text style={styles.sectionTitle}>10. Contact Information</Text>
+          <Text style={styles.sectionTitle}>10. Dispute Resolution and Governing Law</Text>
+          <Text style={styles.sectionText}>
+            These Terms of Service are governed by and construed in accordance with the laws of the State of California, without regard to conflict of law principles. Any disputes arising from or relating to these terms or your use of this app shall be resolved through binding arbitration conducted in California in accordance with the rules of the American Arbitration Association.
+            {'\n\n'}By using this app, you waive your right to participate in class action lawsuits or class-wide arbitration. Each party may bring claims against the other only in an individual capacity.
+            {'\n\n'}Exception: Either party may bring a claim in small claims court in California for disputes that qualify for small claims jurisdiction.
+          </Text>
+
+          <Text style={styles.sectionTitle}>11. Contact Information</Text>
           <Text style={styles.sectionText}>
             Questions about these terms? Contact us at healthfreak.ai@gmail.com
           </Text>

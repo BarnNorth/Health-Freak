@@ -50,24 +50,33 @@ Before you begin, ensure you have:
 
 ### Model Configuration
 
-The app uses **GPT-4 Vision (GPT-4o-mini)** for both OCR and ingredient analysis:
+The app uses **two different OpenAI models** optimized for specific tasks:
 
-- **OCR Cost:** ~$0.001-0.003 per image scan
-- **Analysis Cost:** ~$0.001-0.005 per ingredient analysis  
-- **Speed:** ~2-5 seconds total per scan
-- **Accuracy:** Excellent for both text extraction and ingredient classification
+**1. GPT-4o-mini (Vision Model)**
+- **Purpose:** OCR text extraction from food label photos
+- **Cost:** ~$0.002-0.008 per image scan
+- **Speed:** ~2-5 seconds per scan
+- **Why:** Vision capabilities required for reading text from images
 
-**Optional:** You can configure different models in `app.json`:
+**2. GPT-3.5-turbo (Text Model)**
+- **Purpose:** Ingredient classification and analysis
+- **Cost:** ~$0.001-0.003 per ingredient
+- **Speed:** 10x faster than GPT-4 models
+- **Why:** Cheaper and faster for text-only analysis tasks
+
+**Optional:** You can configure the default model in `app.json`:
 ```json
 {
   "expo": {
     "extra": {
       "openaiModel": "gpt-4o-mini",
-      "openaiMaxTokens": 2000
+      "openaiMaxTokens": 300
     }
   }
 }
 ```
+
+**Note:** The app automatically uses the appropriate model for each task regardless of this setting.
 
 ---
 
@@ -214,7 +223,7 @@ Create `.env` file with:
 
 ```bash
 # ============================================
-# AI Analysis & OCR (OpenAI GPT-4 Vision)
+# AI Analysis & OCR (OpenAI)
 # ============================================
 EXPO_PUBLIC_OPENAI_API_KEY=sk-proj-your-actual-openai-key
 
@@ -265,7 +274,7 @@ npm start
 
 ```bash
 # Take a photo of ingredient list
-# Check console for: "GPT-4 Vision OCR successful"
+# Check console for: "OCR extraction successful"
 # Verify ingredient text is extracted correctly
 ```
 
@@ -314,7 +323,7 @@ npm start
 - Check key starts with `sk-proj-` or `sk-`
 - Ensure OpenAI account has credits
 
-**"GPT-4 Vision API error"**
+**"OpenAI API error"**
 - Check OpenAI API key is valid (not revoked)
 - Verify you have sufficient credits
 - Ensure billing is enabled in OpenAI account
@@ -413,7 +422,7 @@ After setup is complete:
 
 | Service | Free Tier | Paid Tier | Typical Cost |
 |---------|-----------|-----------|--------------|
-| OpenAI GPT-4 Vision | - | $0.002-0.008/scan | $10-30/month |
+| OpenAI (GPT-4o-mini + GPT-3.5-turbo) | - | $0.003-0.011/scan | $10-30/month |
 | Supabase | 500MB DB, 2GB bandwidth | $25/month | $0-25/month |
 | Stripe | - | 2.9% + $0.30/transaction | Variable |
 

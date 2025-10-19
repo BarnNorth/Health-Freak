@@ -8,16 +8,16 @@ import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
 export default function PrivacyScreen() {
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <ArrowLeft size={24} color={COLORS.cleanGreen} />
-          </TouchableOpacity>
-          <Text style={styles.title}>Privacy Policy</Text>
-          <View style={styles.placeholder} />
-        </View>
+      {/* Fixed Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <ArrowLeft size={24} color={COLORS.cleanGreen} />
+        </TouchableOpacity>
+        <Text style={styles.title}>Privacy Policy</Text>
+        <View style={styles.placeholder} />
+      </View>
 
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
         {/* Important Notice */}
         <View style={styles.noticeContainer}>
           <Text style={styles.noticeText}>
@@ -40,7 +40,7 @@ export default function PrivacyScreen() {
           <Text style={styles.sectionTitle}>2. How We Use Your Information</Text>
           <Text style={styles.sectionText}>
             Your information is used exclusively to provide and enhance our services:
-            {'\n'}• Analyze ingredient photos in real-time using OpenAI API (photos are processed but not permanently stored)
+            {'\n'}• Analyze ingredient photos in real-time using OpenAI API (photos retained for up to 30 days, then permanently deleted)
             {'\n'}• Store your scan history and analysis results in Supabase database
             {'\n'}• Process subscription payments securely through Stripe
             {'\n'}• Authenticate your account and maintain your session
@@ -50,7 +50,7 @@ export default function PrivacyScreen() {
           <Text style={styles.sectionTitle}>3. Third-Party Services and Data Sharing</Text>
           <Text style={styles.sectionText}>
             We use trusted third-party services to operate our app:
-            {'\n'}• OpenAI: Ingredient photo analysis and classification (images sent for processing, not stored by OpenAI)
+            {'\n'}• OpenAI: Ingredient photo analysis and classification. Images are processed and retained for up to 30 days for security and abuse prevention, then permanently deleted. OpenAI does not use your data to train their models.
             {'\n'}• Supabase: Secure data storage, authentication, and database services
             {'\n'}• Stripe: Payment processing for premium subscriptions
             {'\n\n'}Important: We do not sell your personal information to third parties. Your data is shared only with these essential service providers to deliver app functionality.
@@ -80,16 +80,17 @@ export default function PrivacyScreen() {
           <Text style={styles.sectionText}>
             Your camera is used solely for ingredient label scanning:
             {'\n'}• Camera is used only for real-time ingredient label scanning
-            {'\n'}• Photos are processed immediately and not stored in our systems
+            {'\n'}• Photos are not stored in our systems
             {'\n'}• You control when the camera is activated
             {'\n'}• No access to your device's photo library
-            {'\n\n'}Images are sent to OpenAI for analysis and are not permanently retained by us or OpenAI.
+            {'\n\n'}Images are sent to OpenAI for analysis and retained for up to 30 days for security and abuse prevention, then permanently deleted. We do not retain copies of your photos.
           </Text>
 
           <Text style={styles.sectionTitle}>7. Data Retention</Text>
           <Text style={styles.sectionText}>
             We retain your data according to the following policies:
-            {'\n'}• Active accounts: Scan history retained while account is active
+            {'\n'}• Premium users: Scan history retained indefinitely while subscription is active
+            {'\n'}• Free tier users: Analysis data older than 365 days may be automatically deleted as part of our data retention policy
             {'\n'}• Deleted accounts: All personal data removed within 30 days
             {'\n'}• Legal compliance: Some data may be retained as required by law
             {'\n\n'}You can request account deletion at any time by contacting support.
@@ -97,7 +98,7 @@ export default function PrivacyScreen() {
 
           <Text style={styles.sectionTitle}>8. Children's Privacy</Text>
           <Text style={styles.sectionText}>
-            This app is not intended for use by children under 13 years of age. We do not knowingly collect information from children under 13. If we discover that we have collected personal information from a child under 13, we will delete that information immediately. If you believe we have collected information from a child under 13, please contact us at healthfreak.ai@gmail.com
+            This app is not intended for use by children under 13 years of age. We do not knowingly collect information from children under 13. If we discover that we have collected personal information from a child under 13, we will delete that information immediately. If you believe we have collected information from a child under 13, please contact us at healthfreak.ai@gmail.com. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately at healthfreak.ai@gmail.com and we will delete such information from our systems.
           </Text>
 
           <Text style={styles.sectionTitle}>9. Changes to This Privacy Policy</Text>
@@ -114,6 +115,16 @@ export default function PrivacyScreen() {
             If you have questions, concerns, or requests regarding this privacy policy or your personal data, please contact us:
             {'\n\n'}Email: healthfreak.ai@gmail.com
             {'\n\n'}For privacy concerns, data requests, or questions about this policy, we will respond to your inquiry as soon as possible.
+          </Text>
+
+          <Text style={styles.sectionTitle}>11. California Privacy Rights</Text>
+          <Text style={styles.sectionText}>
+            If you are a California resident, you have specific rights under the California Consumer Privacy Act (CCPA):
+            {'\n'}• Right to Know: Request information about the personal data we have collected about you in the past 12 months
+            {'\n'}• Right to Delete: Request deletion of your personal data, subject to certain exceptions
+            {'\n'}• Right to Opt-Out: Opt-out of the sale of your personal data (note: we do not sell your personal data)
+            {'\n'}• Right to Non-Discrimination: Exercise your privacy rights without receiving discriminatory treatment
+            {'\n\n'}To exercise any of these rights, please email us at healthfreak.ai@gmail.com with "California Privacy Request" in the subject line. We will respond to your request within 45 days as required by law.
           </Text>
         </View>
 

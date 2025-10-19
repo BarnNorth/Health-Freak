@@ -11,14 +11,14 @@ Health Freak is a mobile app that takes the guesswork out of reading food labels
 ## ✨ How It Works
 
 1. **📸 Snap a Photo** - Point your camera at any ingredient list on food packaging
-2. **🤖 AI Analysis** - Our GPT-4 Vision AI instantly reads and analyzes each ingredient
+2. **🤖 AI Analysis** - Our advanced AI instantly reads and analyzes each ingredient
 3. **✅ Get Results** - See which ingredients are clean (green) and which are potentially harmful (red)
 4. **📊 Review History** - Track all your scans and revisit past analyses anytime
 
 ## 🎯 Features
 
-- **Smart AI Vision** - GPT-4 Vision automatically reads ingredient lists from any angle
-- **Instant AI Analysis** - Powered by OpenAI's advanced AI to classify ingredients
+- **Smart AI Vision** - Advanced vision AI automatically reads ingredient lists from any angle
+- **Instant AI Analysis** - Powered by OpenAI to classify ingredients accurately
 - **Color-Coded Results** - Easy-to-understand green (clean) and red (potentially toxic) ratings
 - **Scan History** - Keep track of all the products you've scanned
 - **Works Offline** - Common ingredients are pre-analyzed for instant results
