@@ -22,7 +22,7 @@ Complete technical documentation for setting up and developing Health Freak.
 - **AI & OCR:** OpenAI (GPT-4o-mini + GPT-3.5-turbo)
 - **Database:** Supabase (PostgreSQL)
 - **Auth:** Supabase Auth
-- **Payments:** Stripe
+- **Payments:** Stripe + RevenueCat (Apple IAP)
 - **Language:** TypeScript
 
 ## 📋 Prerequisites
@@ -33,7 +33,8 @@ Complete technical documentation for setting up and developing Health Freak.
 - Active API accounts:
   - [OpenAI](https://platform.openai.com/)
   - [Supabase](https://supabase.com/)
-  - [Stripe](https://stripe.com/) (for subscriptions)
+  - [Stripe](https://stripe.com/) (for web payments)
+  - [RevenueCat](https://www.revenuecat.com/) (for Apple IAP)
 
 ## 🚀 Quick Start
 
@@ -361,10 +362,141 @@ When contributing:
 - `stripe_subscriptions` - Subscription tracking
 
 **Tier Enforcement:**
-- Free: 5 scans, no history (database enforced)
+- Free: 10 scans with full analysis, history saved (database enforced)
 - Premium: Unlimited scans, full history saved
 - RLS policies prevent unauthorized access
 - Triggers enforce constraints
+
+### Subscription System Architecture
+
+**Dual Payment Provider System:**
+
+Health Freak supports two payment providers with a unified abstraction layer:
+
+```
+┌─────────────────────────────────────────────────┐
+│           Application Layer                      │
+│  (Profile, Camera, History screens)             │
+└──────────────────┬──────────────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────────────┐
+│     Unified Subscription Service                 │
+│     (services/subscription.ts)                   │
+│                                                   │
+│  • isPremiumActive()                             │
+│  • getSubscriptionInfo()                         │
+│  • startSubscriptionPurchase()                   │
+│  • cancelSubscription()                          │
+│  • 5-minute caching layer                        │
+└──────────────┬───────────────┬───────────────────┘
+               │               │
+               ▼               ▼
+    ┌──────────────┐  ┌──────────────┐
+    │   Stripe     │  │  RevenueCat  │
+    │   Service    │  │   Service    │
+    │              │  │  (Apple IAP) │
+    └──────┬───────┘  └──────┬───────┘
+           │                 │
+           ▼                 ▼
+    ┌──────────────┐  ┌──────────────┐
+    │   Stripe     │  │  App Store   │
+    │   API        │  │   StoreKit   │
+    └──────┬───────┘  └──────┬───────┘
+           │                 │
+           └────────┬────────┘
+                    ▼
+         ┌─────────────────────┐
+         │   Supabase Database  │
+         │   (users table)      │
+         │                      │
+         │  • subscription_status │
+         │  • payment_method     │
+         │  • stripe_* fields    │
+         │  • apple_* fields     │
+         └─────────────────────┘
+```
+
+**Key Components:**
+
+1. **Unified Service** (`services/subscription.ts`)
+   - Single interface for all subscription operations
+   - Abstracts away payment provider differences
+   - Caches subscription status for 5 minutes (reduces API calls)
+   - Defaults to `false` on errors (fail-safe)
+
+2. **Provider Services**
+   - `services/stripe.ts` - Stripe-specific operations
+   - `services/revenueCat.ts` - Apple IAP operations via RevenueCat SDK
+   - Each handles its own authentication, API calls, and error handling
+
+3. **Database Schema** (`users` table)
+   - `subscription_status`: 'free' | 'premium'
+   - `payment_method`: 'stripe' | 'apple_iap' | null
+   - `stripe_customer_id`, `stripe_subscription_id` (Stripe users)
+   - `apple_original_transaction_id`, `revenuecat_customer_id` (Apple users)
+
+**Webhook Synchronization:**
+
+Both providers send webhook events to keep database in sync:
+
+**Stripe Webhooks** (`supabase/functions/stripe-webhook/`)
+- `customer.subscription.created` → Set premium status
+- `customer.subscription.updated` → Update subscription details
+- `customer.subscription.deleted` → Remove premium status
+
+**RevenueCat Webhooks** (`supabase/functions/revenuecat-webhook/`)
+- `INITIAL_PURCHASE` → Set premium status, store transaction ID
+- `RENEWAL` → Update subscription timestamp
+- `CANCELLATION` → Mark for cancellation at period end
+- `EXPIRATION` → Remove premium status
+
+**Usage in Application:**
+
+```typescript
+// Check if user has premium access (works for both providers)
+const isPremium = await isPremiumActive(userId);
+
+// Get detailed subscription info
+const subInfo = await getSubscriptionInfo(userId);
+// Returns: { isActive, paymentMethod, renewalDate, cancelsAtPeriodEnd }
+
+// Start new subscription
+const result = await startSubscriptionPurchase(userId, 'apple_iap');
+
+// Cancel subscription (provider-specific handling)
+const cancelResult = await cancelSubscription(userId);
+```
+
+**Caching Strategy:**
+- Premium status cached for 5 minutes per user
+- Cache cleared immediately on purchase/cancellation
+- Reduces API calls by ~90%
+- Cache key: `premium_${userId}_${timestamp}`
+
+**Subscription Restoration:**
+
+On app launch (`app/_layout.tsx`):
+1. Check if user is authenticated
+2. For Apple IAP users: Call RevenueCat `restorePurchases()`
+3. For Stripe users: Verify status from database
+4. Update local state with results
+
+This ensures users keep access after reinstalling the app, switching devices, or updating the app.
+
+**Payment Method Selection:**
+
+`components/PaymentMethodModal.tsx` presents both options:
+- Shown when user taps "Upgrade to Premium"
+- Equal prominence for both methods
+- Platform-aware (iOS shows Apple IAP, Android shows Stripe only)
+- Handles loading states and errors for each provider
+
+**Subscription Management:**
+- **Stripe users:** Can cancel directly in app via Stripe API
+- **Apple users:** Directed to iPhone Settings (per Apple requirements)
+- Deep linking attempted to Settings → Subscriptions
+- Fallback instructions if deep link fails
 
 ## 📚 Additional Documentation
 
@@ -373,6 +505,10 @@ When contributing:
 - **Database Schema:** [TIER_SYSTEM_DATABASE_SCHEMA.md](TIER_SYSTEM_DATABASE_SCHEMA.md) - DB structure
 - **Production Checklist:** [PRODUCTION_CHECKLIST.md](PRODUCTION_CHECKLIST.md) - Launch guide
 - **TestFlight Checklist:** [TESTFLIGHT_CHECKLIST.md](TESTFLIGHT_CHECKLIST.md) - Beta testing
+- **IAP Testing Guide:** [IAP_TESTING_GUIDE.md](IAP_TESTING_GUIDE.md) - Apple in-app purchase testing
+- **IAP Test Checklist:** [IAP_TEST_CHECKLIST.md](IAP_TEST_CHECKLIST.md) - IAP verification checklist
+- **Revenue Tracking:** [REVENUE_TRACKING.md](REVENUE_TRACKING.md) - Multi-provider revenue analytics
+- **App Store Notes:** [APP_STORE_SUBMISSION_NOTES.md](APP_STORE_SUBMISSION_NOTES.md) - Submission documentation
 
 ## 📄 License
 

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Ale
 import { CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, Info, ArrowLeft, Crown, Zap, ThumbsUp, ThumbsDown, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { showPremiumUpgradePrompt, getIngredientCounts } from '@/services/subscription';
+import { showPremiumUpgradePrompt, getIngredientCounts } from '@/services/subscriptionModals';
 import { submitIngredientFeedback, getBatchIngredientAccuracy } from '@/services/feedback';
 import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';

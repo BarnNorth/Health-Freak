@@ -36,7 +36,8 @@ import { FileSearch, Calendar, ChevronRight, Trash2, CircleCheck, TriangleAlert,
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUserAnalyses, deleteAnalysis } from '@/lib/database';
-import { showPremiumUpgradePrompt } from '@/services/subscription';
+import { showPremiumUpgradePrompt } from '@/services/subscriptionModals';
+import { isPremiumActive } from '@/services/subscription';
 import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
 
@@ -44,7 +45,7 @@ interface AnalysisHistory {
   id: string;
   created_at: string;
   extractedText: string;
-  results: any[];
+  results: any[] | { productIdentification?: string; [key: string]: any };
 }
 
 export default function HistoryScreen() {
@@ -52,14 +53,29 @@ export default function HistoryScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [latestResult, setLatestResult] = useState<any>(null);
+  const [isPremium, setIsPremium] = useState(false);
   const { user } = useAuth();
   const { results: resultsParam, extractedText: extractedTextParam } = useLocalSearchParams();
 
   useEffect(() => {
     if (user) {
       loadHistory();
+      checkPremiumStatus();
     }
   }, [user]);
+
+  // Check premium status using unified service
+  const checkPremiumStatus = async () => {
+    if (!user) return;
+    
+    try {
+      const premiumStatus = await isPremiumActive(user.id);
+      setIsPremium(premiumStatus);
+    } catch (error) {
+      console.error('[HISTORY] Error checking premium status:', error);
+      setIsPremium(false);
+    }
+  };
 
   useEffect(() => {
     if (resultsParam && extractedTextParam) {
@@ -179,7 +195,7 @@ export default function HistoryScreen() {
   }
 
   // Premium users with no history
-  if (user?.subscription_status === 'premium' && history.length === 0 && !latestResult) {
+  if (isPremium && history.length === 0 && !latestResult) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.emptyContainer}>
@@ -256,7 +272,7 @@ export default function HistoryScreen() {
                         ]}>
                           {overallVerdict}
                         </Text>
-                        {user?.subscription_status === 'premium' && (
+                        {isPremium && (
                           <Text style={styles.verdictCount}>
                             {cleanCount} clean, {toxicCount} toxic
                           </Text>
@@ -326,7 +342,7 @@ export default function HistoryScreen() {
               </View>
               
               {/* Show product name if available, otherwise show ingredients */}
-              {item.results?.productIdentification ? (
+              {!Array.isArray(item.results) && item.results?.productIdentification ? (
                 <View style={styles.productNameContainer}>
                   <Text style={styles.productNameIcon}>🔍</Text>
                   <Text style={styles.productNameText} numberOfLines={2}>
@@ -348,7 +364,7 @@ export default function HistoryScreen() {
                         <View style={[styles.statusDot, overallVerdict === 'CLEAN' ? styles.cleanDot : styles.toxicDot]} />
                         <Text style={styles.resultText}>Product is {overallVerdict}</Text>
                       </View>
-                      {user?.subscription_status === 'premium' && (
+                      {isPremium && (
                         <View style={styles.ingredientCounts}>
                           <Text style={styles.resultText}>{cleanCount} clean, {toxicCount} toxic</Text>
                         </View>
@@ -385,10 +401,10 @@ export default function HistoryScreen() {
         {/* Educational Note & Disclaimer */}
         <View style={styles.educationalNote}>
           <Text style={styles.educationalTitle}>
-            {user?.subscription_status === 'premium' ? 'About Your History' : 'About Your Analysis'}
+            {isPremium ? 'About Your History' : 'About Your Analysis'}
           </Text>
           <Text style={styles.educationalText}>
-            {user?.subscription_status === 'premium' ? 
+            {isPremium ? 
               '♾️ Premium: Unlimited scans with full history saved automatically.' :
               '⚡ Free Tier: 10 scans with full ingredient analysis and saved history. Upgrade to Premium for unlimited scans!'
             }

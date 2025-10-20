@@ -1,16 +1,22 @@
-import React, { useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Alert } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Alert, TouchableWithoutFeedback } from 'react-native';
 import { User, Crown, FileText, Shield, LogOut, CreditCard, RefreshCw } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { startPremiumSubscription } from '@/services/stripe';
-import { showCancelSubscriptionPrompt } from '@/services/subscription';
+import { showCancelSubscriptionPrompt } from '@/services/subscriptionModals';
+import { getPaymentMethod } from '@/lib/database';
+import { PaymentMethodModal } from '@/components/PaymentMethodModal';
+import { getSubscriptionInfo, isPremiumActive, SubscriptionInfo } from '@/services/subscription';
 import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
 
 export default function ProfileScreen() {
   const { user, signOut, initializing, refreshUserProfile } = useAuth();
   const hasRefreshedRef = useRef(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [subscriptionInfo, setSubscriptionInfo] = useState<SubscriptionInfo | null>(null);
+  const [isPremium, setIsPremium] = useState(false);
+  const debugPressTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Refresh profile once when tab is focused (prevent infinite loops)
   useFocusEffect(
@@ -18,6 +24,7 @@ export default function ProfileScreen() {
       if (user?.id && !initializing && !hasRefreshedRef.current) {
         hasRefreshedRef.current = true;
         refreshUserProfile();
+        loadSubscriptionInfo();
         
         // Reset the flag after 5 seconds to allow future refreshes
         setTimeout(() => {
@@ -26,6 +33,25 @@ export default function ProfileScreen() {
       }
     }, [user?.id, initializing])
   );
+
+  // Load subscription information using unified service
+  const loadSubscriptionInfo = async () => {
+    if (!user) return;
+    
+    try {
+      const [premiumStatus, subInfo] = await Promise.all([
+        isPremiumActive(user.id),
+        getSubscriptionInfo(user.id)
+      ]);
+      
+      setIsPremium(premiumStatus);
+      setSubscriptionInfo(subInfo);
+    } catch (error) {
+      console.error('[PROFILE] Error loading subscription info:', error);
+      setIsPremium(false);
+      setSubscriptionInfo(null);
+    }
+  };
 
 
   if (initializing) {
@@ -58,16 +84,27 @@ export default function ProfileScreen() {
     );
   }
 
-  const handleSubscribe = async () => {
-    try {
-      await startPremiumSubscription();
-    } catch (error) {
-      console.error('❌ Subscription checkout failed:', error);
-      Alert.alert(
-        'Checkout Failed',
-        'Unable to start the subscription process. Please try again.',
-        [{ text: 'OK' }]
-      );
+  const handleUpgradeClick = () => {
+    setShowPaymentModal(true);
+  };
+
+  const handlePaymentSuccess = async () => {
+    await refreshUserProfile();
+  };
+
+  // Debug gesture handlers (development only)
+  const handleDebugPressIn = () => {
+    if (!__DEV__) return;
+    
+    debugPressTimeout.current = setTimeout(() => {
+      router.push('/debug-subscription' as any);
+    }, 3000); // 3 second long press
+  };
+
+  const handleDebugPressOut = () => {
+    if (debugPressTimeout.current) {
+      clearTimeout(debugPressTimeout.current);
+      debugPressTimeout.current = null;
     }
   };
 
@@ -105,8 +142,22 @@ export default function ProfileScreen() {
             <View style={styles.userDetails}>
               <Text style={styles.userEmail} numberOfLines={1} ellipsizeMode="tail">{user.email}</Text>
               <View style={styles.statusContainer}>
-                {user.subscription_status === 'premium' ? (
-                  <Text style={styles.premiumStatus}>👑 Premium Member</Text>
+                {isPremium ? (
+                  <View>
+                    <Text style={styles.premiumStatus}>👑 Premium Member</Text>
+                    {subscriptionInfo && (
+                      <View style={styles.premiumInfo}>
+                        <Text style={styles.premiumLabel}>
+                          Payment Method: {subscriptionInfo.paymentMethod === 'stripe' ? '💳 Stripe' : '🍎 Apple'}
+                        </Text>
+                        {subscriptionInfo.renewalDate && (
+                          <Text style={styles.premiumLabel}>
+                            Renews: {new Date(subscriptionInfo.renewalDate).toLocaleDateString()}
+                          </Text>
+                        )}
+                      </View>
+                    )}
+                  </View>
                 ) : (
                   <Text style={styles.freeStatus}>⚡ Free Account{'\n'}{Math.min(user.total_scans_used, 10)} of 10 scans used</Text>
                 )}
@@ -122,7 +173,7 @@ export default function ProfileScreen() {
         </View>
 
         {/* Free Tier Upgrade Section */}
-        {user.subscription_status === 'free' && (
+        {!isPremium && (
           <View style={styles.upgradeCard}>
             <View style={styles.upgradeHeader}>
               <Text style={styles.upgradeTitle}>🔥 Upgrade to Premium</Text>
@@ -139,17 +190,26 @@ export default function ProfileScreen() {
               <Text style={styles.benefit}>• 🔍 Search and filter your history</Text>
             </View>
             
-            <TouchableOpacity style={styles.upgradeButton} onPress={handleSubscribe}>
+            <TouchableOpacity style={styles.upgradeButton} onPress={handleUpgradeClick}>
               <Text style={styles.upgradeButtonText}>💵 Upgrade to Premium 💵{'\n'}$10/month</Text>
             </TouchableOpacity>
           </View>
         )}
 
         {/* Premium Status Section */}
-        {user.subscription_status === 'premium' && (
+        {isPremium && (
           <View style={styles.premiumCard}>
             <View style={styles.premiumTitleBox}>
               <Text style={styles.premiumTitle}>🤑 Membership Benefits</Text>
+            </View>
+            
+            <View style={styles.premiumInfo}>
+              <Text style={styles.premiumLabel}>Payment Method:</Text>
+              <Text style={styles.premiumValue}>
+                {getPaymentMethod(user) === 'stripe' 
+                  ? '💳 Credit Card (Web)' 
+                  : '🍎 Apple In-App Purchase'}
+              </Text>
             </View>
             
             <View style={styles.premiumFeatures}>
@@ -162,10 +222,10 @@ export default function ProfileScreen() {
 
         {/* Menu Items */}
         <View style={styles.menuContainer}>
-          {user.subscription_status === 'premium' && (
+          {isPremium && (
             <TouchableOpacity 
               style={styles.menuItem} 
-              onPress={showCancelSubscriptionPrompt}
+              onPress={() => router.push('/manage-subscription' as any)}
             >
               <CreditCard size={20} color={COLORS.cleanGreen} />
               <Text style={styles.menuText}>Manage Subscription</Text>
@@ -202,14 +262,26 @@ export default function ProfileScreen() {
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
 
-        {/* App Version */}
-        <View style={styles.versionContainer}>
-          <Text style={styles.versionText}>
-            Health Freak v1.0.0{'\n'}
-            Educational purposes only
-          </Text>
-        </View>
+        {/* App Version (with secret debug gesture in dev mode) */}
+        <TouchableWithoutFeedback 
+          onPressIn={handleDebugPressIn}
+          onPressOut={handleDebugPressOut}
+        >
+          <View style={styles.versionContainer}>
+            <Text style={styles.versionText}>
+              Health Freak v1.0.0{'\n'}
+              Educational purposes only
+            </Text>
+          </View>
+        </TouchableWithoutFeedback>
       </ScrollView>
+
+      {/* Payment Method Modal */}
+      <PaymentMethodModal
+        visible={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        onSuccess={handlePaymentSuccess}
+      />
     </SafeAreaView>
   );
 }
@@ -438,6 +510,27 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     fontFamily: FONTS.terminalGrotesque,
     lineHeight: LINE_HEIGHTS.bodyLarge,
+  },
+  premiumInfo: {
+    backgroundColor: COLORS.background,
+    padding: 12,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    marginBottom: 16,
+  },
+  premiumLabel: {
+    fontSize: FONT_SIZES.bodySmall,
+    color: COLORS.textSecondary,
+    fontFamily: FONTS.terminalGrotesque,
+    marginBottom: 4,
+    fontWeight: '700',
+  },
+  premiumValue: {
+    fontSize: FONT_SIZES.bodyMedium,
+    color: COLORS.textPrimary,
+    fontFamily: FONTS.terminalGrotesque,
+    fontWeight: '400',
   },
   premiumFeatures: {
     marginBottom: 0,

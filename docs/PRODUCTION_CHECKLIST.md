@@ -94,6 +94,109 @@ EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
 
 ---
 
+### Phase 1.5: RevenueCat & Apple IAP Configuration
+
+#### [ ] 1.5.1 Switch to Live RevenueCat API Key
+
+**App Environment (.env file):**
+```bash
+# Update from test/development key to production key:
+EXPO_PUBLIC_REVENUECAT_API_KEY=appl_xxxxxxxxx
+```
+
+**Where to get live key:**
+- Go to: https://app.revenuecat.com/
+- Navigate to: Project Settings → API Keys → Public app-specific API keys
+- Copy the iOS Production API key (starts with `appl_`)
+
+---
+
+#### [ ] 1.5.2 Verify Apple IAP Product Status
+
+**App Store Connect:**
+1. Go to: https://appstoreconnect.apple.com/
+2. Navigate to: Your App → In-App Purchases
+3. Verify product status is **"Ready to Submit"** or **"Approved"**
+4. Verify Product ID matches RevenueCat configuration
+5. Confirm pricing is set to $10/month
+
+**RevenueCat Dashboard Check:**
+1. Go to: Project Settings → Products
+2. Verify product is linked to App Store Connect
+3. Confirm entitlement mapping is correct
+
+---
+
+#### [ ] 1.5.3 Test Apple IAP Purchase in Production
+
+**On TestFlight or Production Build:**
+1. Complete a test purchase with sandbox account
+2. Verify purchase completes successfully
+3. Check database shows correct `subscription_status = 'premium'`
+4. Verify `payment_method = 'apple_iap'`
+5. Confirm `apple_original_transaction_id` is populated
+
+**Verification Query:**
+```sql
+SELECT 
+  email, 
+  subscription_status, 
+  payment_method,
+  apple_original_transaction_id,
+  revenuecat_customer_id,
+  updated_at
+FROM users
+WHERE payment_method = 'apple_iap'
+ORDER BY updated_at DESC
+LIMIT 5;
+```
+
+---
+
+#### [ ] 1.5.4 Verify RevenueCat Webhook
+
+**RevenueCat Dashboard:**
+1. Navigate to: Integrations → Webhooks
+2. Verify webhook URL: `https://[project].supabase.co/functions/v1/revenuecat-webhook`
+3. Verify events selected: INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION, BILLING_ISSUE
+4. Test webhook delivery with sample event
+5. Check webhook history shows successful deliveries (200 OK)
+
+**Supabase Secrets Check:**
+```bash
+# Verify authorization header is set
+supabase secrets list | grep REVENUECAT_WEBHOOK_SECRET
+```
+
+**Test Webhook:**
+1. Go to RevenueCat → Integrations → Webhooks
+2. Click "Test" button
+3. Send INITIAL_PURCHASE event
+4. Check Supabase logs: `supabase functions logs revenuecat-webhook --limit 10`
+5. Verify 200 OK response
+
+---
+
+#### [ ] 1.5.5 Confirm Subscription Restoration
+
+**Test on Physical Device:**
+1. Install production build from TestFlight
+2. Purchase subscription using sandbox account
+3. Verify premium access granted
+4. Delete app from device
+5. Reinstall app
+6. Sign in with same account
+7. Wait 5-10 seconds
+8. Verify subscription automatically restored
+9. Check logs show: `"✅ [LAYOUT] Subscription restoration completed. Premium status: true"`
+
+**Expected Behavior:**
+- No manual "Restore Purchases" button needed
+- Automatic restoration on app launch
+- Works for both device reinstall and device switch
+
+---
+
 ### Phase 2: Environment Variables
 
 #### [ ] 2.1 Update App URL to Production
@@ -291,28 +394,50 @@ expo build:android
 
 #### [ ] 6.1 Test with Real Payment
 
-**Critical: Test subscription flow with real card**
+**Critical: Test subscription flow with both payment methods**
 
+**Stripe Test:**
 1. [ ] Create new account
-2. [ ] Subscribe to premium with real card
+2. [ ] Subscribe to premium with real card via Stripe
 3. [ ] Verify real charge in Stripe Dashboard
 4. [ ] Verify premium features unlock
-5. [ ] Refund the test charge immediately
-6. [ ] Verify subscription status updates
+5. [ ] Verify `payment_method = 'stripe'` in database
+6. [ ] Refund the test charge immediately
+7. [ ] Verify subscription status updates
+
+**Apple IAP Test:**
+1. [ ] Create new account (or use different test account)
+2. [ ] Subscribe to premium with sandbox account via Apple IAP
+3. [ ] Verify purchase completes (free in sandbox)
+4. [ ] Verify premium features unlock
+5. [ ] Verify `payment_method = 'apple_iap'` in database
+6. [ ] Check RevenueCat dashboard shows subscription
 
 ---
 
 #### [ ] 6.2 Test Cancellation Behavior
 
-**Verify end-of-period cancellation:**
+**Verify end-of-period cancellation for both methods:**
 
+**Stripe Cancellation:**
 1. [ ] Subscribe with real card (small amount)
-2. [ ] Cancel subscription
-3. [ ] Verify message says "retain access until [date]"
-4. [ ] Verify subscription shows `cancel_at_period_end: true` in Stripe
-5. [ ] Verify access NOT lost immediately
-6. [ ] Wait for period end (or manually expire in Stripe)
-7. [ ] Verify access removed after period ends
+2. [ ] Go to Profile → Manage Subscription
+3. [ ] Cancel subscription
+4. [ ] Verify message says "retain access until [date]"
+5. [ ] Verify subscription shows `cancel_at_period_end: true` in Stripe
+6. [ ] Verify access NOT lost immediately
+7. [ ] Wait for period end (or manually expire in Stripe)
+8. [ ] Verify access removed after period ends
+
+**Apple IAP Cancellation:**
+1. [ ] Subscribe via Apple IAP (sandbox account)
+2. [ ] Go to Profile → Manage Subscription
+3. [ ] Tap "Manage in iPhone Settings"
+4. [ ] Verify deep link opens Settings → Subscriptions
+5. [ ] Cancel subscription in Settings
+6. [ ] Verify RevenueCat webhook fires (CANCELLATION event)
+7. [ ] Verify app shows "Cancelling" status
+8. [ ] Verify user retains access until period end
 
 ---
 

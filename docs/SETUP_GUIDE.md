@@ -7,6 +7,7 @@ Complete setup instructions for all API services and development environment.
 - [Prerequisites](#prerequisites)
 - [OpenAI Setup](#openai-setup)
 - [Supabase Setup](#supabase-setup)
+- [RevenueCat Setup](#revenuecat-setup)
 - [Stripe Setup](#stripe-setup)
 - [Environment Variables](#environment-variables)
 - [Verification](#verification)
@@ -24,6 +25,7 @@ Before you begin, ensure you have:
 - Active accounts for:
   - [OpenAI](https://platform.openai.com/)
   - [Supabase](https://supabase.com/)
+  - [RevenueCat](https://www.revenuecat.com/)
   - [Stripe](https://stripe.com/)
 
 ---
@@ -141,6 +143,168 @@ supabase migration up
 
 ---
 
+## RevenueCat Setup
+
+**Purpose:** Apple in-app purchases (iOS subscriptions)
+
+### Step 1: Create RevenueCat Account
+
+1. Go to [RevenueCat](https://www.revenuecat.com/)
+2. Sign up with your email or GitHub account
+3. Verify your email address
+4. Complete the onboarding wizard
+
+### Step 2: Create a New Project
+
+1. Click "Create new project"
+2. Enter project details:
+   - Name: "Health Freak"
+   - Choose "iOS" as primary platform
+3. Click "Create project"
+
+### Step 3: Connect to App Store Connect
+
+1. In RevenueCat Dashboard, go to Project Settings → App Store
+2. Click "Connect to App Store Connect"
+3. You'll need:
+   - **App Store Connect API Key** - Create at [App Store Connect → Users and Access → Integrations → Keys](https://appstoreconnect.apple.com/access/integrations/api)
+   - Key Name: "RevenueCat Integration"
+   - Access: "Admin" or "App Manager"
+   - Download the `.p8` key file and save the Key ID and Issuer ID
+4. Upload the information to RevenueCat:
+   - Issuer ID
+   - Key ID
+   - Upload the `.p8` file
+5. Enter your **Bundle ID**: `com.healthfreak.app`
+6. Click "Save"
+
+### Step 4: Create Products and Entitlements
+
+**Create Entitlement:**
+1. Go to Entitlements → Create entitlement
+2. Configure:
+   - Identifier: `premium_access`
+   - Display name: "Premium Access"
+   - Description: "Unlimited scans and detailed ingredient analysis"
+3. Click "Save"
+
+**Create Product (iOS Subscription):**
+1. First, create the subscription in [App Store Connect](https://appstoreconnect.apple.com/):
+   - Go to Apps → Health Freak → In-App Purchases
+   - Click "+" to add new subscription
+   - Subscription Group: Create "Premium Membership"
+   - Product ID: `healthfreak_premium_monthly`
+   - Price: $9.99/month (or your pricing)
+   - Subscription Duration: 1 month
+   - Add localized names and descriptions
+   - Submit for review
+
+2. Back in RevenueCat Dashboard:
+   - Go to Products → Create product
+   - Product identifier: `healthfreak_premium_monthly` (must match App Store)
+   - Display name: "Health Freak Premium"
+   - Description: "Monthly premium subscription"
+   - Select entitlement: `premium_access`
+   - Click "Save"
+
+### Step 5: Get API Keys
+
+1. Go to Project Settings → API Keys
+2. Copy the **Public app-specific API key** for iOS
+   - Starts with `appl_` for Apple platform
+3. Store it securely - you'll add it to `.env`
+
+### Step 6: Configure Webhooks (Optional but Recommended)
+
+To sync subscription status with Supabase:
+
+1. Go to Project Settings → Integrations → Webhooks
+2. Click "Add webhook"
+3. Configure:
+   - URL: Your Supabase function URL
+     ```
+     https://[your-project].supabase.co/functions/v1/revenuecat-webhook
+     ```
+   - Events: Select all subscription events:
+     - Initial purchase
+     - Renewal
+     - Cancellation
+     - Billing issue
+     - Expiration
+4. Copy the **Authorization header** value
+5. Save the webhook
+
+**Note:** The webhook handler is created in Steps 8-9 below.
+
+### Step 7: Configure Environment Variable
+
+Add your RevenueCat API key to `.env`:
+
+```bash
+EXPO_PUBLIC_REVENUECAT_API_KEY=appl_your_actual_api_key_here
+```
+
+### Step 8: Deploy RevenueCat Webhook Function
+
+Deploy the webhook handler to Supabase Edge Functions:
+
+```bash
+# Deploy the RevenueCat webhook handler
+supabase functions deploy revenuecat-webhook --no-verify-jwt
+```
+
+**Note:** The `--no-verify-jwt` flag is required because RevenueCat uses custom authorization headers, not JWT tokens.
+
+### Step 9: Configure Webhook in RevenueCat Dashboard
+
+**Get Your Webhook URL:**
+
+Your Supabase function URL will be:
+```
+https://[your-project-ref].supabase.co/functions/v1/revenuecat-webhook
+```
+
+Replace `[your-project-ref]` with your actual Supabase project reference (e.g., `vuiaqdkbpkbcvyrzpmzv`).
+
+**Configure in RevenueCat:**
+
+1. Go to **Project Settings** → **Integrations** → **Webhooks**
+2. Click **"Add webhook"**
+3. Enter your webhook URL above
+4. Select these events:
+   - ✅ **Initial Purchase** - First subscription
+   - ✅ **Renewal** - Auto-renewal
+   - ✅ **Cancellation** - User cancelled
+   - ✅ **Expiration** - Subscription expired
+   - ✅ **Billing Issue** - Payment failed
+5. Click **"Save"**
+6. **Copy the Authorization token** that RevenueCat generates
+
+**Add Token to Supabase Secrets:**
+
+```bash
+# Option 1: Via Supabase CLI
+supabase secrets set REVENUECAT_WEBHOOK_AUTH_TOKEN=your_token_here
+
+# Option 2: Via Supabase Dashboard
+# Go to: Functions → Secrets → Add Secret
+# Name: REVENUECAT_WEBHOOK_AUTH_TOKEN
+# Value: [paste token from RevenueCat]
+```
+
+**Test the Webhook:**
+
+1. In RevenueCat Dashboard, go to the webhook you just created
+2. Click **"Send test event"**
+3. Select **"Initial Purchase"** event type
+4. Click **"Send"**
+5. Check the response - should see `{ "received": true }`
+6. Verify in Supabase:
+   - Go to **Functions** → **revenuecat-webhook** → **Logs**
+   - Look for: `✅ Successfully processed INITIAL_PURCHASE`
+
+---
+
 ## Stripe Setup
 
 **Purpose:** Subscription payments and billing
@@ -234,9 +398,13 @@ EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 
 # ============================================
-# Payments (Stripe)
+# Payments
 # ============================================
+# Stripe - For web/Android payments
 EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your-stripe-key
+
+# RevenueCat - For iOS in-app purchases
+EXPO_PUBLIC_REVENUECAT_API_KEY=appl_your-revenuecat-api-key
 
 # ============================================
 # App Configuration
@@ -286,10 +454,27 @@ npm start
 # Verify user was created
 ```
 
+### Test RevenueCat
+
+```bash
+# Test webhook:
+# 1. Go to RevenueCat Dashboard → Webhooks
+# 2. Click "Send test event" on your webhook
+# 3. Select "Initial Purchase" event
+# 4. Check Supabase → Functions → Logs for success message
+
+# Test in app (requires TestFlight/production build):
+# 1. Sign in to app
+# 2. Check logs for "RevenueCat Configuration complete"
+# 3. Tap "Upgrade to Premium" → Choose "App Store"
+# 4. Complete purchase with Sandbox account
+```
+
 ### Test Stripe
 
 ```bash
 # In app: Click "Upgrade to Premium"
+# Choose "Credit Card" option
 # Use test card: 4242 4242 4242 4242
 # Check Stripe Dashboard → Payments
 # Verify test payment appears
@@ -351,6 +536,31 @@ npm start
 - Check function is deployed: `supabase functions list`
 - Verify secrets are configured
 - Check function logs in Supabase Dashboard
+
+### RevenueCat Issues
+
+**"RevenueCat API key not configured"**
+- Verify `EXPO_PUBLIC_REVENUECAT_API_KEY` in `.env`
+- Check key starts with `appl_` (for iOS)
+- Restart development server after adding key
+
+**"Products not loading"**
+- Ensure products are created in App Store Connect
+- Verify product IDs match exactly in RevenueCat
+- Check subscription is approved in App Store Connect
+- Wait 2-4 hours after creating products for them to sync
+
+**"Purchase not completing"**
+- Ensure using Sandbox test account on iOS device
+- Go to Settings → App Store → Sandbox Account
+- Sign in with test account created in App Store Connect
+- Never use production Apple ID for testing
+
+**"Entitlement not activating"**
+- Verify entitlement is linked to product in RevenueCat
+- Check RevenueCat dashboard → Customer history
+- Ensure webhook is configured correctly
+- Test in Sandbox environment first
 
 ### Stripe Issues
 
@@ -424,9 +634,16 @@ After setup is complete:
 |---------|-----------|-----------|--------------|
 | OpenAI (GPT-4o-mini + GPT-3.5-turbo) | - | $0.003-0.011/scan | $10-30/month |
 | Supabase | 500MB DB, 2GB bandwidth | $25/month | $0-25/month |
+| RevenueCat | Up to $2,500 MTR | 1% of revenue > $2,500 | $0-50/month |
 | Stripe | - | 2.9% + $0.30/transaction | Variable |
 
-**Total estimated cost:** $10-55/month depending on usage
+**Total estimated cost:** $10-105/month depending on usage
+
+**Notes:**
+- RevenueCat MTR (Monthly Tracked Revenue) = gross subscription revenue before Apple's cut
+- Apple takes 30% (or 15% after year 1 of subscription) before RevenueCat fees apply
+- Example: $100 in subscriptions = $70 after Apple's cut, RevenueCat fee applies to the $100
+- RevenueCat is free until you track $2,500/month in gross revenue
 
 ---
 
@@ -434,6 +651,7 @@ After setup is complete:
 
 - **OpenAI:** https://platform.openai.com/docs
 - **Supabase:** https://supabase.com/docs
+- **RevenueCat:** https://docs.revenuecat.com/
 - **Stripe:** https://stripe.com/docs
 
 ---

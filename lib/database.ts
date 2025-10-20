@@ -1,5 +1,16 @@
 import { supabase, User, IngredientCache, AnalysisHistory } from './supabase';
 
+/**
+ * Determine which payment method a user is using
+ * @param user - User object from database
+ * @returns 'apple' | 'stripe' | 'none'
+ */
+export function getPaymentMethod(user: User): 'apple' | 'stripe' | 'none' {
+  if (user.subscription_status !== 'premium') return 'none';
+  if (user.stripe_subscription_id) return 'stripe';
+  return 'apple'; // Assume Apple if premium but no Stripe ID
+}
+
 // User management functions
 export async function createUserProfile(userId: string, email: string): Promise<User | null> {
   try {

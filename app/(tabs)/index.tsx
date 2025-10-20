@@ -21,8 +21,9 @@ import { analyzeIngredients } from '@/services/ingredients';
 import { saveAnalysis } from '@/lib/database';
 import { analyzePhoto as analyzePhotoWithOCR, getOCRStatus } from '@/services/photoAnalysis';
 import { testOpenAIAPIKey } from '@/services/aiAnalysis';
-import { showScanLimitReachedModal, showPremiumUpgradePrompt } from '@/services/subscription';
-import { startPremiumSubscription } from '@/services/stripe';
+import { showScanLimitReachedModal, showPremiumUpgradePrompt } from '@/services/subscriptionModals';
+import { isPremiumActive } from '@/services/subscription';
+import { PaymentMethodModal } from '@/components/PaymentMethodModal';
 import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
 import { AIAnalysisLoadingModal, AIThought } from '@/components/AIAnalysisLoadingModal';
@@ -48,6 +49,8 @@ export default function CameraScreen() {
   const lastScale = useRef(1);
   const [scansRemaining, setScansRemaining] = useState<number | null>(null);
   const [canScan, setCanScan] = useState(true);
+  const [isPremiumUser, setIsPremiumUser] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const { user, initializing, refreshUserProfile } = useAuth();
   
   // AI Loading Modal state
@@ -116,31 +119,44 @@ export default function CameraScreen() {
     };
   }, []); // Remove [user] dependency - API key doesn't change when user changes
 
-  // Check scan limits for Free tier users
+  // Check subscription status and scan limits
   useEffect(() => {
-    async function checkLimits() {
+    async function checkSubscriptionAndLimits() {
       if (!user) return;
 
-      // Premium users have unlimited scans
-      if (user.subscription_status === 'premium') {
-        setScansRemaining(null); // null = unlimited
-        setCanScan(true);
-        return;
-      }
+      try {
+        // Check premium status using unified service
+        const isPremium = await isPremiumActive(user.id);
+        setIsPremiumUser(isPremium);
 
-      // Free tier: Check database for current usage
-      const limits = await checkUserLimits(user.id);
-      setScansRemaining(limits.remaining);
-      setCanScan(limits.canAnalyze);
-      
-      console.log('[SCANNER] Free tier limits:', {
-        totalUsed: limits.totalUsed,
-        remaining: limits.remaining,
-        canScan: limits.canAnalyze
-      });
+        if (isPremium) {
+          // Premium users have unlimited scans
+          setScansRemaining(null); // null = unlimited
+          setCanScan(true);
+          return;
+        }
+
+        // Free tier: Check database for current usage
+        const limits = await checkUserLimits(user.id);
+        setScansRemaining(limits.remaining);
+        setCanScan(limits.canAnalyze);
+        
+        console.log('[SCANNER] Free tier limits:', {
+          totalUsed: limits.totalUsed,
+          remaining: limits.remaining,
+          canScan: limits.canAnalyze
+        });
+      } catch (error) {
+        console.error('[SCANNER] Error checking subscription status:', error);
+        // Default to free tier on error
+        setIsPremiumUser(false);
+        const limits = await checkUserLimits(user.id);
+        setScansRemaining(limits.remaining);
+        setCanScan(limits.canAnalyze);
+      }
     }
 
-    checkLimits();
+    checkSubscriptionAndLimits();
   }, [user, user?.total_scans_used]); // Re-check when user or their scan count changes
 
   if (!permission) {
@@ -214,17 +230,8 @@ export default function CameraScreen() {
   };
 
   // Handle subscription upgrade
-  const handleSubscribe = async () => {
-    try {
-      await startPremiumSubscription();
-    } catch (error) {
-      console.error('❌ Subscription checkout failed:', error);
-      Alert.alert(
-        'Checkout Failed',
-        'Unable to start the subscription process. Please try again.',
-        [{ text: 'OK' }]
-      );
-    }
+  const handleSubscribe = () => {
+    setShowPaymentModal(true);
   };
 
   function openTextInput() {
@@ -401,7 +408,7 @@ export default function CameraScreen() {
       ]).catch(e => console.error('Background DB operations failed:', e));
 
       // Optimistic UI updates for free users (no waiting for DB)
-      if (user?.subscription_status === 'free') {
+      if (!isPremiumUser) {
         setScansRemaining(prev => Math.max(0, (prev || 0) - 1));
         setCanScan(scansRemaining !== null ? scansRemaining > 1 : true);
       }
@@ -492,7 +499,7 @@ export default function CameraScreen() {
       ]).catch(e => console.error('Background DB operations failed:', e));
 
       // Optimistic UI updates for free users (no waiting for DB)
-      if (user?.subscription_status === 'free') {
+      if (!isPremiumUser) {
         setScansRemaining(prev => Math.max(0, (prev || 0) - 1));
         setCanScan(scansRemaining !== null ? scansRemaining > 1 : true);
       }
@@ -538,7 +545,7 @@ export default function CameraScreen() {
         <Text style={styles.title}>Health Freak</Text>
         
         {/* Scan Counter - Free tier only */}
-        {user?.subscription_status === 'free' && scansRemaining !== null && (
+        {!isPremiumUser && scansRemaining !== null && (
           <View style={styles.scanCounter}>
             <Text style={styles.scanCounterText}>
               {scansRemaining > 0 
@@ -799,6 +806,17 @@ export default function CameraScreen() {
           thoughts={aiThoughts} 
           progress={aiProgress} 
           ingredientCount={ingredientCount} 
+        />
+
+        {/* Payment Method Modal */}
+        <PaymentMethodModal
+          visible={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          onSuccess={() => {
+            setShowPaymentModal(false);
+            // Refresh subscription status after successful purchase
+            refreshUserProfile();
+          }}
         />
     </SafeAreaView>
   );

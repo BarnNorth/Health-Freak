@@ -73,6 +73,9 @@ export interface User {
   total_scans_used: number;
   stripe_customer_id?: string;
   stripe_subscription_id?: string;
+  payment_method?: 'stripe' | 'apple_iap';
+  apple_original_transaction_id?: string;
+  revenuecat_customer_id?: string;
   created_at: string;
   updated_at: string;
 }
