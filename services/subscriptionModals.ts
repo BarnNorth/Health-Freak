@@ -9,10 +9,10 @@ interface CancelSubscriptionResponse {
   cancelled_immediately: boolean;
 }
 
-export async function cancelSubscription(): Promise<CancelSubscriptionResponse> {
+export async function cancelSubscription(instant: boolean = false): Promise<CancelSubscriptionResponse> {
   try {
-    const { data, error } = await supabase.functions.invoke('stripe-cancel-subscription', {
-      body: {},
+    const { data, error} = await supabase.functions.invoke('stripe-cancel-subscription', {
+      body: { instant: instant && __DEV__ }, // Only allow instant in DEV mode
     });
 
     if (error) {

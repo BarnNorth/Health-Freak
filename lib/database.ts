@@ -7,8 +7,20 @@ import { supabase, User, IngredientCache, AnalysisHistory } from './supabase';
  */
 export function getPaymentMethod(user: User): 'apple' | 'stripe' | 'none' {
   if (user.subscription_status !== 'premium') return 'none';
-  if (user.stripe_subscription_id) return 'stripe';
-  return 'apple'; // Assume Apple if premium but no Stripe ID
+  
+  // Check explicit payment_method field first (set by webhooks)
+  if (user.payment_method) {
+    return user.payment_method === 'stripe' ? 'stripe' : 'apple';
+  }
+  
+  // Legacy detection: Check for Stripe IDs (handles old users)
+  if (user.stripe_subscription_id || user.stripe_customer_id) {
+    return 'stripe';
+  }
+  
+  // If premium but no identifiable payment method, return 'none' instead of assuming
+  // This prevents incorrectly routing users to Apple cancellation flow
+  return 'none';
 }
 
 // User management functions

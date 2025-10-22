@@ -202,8 +202,14 @@ export async function getSubscriptionInfo(userId: string): Promise<SubscriptionI
     if (!isActive) {
       if (__DEV__) {
         console.log('❌ [Subscription] No active subscription found');
+        console.log('ℹ️ [Subscription] Returning inactive subscription status');
       }
-      return null;
+      return {
+        isActive: false,
+        paymentMethod: null,
+        renewalDate: null,
+        cancelsAtPeriodEnd: false
+      };
     }
 
     let subscriptionInfo: SubscriptionInfo;
@@ -213,8 +219,10 @@ export async function getSubscriptionInfo(userId: string): Promise<SubscriptionI
       subscriptionInfo = {
         isActive: true,
         paymentMethod: 'stripe',
-        renewalDate: null, // TODO: Get from Stripe if needed
-        cancelsAtPeriodEnd: false // TODO: Get from Stripe if needed
+        renewalDate: user.subscription_renewal_date 
+          ? new Date(user.subscription_renewal_date).getTime()
+          : null,
+        cancelsAtPeriodEnd: user.cancels_at_period_end || false
       };
       
       if (__DEV__) {
@@ -324,12 +332,16 @@ export async function startSubscriptionPurchase(paymentMethod: 'stripe' | 'apple
  * Cancel a subscription based on the user's current payment method
  * 
  * @param userId - The user's ID
+ * @param instant - DEV ONLY: If true, cancel immediately instead of at period end
  * @returns Promise<CancellationResult> - Success status, instructions, and optional error
  */
-export async function cancelSubscription(userId: string): Promise<CancellationResult> {
+export async function cancelSubscription(userId: string, instant: boolean = false): Promise<CancellationResult> {
   try {
     if (__DEV__) {
       console.log('🛑 [Subscription] Cancelling subscription for user:', userId);
+      if (instant) {
+        console.log('⚡ [Subscription] DEV MODE: Instant cancellation requested');
+      }
     }
 
     // Get user profile to determine payment method
@@ -345,13 +357,17 @@ export async function cancelSubscription(userId: string): Promise<CancellationRe
     if (user.payment_method === 'stripe') {
       // Route to Stripe cancellation
       try {
-        await cancelStripeSubscription();
+        await cancelStripeSubscription(instant);
         
         // Clear cache after successful cancellation
         clearSubscriptionCache();
         
         if (__DEV__) {
-          console.log('✅ [Subscription] Stripe subscription cancelled successfully');
+          console.log(
+            instant
+              ? '⚡ [Subscription] Stripe subscription cancelled INSTANTLY (DEV mode)'
+              : '✅ [Subscription] Stripe subscription cancelled successfully'
+          );
         }
         
         return { success: true };

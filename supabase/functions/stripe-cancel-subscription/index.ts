@@ -36,7 +36,14 @@ Deno.serve(async (req) => {
       return new Response('Invalid token', { status: 401 });
     }
 
+    // Parse request body for instant cancellation flag (DEV only)
+    const body = await req.json().catch(() => ({}));
+    const instantCancel = body.instant === true;
+
     console.log('Cancelling subscription for user:', user.id);
+    if (instantCancel) {
+      console.log('⚡ DEV MODE: Instant cancellation requested');
+    }
 
     // Get the customer ID from the database
     const { data: customerData, error: customerError } = await supabase
@@ -58,21 +65,49 @@ Deno.serve(async (req) => {
     });
 
     if (subscriptions.data.length === 0) {
+      // Check if subscription was already cancelled
+      const allSubscriptions = await stripe.subscriptions.list({
+        customer: customerData.customer_id,
+        limit: 1,
+      });
+      
+      if (allSubscriptions.data.length > 0 && allSubscriptions.data[0].status === 'canceled') {
+        console.log('Subscription already cancelled:', allSubscriptions.data[0].id);
+        return Response.json({ 
+          success: true, 
+          message: 'Subscription already cancelled' 
+        });
+      }
+      
       console.error('No active subscription found for customer:', customerData.customer_id);
-      return new Response('No active subscription found', { status: 404 });
+      return Response.json({ 
+        success: false,
+        error: 'No active subscription found' 
+      }, { status: 404 });
     }
 
     const subscription = subscriptions.data[0];
 
-    // Determine cancellation behavior based on environment
-    const isTestMode = Deno.env.get('STRIPE_CANCEL_MODE') === 'immediate';
-
     let cancelledSubscription;
 
-    if (isTestMode) {
-      // Test mode: Cancel immediately for easy testing
-      console.log('TEST MODE: Cancelling subscription immediately');
+    if (instantCancel) {
+      // DEV MODE: Cancel immediately for easy testing
+      console.log('⚡ DEV MODE: Cancelling subscription immediately');
       cancelledSubscription = await stripe.subscriptions.cancel(subscription.id);
+      
+      // Update database immediately to free status
+      await supabase
+        .from('users')
+        .update({
+          subscription_status: 'free',
+          payment_method: null,
+          stripe_subscription_id: null,
+          subscription_renewal_date: null,
+          cancels_at_period_end: false
+        })
+        .eq('id', user.id);
+        
+      console.log('✅ Database updated to free status immediately');
     } else {
       // Production mode: Cancel at end of period (industry standard)
       console.log('PRODUCTION MODE: Cancelling at end of billing period');
@@ -86,7 +121,7 @@ Deno.serve(async (req) => {
       cancel_at_period_end: cancelledSubscription.cancel_at_period_end,
       current_period_end: cancelledSubscription.current_period_end,
       status: cancelledSubscription.status,
-      mode: isTestMode ? 'immediate' : 'end-of-period'
+      mode: instantCancel ? 'immediate' : 'end-of-period'
     });
 
     return Response.json({ 
@@ -94,7 +129,7 @@ Deno.serve(async (req) => {
       subscription_id: cancelledSubscription.id,
       cancel_at_period_end: cancelledSubscription.cancel_at_period_end,
       current_period_end: cancelledSubscription.current_period_end,
-      cancelled_immediately: isTestMode
+      cancelled_immediately: instantCancel
     });
 
   } catch (error: any) {

@@ -76,6 +76,8 @@ export interface User {
   payment_method?: 'stripe' | 'apple_iap';
   apple_original_transaction_id?: string;
   revenuecat_customer_id?: string;
+  subscription_renewal_date?: string | null;
+  cancels_at_period_end?: boolean;
   created_at: string;
   updated_at: string;
 }

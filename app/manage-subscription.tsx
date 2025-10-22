@@ -50,26 +50,36 @@ export default function ManageSubscriptionScreen() {
     }
   };
 
-  const handleCancelSubscription = async () => {
+  const handleCancelSubscription = async (instant: boolean = false) => {
     if (!user) return;
+
+    const message = instant
+      ? '⚡ DEV MODE: This will cancel your subscription IMMEDIATELY and you will lose premium access right away. Perfect for testing the checkout flow again.'
+      : 'Your subscription will remain active until the end of your billing period. Are you sure you want to cancel?';
+
+    const buttonText = instant ? '⚡ Cancel Instantly (DEV)' : 'Cancel Subscription';
 
     Alert.alert(
       'Cancel Subscription?',
-      'Your subscription will remain active until the end of your billing period. Are you sure you want to cancel?',
+      message,
       [
         { text: 'Keep Subscription', style: 'cancel' },
         {
-          text: 'Cancel Subscription',
+          text: buttonText,
           style: 'destructive',
           onPress: async () => {
             try {
               setCancelling(true);
-              const result = await cancelSubscription(user.id);
+              const result = await cancelSubscription(user.id, instant);
               
               if (result.success && !result.instructions) {
+                const successMessage = instant
+                  ? '⚡ Your subscription has been cancelled immediately. You are now a free user and can test the checkout flow again!'
+                  : 'Your subscription has been cancelled and will remain active until the end of your billing period.';
+                
                 Alert.alert(
                   'Subscription Cancelled',
-                  'Your subscription has been cancelled and will remain active until the end of your billing period.',
+                  successMessage,
                   [{ 
                     text: 'OK', 
                     onPress: () => {
@@ -139,6 +149,39 @@ export default function ManageSubscriptionScreen() {
     );
   }
 
+  // Fix 6: Defensive check for invalid state (active subscription with no payment method)
+  if (subscriptionInfo.isActive && !subscriptionInfo.paymentMethod) {
+    console.error('[MANAGE_SUB] Invalid state: active subscription with no payment method');
+    Alert.alert(
+      'Subscription Error',
+      'There is an issue with your subscription data. Please try refreshing or contact support.',
+      [{ text: 'OK', onPress: () => router.back() }]
+    );
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.cleanGreen} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Fix 4: Explicit null check for payment method
+  if (!subscriptionInfo.paymentMethod) {
+    Alert.alert(
+      'Subscription Error',
+      'Unable to determine payment method. Please contact support.',
+      [{ text: 'OK', onPress: () => router.back() }]
+    );
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.cleanGreen} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   const isStripe = subscriptionInfo.paymentMethod === 'stripe';
   const renewalDateStr = subscriptionInfo.renewalDate 
     ? new Date(subscriptionInfo.renewalDate).toLocaleDateString(undefined, {
@@ -167,7 +210,12 @@ export default function ManageSubscriptionScreen() {
             <Text style={styles.planTitle}>Premium Monthly</Text>
           </View>
 
-          <Text style={styles.priceText}>$10/month</Text>
+          <View style={styles.detailRow}>
+            <View style={styles.iconPlaceholder} />
+            <View style={styles.detailContent}>
+              <Text style={styles.priceText}>$10/month</Text>
+            </View>
+          </View>
 
           <View style={styles.detailsSection}>
             {/* Payment Method */}
@@ -221,22 +269,43 @@ export default function ManageSubscriptionScreen() {
         {/* Action Buttons */}
         <View style={styles.actionsContainer}>
           {isStripe ? (
-            // Stripe: Show cancel button
+            // Stripe: Show cancel button(s)
             !subscriptionInfo.cancelsAtPeriodEnd && (
-              <TouchableOpacity 
-                style={[styles.actionButton, styles.cancelButton]} 
-                onPress={handleCancelSubscription}
-                disabled={cancelling}
-              >
-                {cancelling ? (
-                  <ActivityIndicator size="small" color={COLORS.toxicRed} />
-                ) : (
-                  <>
-                    <AlertCircle size={20} color={COLORS.toxicRed} />
-                    <Text style={styles.cancelButtonText}>Cancel Subscription</Text>
-                  </>
+              <>
+                {/* Normal cancellation */}
+                <TouchableOpacity 
+                  style={[styles.actionButton, styles.cancelButton]} 
+                  onPress={() => handleCancelSubscription(false)}
+                  disabled={cancelling}
+                >
+                  {cancelling ? (
+                    <ActivityIndicator size="small" color={COLORS.toxicRed} />
+                  ) : (
+                    <>
+                      <AlertCircle size={20} color={COLORS.toxicRed} />
+                      <Text style={styles.cancelButtonText}>Cancel Subscription</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                
+                {/* DEV ONLY: Instant cancellation */}
+                {__DEV__ && (
+                  <TouchableOpacity 
+                    style={[styles.actionButton, styles.devCancelButton]} 
+                    onPress={() => handleCancelSubscription(true)}
+                    disabled={cancelling}
+                  >
+                    {cancelling ? (
+                      <ActivityIndicator size="small" color={COLORS.accentYellow} />
+                    ) : (
+                      <>
+                        <AlertCircle size={20} color={COLORS.accentYellow} />
+                        <Text style={styles.devCancelButtonText}>⚡ DEV: Cancel Instantly</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
                 )}
-              </TouchableOpacity>
+              </>
             )
           ) : (
             // Apple IAP: Show Settings button
@@ -344,20 +413,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   planTitle: {
-    fontSize: FONT_SIZES.titleSmall,
-    fontWeight: '400',
-    color: COLORS.textPrimary,
+    fontSize: FONT_SIZES.bodyMedium,
+    color: COLORS.textSecondary,
     marginLeft: 8,
-    fontFamily: FONTS.karmaFuture,
-    lineHeight: LINE_HEIGHTS.titleSmall,
+    marginBottom: 4,
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodyMedium,
   },
   priceText: {
-    fontSize: FONT_SIZES.titleMedium,
+    fontSize: FONT_SIZES.bodyLarge,
+    color: COLORS.textPrimary,
     fontWeight: '400',
-    color: COLORS.cleanGreen,
     marginBottom: 20,
-    fontFamily: FONTS.karmaFuture,
-    lineHeight: LINE_HEIGHTS.titleMedium,
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodyLarge,
   },
   detailsSection: {
     gap: 16,
@@ -366,6 +435,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
+  },
+  iconPlaceholder: {
+    width: 20,
   },
   detailContent: {
     flex: 1,
@@ -435,6 +507,7 @@ const styles = StyleSheet.create({
   actionsContainer: {
     marginHorizontal: 16,
     marginTop: 24,
+    gap: 12,
   },
   actionButton: {
     flexDirection: 'row',
@@ -461,6 +534,17 @@ const styles = StyleSheet.create({
     color: COLORS.toxicRed,
     fontFamily: FONTS.terminalGrotesque,
     lineHeight: LINE_HEIGHTS.bodyLarge,
+  },
+  devCancelButton: {
+    backgroundColor: COLORS.accentYellow,
+    borderColor: COLORS.border,
+  },
+  devCancelButtonText: {
+    fontSize: FONT_SIZES.bodyMedium,
+    fontWeight: '400',
+    color: COLORS.textPrimary,
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodyMedium,
   },
   settingsButton: {
     backgroundColor: COLORS.cleanGreen,

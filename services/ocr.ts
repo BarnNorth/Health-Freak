@@ -247,95 +247,95 @@ export async function extractTextFromImage(
       if (!qualityCheck.shouldProcess) {
         return { text: '', confidence: qualityCheck.confidence, error: qualityCheck.error };
       }
-      
-      // Preprocess image for better OCR results
+    
+    // Preprocess image for better OCR results
       const processedImageUri = await preprocessImage(imageUri, {
         ...preprocessingOptions,
         resize: { width: 800, height: 800 },
       });
-      
-      // Read image file as base64
-      const base64Image = await FileSystem.readAsStringAsync(processedImageUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+    
+    // Read image file as base64
+    const base64Image = await FileSystem.readAsStringAsync(processedImageUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
 
       // Validate image data size and format
       const imageValidation = validateImageData(base64Image);
       if (!imageValidation.valid) {
-        return { 
-          text: '', 
-          confidence: 0, 
+      return {
+        text: '',
+        confidence: 0,
           error: imageValidation.error 
         };
       }
 
       // Use GPT-4 Vision for ingredient extraction
       return await extractIngredientsWithGPT4Vision(base64Image);
-    } catch (error) {
+  } catch (error) {
       // If it's a rate limit error, re-throw it
       if (error instanceof Error && error.message.includes('Rate limit')) {
         throw error;
       }
       
       // Handle other errors normally
-      logDetailedError('OCR_EXTRACTION', error, {
-        imageUri,
-        hasPreprocessingOptions: !!preprocessingOptions
-      });
-      
+    logDetailedError('OCR_EXTRACTION', error, {
+      imageUri,
+      hasPreprocessingOptions: !!preprocessingOptions
+    });
+    
       // Handle GPT-4 Vision specific errors
       if (error instanceof Error) {
         // OpenAI API key errors
         if (error.message.includes('API key') || error.message.includes('unauthorized') || error.message.includes('401')) {
-          return {
-            text: '',
-            confidence: 0,
+      return {
+        text: '',
+        confidence: 0,
             error: 'OpenAI API key error. Please check configuration.',
-          };
-        }
-        
+      };
+    }
+    
         // OpenAI quota/rate limit errors
         if (error.message.includes('quota') || error.message.includes('limit') || error.message.includes('429')) {
-          return {
-            text: '',
-            confidence: 0,
+      return {
+        text: '',
+        confidence: 0,
             error: 'OpenAI API quota exceeded. Please try again later.',
           };
         }
         
         // Network errors
         if (error.message.includes('network') || error.message.includes('fetch')) {
-          return {
-            text: '',
-            confidence: 0,
+        return {
+          text: '',
+          confidence: 0,
             error: 'Network error. Please check your internet connection.',
-          };
-        }
-        
-        // Invalid image errors
-        if (error.message.includes('invalid') || error.message.includes('image') || error.message.includes('400')) {
-          return {
-            text: '',
-            confidence: 0,
-            error: 'Invalid image format. Please try taking a new photo.',
-          };
-        }
-        
-        // File system errors
-        if (error.message.includes('file') || error.message.includes('read')) {
-          return {
-            text: '',
-            confidence: 0,
-            error: 'Unable to read image file. Please try taking a new photo.',
-          };
-        }
+        };
       }
+      
+      // Invalid image errors
+      if (error.message.includes('invalid') || error.message.includes('image') || error.message.includes('400')) {
+        return {
+          text: '',
+          confidence: 0,
+          error: 'Invalid image format. Please try taking a new photo.',
+        };
+      }
+      
+      // File system errors
+      if (error.message.includes('file') || error.message.includes('read')) {
+        return {
+          text: '',
+          confidence: 0,
+          error: 'Unable to read image file. Please try taking a new photo.',
+        };
+      }
+    }
 
-      // Generic fallback error
-      const friendlyMessage = getUserFriendlyErrorMessage(error);
-      return {
-        text: '',
-        confidence: 0,
+    // Generic fallback error
+    const friendlyMessage = getUserFriendlyErrorMessage(error);
+    return {
+      text: '',
+      confidence: 0,
         error: `Failed to extract ingredients: ${friendlyMessage}. Please try again with a clearer photo.`,
       };
     }
@@ -601,7 +601,7 @@ function extractNestedParentheses(text: string): string[] {
  */
 export function parseIngredientsFromText(text: string): ParsedIngredient[] {
   if (!text) return [];
-  
+
   // Validate and sanitize input text
   try {
     text = validateExtractedText(text);
@@ -885,7 +885,7 @@ function parseIndividualIngredient(text: string, commonIngredients: string[]): P
     ingredient = cleaned.trim();
   } else {
     // For trademark case, just remove parentheses (already processed)
-    ingredient = ingredient.replace(/\s*\([^)]*\)/g, '').trim();
+  ingredient = ingredient.replace(/\s*\([^)]*\)/g, '').trim();
   }
   
   // Extract bracketed information

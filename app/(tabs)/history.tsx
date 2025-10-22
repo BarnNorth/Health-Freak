@@ -362,7 +362,7 @@ export default function HistoryScreen() {
                     <>
                       <View style={styles.resultBadge}>
                         <View style={[styles.statusDot, overallVerdict === 'CLEAN' ? styles.cleanDot : styles.toxicDot]} />
-                        <Text style={styles.resultText}>Product is {overallVerdict}</Text>
+                        <Text style={styles.resultText}>Product is {overallVerdict === 'TOXIC' ? 'potentially TOXIC' : overallVerdict}</Text>
                       </View>
                       {isPremium && (
                         <View style={styles.ingredientCounts}>

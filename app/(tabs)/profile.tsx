@@ -143,21 +143,7 @@ export default function ProfileScreen() {
               <Text style={styles.userEmail} numberOfLines={1} ellipsizeMode="tail">{user.email}</Text>
               <View style={styles.statusContainer}>
                 {isPremium ? (
-                  <View>
-                    <Text style={styles.premiumStatus}>👑 Premium Member</Text>
-                    {subscriptionInfo && (
-                      <View style={styles.premiumInfo}>
-                        <Text style={styles.premiumLabel}>
-                          Payment Method: {subscriptionInfo.paymentMethod === 'stripe' ? '💳 Stripe' : '🍎 Apple'}
-                        </Text>
-                        {subscriptionInfo.renewalDate && (
-                          <Text style={styles.premiumLabel}>
-                            Renews: {new Date(subscriptionInfo.renewalDate).toLocaleDateString()}
-                          </Text>
-                        )}
-                      </View>
-                    )}
-                  </View>
+                  <Text style={styles.premiumStatus}>👑 Premium Member</Text>
                 ) : (
                   <Text style={styles.freeStatus}>⚡ Free Account{'\n'}{Math.min(user.total_scans_used, 10)} of 10 scans used</Text>
                 )}
@@ -193,30 +179,6 @@ export default function ProfileScreen() {
             <TouchableOpacity style={styles.upgradeButton} onPress={handleUpgradeClick}>
               <Text style={styles.upgradeButtonText}>💵 Upgrade to Premium 💵{'\n'}$10/month</Text>
             </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Premium Status Section */}
-        {isPremium && (
-          <View style={styles.premiumCard}>
-            <View style={styles.premiumTitleBox}>
-              <Text style={styles.premiumTitle}>🤑 Membership Benefits</Text>
-            </View>
-            
-            <View style={styles.premiumInfo}>
-              <Text style={styles.premiumLabel}>Payment Method:</Text>
-              <Text style={styles.premiumValue}>
-                {getPaymentMethod(user) === 'stripe' 
-                  ? '💳 Credit Card (Web)' 
-                  : '🍎 Apple In-App Purchase'}
-              </Text>
-            </View>
-            
-            <View style={styles.premiumFeatures}>
-              <Text style={styles.premiumFeature}>✅ Unlimited ingredient scans</Text>
-              <Text style={styles.premiumFeature}>✅ Full scan history saved</Text>
-              <Text style={styles.premiumFeature}>✅ Search and export features</Text>
-            </View>
           </View>
         )}
 

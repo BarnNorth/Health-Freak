@@ -14,7 +14,7 @@ function cleanupTempResults() {
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { PinchGestureHandler, TapGestureHandler, State } from 'react-native-gesture-handler';
 import { Camera, RotateCcw, Zap, Keyboard as KeyboardIcon, X, Heart, Star, Search, Apple, Carrot, Leaf, Flashlight, FlashlightOff, ZoomIn, ZoomOut } from 'lucide-react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { incrementAnalysisCount, checkUserLimits } from '@/lib/database';
 import { analyzeIngredients } from '@/services/ingredients';
@@ -51,6 +51,7 @@ export default function CameraScreen() {
   const [canScan, setCanScan] = useState(true);
   const [isPremiumUser, setIsPremiumUser] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [isTabFocused, setIsTabFocused] = useState(true);
   const { user, initializing, refreshUserProfile } = useAuth();
   
   // AI Loading Modal state
@@ -99,6 +100,16 @@ export default function CameraScreen() {
     console.log(`⏱️ PERF: capture=${m.capture}ms ocr=${m.ocr}ms ai=${m.ai}ms total=${m.total}ms (${(m.total/1000).toFixed(1)}s) ${m.total < 5000 ? '✅' : '❌'}`);
     return m;
   };
+
+  // Track when tab is focused/unfocused to control camera
+  useFocusEffect(
+    React.useCallback(() => {
+      setIsTabFocused(true);
+      return () => {
+        setIsTabFocused(false);
+      };
+    }, [])
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -367,7 +378,8 @@ export default function CameraScreen() {
         // Track overall progress across all batches
         if (update.type === 'classified') {
           processedCount++;
-          setAiProgress(Math.min((processedCount / results.totalIngredients) * 100, 100));
+          // Use update.total instead of results.totalIngredients since results isn't available yet in callback
+          setAiProgress(Math.min((update.current / (update.total || 1)) * 100, 100));
         }
         addAIThought({ message: update.message, emoji: update.emoji, type: update.type, isToxic: update.isToxic });
       });
@@ -567,81 +579,87 @@ export default function CameraScreen() {
 
       {/* Camera - Takes most of the screen */}
       <View style={styles.cameraContainer}>
-        <PinchGestureHandler
-          onGestureEvent={onPinchGestureEvent}
-          onHandlerStateChange={onPinchHandlerStateChange}
-        >
-          <TapGestureHandler onHandlerStateChange={onTapGestureEvent}>
-            <View style={styles.cameraWrapper}>
-              <CameraView 
-                ref={cameraRef} 
-                style={styles.camera} 
-                facing={facing}
-                zoom={zoom}
-                flash={flashMode}
-              />
-              
-              {/* Focus indicator */}
-              {focusPoint && (
-                <View 
-                  style={[
-                    styles.focusIndicator,
-                    {
-                      left: focusPoint.x - 30,
-                      top: focusPoint.y - 30,
-                    }
-                  ]}
+        {/* Only render camera when actively using it (tab focused, not analyzing, previewing, or entering text) */}
+        {isTabFocused && !isAnalyzing && !showPreview && !showTextInput ? (
+          <PinchGestureHandler
+            onGestureEvent={onPinchGestureEvent}
+            onHandlerStateChange={onPinchHandlerStateChange}
+          >
+            <TapGestureHandler onHandlerStateChange={onTapGestureEvent}>
+              <View style={styles.cameraWrapper}>
+                <CameraView 
+                  ref={cameraRef} 
+                  style={styles.camera} 
+                  facing={facing}
+                  zoom={zoom}
+                  flash={flashMode}
                 />
-              )}
-              
-              {/* Zoom and Flash Controls Overlay */}
-              <View style={styles.cameraOverlay}>
-                <View style={styles.zoomControls}>
-                  <TouchableOpacity 
-                    style={styles.zoomButton} 
-                    onPress={() => adjustZoom(-0.2)}
-                    disabled={zoom <= 0}
-                  >
-                    <ZoomOut size={20} color={COLORS.white} />
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={styles.zoomButton} 
-                    onPress={() => adjustZoom(0.2)}
-                    disabled={zoom >= 1}
-                  >
-                    <ZoomIn size={20} color={COLORS.white} />
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={styles.flashButton} 
-                    onPress={toggleFlash}
-                  >
-                    {flashMode === 'off' && (
-                      <View style={styles.flashButtonContent}>
-                        <FlashlightOff size={20} color={COLORS.white} />
-                        <Text style={styles.flashButtonText}>Off</Text>
-                      </View>
-                    )}
-                    {flashMode === 'on' && (
-                      <View style={styles.flashButtonContent}>
-                        <Flashlight size={20} color={COLORS.accentYellow} />
-                        <Text style={styles.flashButtonText}>On</Text>
-                      </View>
-                    )}
-                    {flashMode === 'auto' && (
-                      <View style={styles.flashButtonContent}>
-                        <Flashlight size={20} color={COLORS.cleanGreen} />
-                        <Text style={styles.flashButtonText}>Auto</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
+                
+                {/* Focus indicator */}
+                {focusPoint && (
+                  <View 
+                    style={[
+                      styles.focusIndicator,
+                      {
+                        left: focusPoint.x - 30,
+                        top: focusPoint.y - 30,
+                      }
+                    ]}
+                  />
+                )}
+                
+                {/* Zoom and Flash Controls Overlay */}
+                <View style={styles.cameraOverlay}>
+                  <View style={styles.zoomControls}>
+                    <TouchableOpacity 
+                      style={styles.zoomButton} 
+                      onPress={() => adjustZoom(-0.2)}
+                      disabled={zoom <= 0}
+                    >
+                      <ZoomOut size={20} color={COLORS.white} />
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={styles.zoomButton} 
+                      onPress={() => adjustZoom(0.2)}
+                      disabled={zoom >= 1}
+                    >
+                      <ZoomIn size={20} color={COLORS.white} />
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={styles.flashButton} 
+                      onPress={toggleFlash}
+                    >
+                      {flashMode === 'off' && (
+                        <View style={styles.flashButtonContent}>
+                          <FlashlightOff size={20} color={COLORS.white} />
+                          <Text style={styles.flashButtonText}>Off</Text>
+                        </View>
+                      )}
+                      {flashMode === 'on' && (
+                        <View style={styles.flashButtonContent}>
+                          <Flashlight size={20} color={COLORS.accentYellow} />
+                          <Text style={styles.flashButtonText}>On</Text>
+                        </View>
+                      )}
+                      {flashMode === 'auto' && (
+                        <View style={styles.flashButtonContent}>
+                          <Flashlight size={20} color={COLORS.cleanGreen} />
+                          <Text style={styles.flashButtonText}>Auto</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  </View>
                 </View>
+                
               </View>
-              
-            </View>
-          </TapGestureHandler>
-        </PinchGestureHandler>
+            </TapGestureHandler>
+          </PinchGestureHandler>
+        ) : (
+          // Black placeholder when camera is not active
+          <View style={[styles.camera, { backgroundColor: COLORS.black }]} />
+        )}
       </View>
 
 

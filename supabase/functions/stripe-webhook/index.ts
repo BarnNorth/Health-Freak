@@ -210,13 +210,22 @@ async function syncCustomerFromStripe(customerId: string) {
     
     const { error: userUpdateError } = await supabase
       .from('users')
-      .update({ subscription_status: userStatus })
+      .update({ 
+        subscription_status: userStatus,
+        payment_method: userStatus === 'premium' ? 'stripe' : null,
+        stripe_customer_id: customerId,
+        stripe_subscription_id: subscription.id,
+        subscription_renewal_date: userStatus === 'premium' 
+          ? new Date(subscription.current_period_end * 1000).toISOString()
+          : null,
+        cancels_at_period_end: subscription.cancel_at_period_end || false
+      })
       .eq('id', customerData.user_id);
 
     if (userUpdateError) {
       console.error('❌ Error updating user subscription status:', userUpdateError);
     } else {
-      console.log(`✅ Successfully updated user ${customerData.user_id} subscription status to ${userStatus}`);
+      console.log(`✅ Successfully updated user ${customerData.user_id} subscription status to ${userStatus} (payment_method: stripe)`);
     }
 
     // Create order record for subscription payment (only for active subscriptions)

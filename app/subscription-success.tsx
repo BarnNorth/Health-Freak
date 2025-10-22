@@ -2,18 +2,48 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
 import { CheckCircle, ArrowLeft } from 'lucide-react-native';
 import { router } from 'expo-router';
+import { useAuth } from '@/contexts/AuthContext';
+import { clearSubscriptionCache } from '@/services/subscription';
 import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
 
 export default function SubscriptionSuccessScreen() {
+  const { refreshUserProfile } = useAuth();
+  const hasRefreshedRef = React.useRef(false);
+
   useEffect(() => {
+    // Only run once per component lifecycle
+    if (hasRefreshedRef.current) {
+      return;
+    }
+    hasRefreshedRef.current = true;
+
+    // Clear subscription cache and refresh profile immediately
+    const refreshSubscriptionStatus = async () => {
+      if (__DEV__) {
+        console.log('🎉 [SUBSCRIPTION_SUCCESS] Clearing cache and refreshing profile');
+      }
+      
+      // Clear the subscription cache so next check gets fresh status
+      clearSubscriptionCache();
+      
+      // Force refresh user profile to get updated subscription_status from database
+      await refreshUserProfile();
+      
+      if (__DEV__) {
+        console.log('✅ [SUBSCRIPTION_SUCCESS] Profile refreshed, user should now be premium');
+      }
+    };
+    
+    refreshSubscriptionStatus();
+
     // Auto-redirect to profile after 3 seconds
     const timer = setTimeout(() => {
       router.replace('/(tabs)/profile');
     }, 3000);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, []); // Empty dependency array - only run once
 
   return (
     <SafeAreaView style={styles.container}>
@@ -38,7 +68,15 @@ export default function SubscriptionSuccessScreen() {
 
         <TouchableOpacity 
           style={styles.backButton} 
-          onPress={() => router.replace('/(tabs)/profile')}
+          onPress={async () => {
+            // Only refresh if it hasn't been done yet
+            if (!hasRefreshedRef.current) {
+              clearSubscriptionCache();
+              await refreshUserProfile();
+              hasRefreshedRef.current = true;
+            }
+            router.replace('/(tabs)/profile');
+          }}
         >
           <ArrowLeft size={20} color={COLORS.white} />
           <Text style={styles.backButtonText}>Go to Profile</Text>
