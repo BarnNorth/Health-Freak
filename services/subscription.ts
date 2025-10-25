@@ -10,7 +10,8 @@ import { startPremiumSubscription } from '@/services/stripe';
 import { 
   purchasePremiumSubscription, 
   isPremiumActiveViaIAP, 
-  getSubscriptionStatus 
+  getSubscriptionStatus,
+  clearStatusCache as clearRevenueCatCache
 } from '@/services/revenueCat';
 import { cancelSubscription as cancelStripeSubscription } from '@/services/subscriptionModals';
 import { logDetailedError, getUserFriendlyErrorMessage } from '@/services/errorHandling';
@@ -66,8 +67,10 @@ let statusCache: StatusCache | null = null;
  */
 export function clearSubscriptionCache(): void {
   statusCache = null;
+  clearRevenueCatCache();  // ✅ Always clear both caches together
+  
   if (__DEV__) {
-    console.log('🔄 [Subscription] Status cache cleared');
+    console.log('🔄 [Subscription] All caches cleared');
   }
 }
 
@@ -290,7 +293,7 @@ export async function startSubscriptionPurchase(paymentMethod: 'stripe' | 'apple
       const result = await purchasePremiumSubscription();
       
       if (result.success) {
-        // Clear cache after successful purchase
+        // Clear all caches after successful purchase
         clearSubscriptionCache();
         
         if (__DEV__) {

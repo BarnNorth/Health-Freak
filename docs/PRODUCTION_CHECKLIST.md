@@ -100,8 +100,11 @@ EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
 
 **App Environment (.env file):**
 ```bash
-# Update from test/development key to production key:
-EXPO_PUBLIC_REVENUECAT_API_KEY=appl_xxxxxxxxx
+# Currently using sandbox key for testing:
+EXPO_PUBLIC_REVENUECAT_API_KEY=appl_xxxxx  // ✅ Sandbox for testing
+
+# Change to production key before App Store release:
+EXPO_PUBLIC_REVENUECAT_API_KEY=appl_xxxxxxxxx  // Production key
 ```
 
 **Where to get live key:**

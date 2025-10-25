@@ -10,9 +10,7 @@ export default {
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
     ios: {
-      bundleIdentifier: process.env.APP_VARIANT === 'development' 
-        ? 'com.tommymulder.healthfreak' 
-        : 'com.healthfreak.app',
+      bundleIdentifier: 'com.healthfreak.app',
       buildNumber: "8",
       supportsTablet: true,
       associatedDomains: [
@@ -24,9 +22,7 @@ export default {
       }
     },
     android: {
-      package: process.env.APP_VARIANT === 'development' 
-        ? 'com.tommymulder.healthfreak' 
-        : 'com.healthfreak.app',
+      package: 'com.healthfreak.app',
       versionCode: 1,
       permissions: [
         "CAMERA"

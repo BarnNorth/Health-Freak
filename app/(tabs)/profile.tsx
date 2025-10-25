@@ -40,7 +40,7 @@ export default function ProfileScreen() {
     
     try {
       const [premiumStatus, subInfo] = await Promise.all([
-        isPremiumActive(user.id),
+        isPremiumActive(user.id),  // Uses cache efficiently
         getSubscriptionInfo(user.id)
       ]);
       

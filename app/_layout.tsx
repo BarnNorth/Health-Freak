@@ -58,16 +58,16 @@ function RootLayoutNav() {
           console.log('🔄 [LAYOUT] Restoring subscription status for user:', user.id);
         }
         
-        // Check current subscription status via unified service
-        const isPremium = await isPremiumActive(user.id, true); // force refresh
-        
-        // For iOS users, also restore purchases from RevenueCat
+        // For iOS users, restore purchases from RevenueCat
         if (Platform.OS === 'ios') {
           const restoreResult = await restorePurchases();
           if (restoreResult.success) {
             console.log('✅ [LAYOUT] Purchases restored successfully');
           }
         }
+        
+        // Check current subscription status
+        const isPremium = await isPremiumActive(user.id, true); // force refresh
         
         subscriptionRestored.current = true;
         

@@ -17,7 +17,7 @@ import { logDetailedError, getUserFriendlyErrorMessage } from './errorHandling';
 // ============================================
 
 const REVENUECAT_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY;
-const PREMIUM_ENTITLEMENT_ID = 'premium_access';
+const PREMIUM_ENTITLEMENT_ID = 'Health Freak Group';
 const PRODUCT_ID = 'com.healthfreak.premium_monthly';
 const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -82,7 +82,7 @@ let statusCache: StatusCache | null = null;
  * Clear the premium status cache
  * Call this after purchases or restores
  */
-function clearStatusCache(): void {
+export function clearStatusCache(): void {
   statusCache = null;
   if (__DEV__) {
     console.log('🔄 [RevenueCat] Status cache cleared');
