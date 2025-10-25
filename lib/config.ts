@@ -28,8 +28,9 @@ export interface AppConfig {
 
 export const config: AppConfig = {
   openai: {
-    // API keys ONLY from environment variables (never from app.json)
-    apiKey: process.env.EXPO_PUBLIC_OPENAI_API_KEY,
+    // OpenAI API calls now use Supabase Edge Function (secure server-side)
+    // No client-side API key needed
+    apiKey: undefined, // Removed client-side API key for security
     enabled: Constants.expoConfig?.extra?.openaiEnabled !== false,
     model: Constants.expoConfig?.extra?.openaiModel || 'gpt-4o-mini',
     maxTokens: Constants.expoConfig?.extra?.openaiMaxTokens || 300,
@@ -55,24 +56,11 @@ if (__DEV__) {
     }
   });
 
-  // Debug API key format (redacted for security)
-  if (config.openai.apiKey) {
-    const key = config.openai.apiKey;
-    console.log('🔑 OpenAI API Key Debug:', {
-      length: key.length,
-      redactedKey: redactApiKey(key),
-      format: key.startsWith('sk-') ? 'VALID FORMAT' : 'INVALID FORMAT',
-      hasSpaces: key.includes(' '),
-      hasNewlines: key.includes('\n'),
-      hasQuotes: key.includes('"') || key.includes("'")
-    });
-  }
+  // Removed - API key is now stored securely in Supabase Edge Function
+  console.log('✅ OpenAI API: Using secure Supabase Edge Function (no client-side API key needed)');
 }
 
-// Always warn about missing API keys (critical for functionality)
-if (!config.openai.apiKey) {
-  console.error('❌ OpenAI API Key: NOT FOUND (set EXPO_PUBLIC_OPENAI_API_KEY environment variable)');
-}
+// OpenAI API calls now use secure Supabase Edge Function
 
 // Google Cloud Vision has been completely removed - using GPT-4 Vision instead
 

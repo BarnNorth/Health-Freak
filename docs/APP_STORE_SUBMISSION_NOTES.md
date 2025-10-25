@@ -254,7 +254,7 @@ Email: [Your Email]
 Phone: [Your Phone]
 
 **Technical Support:**  
-Email: support@healthfreak.app
+Email: support@healthfreak.io
 
 **Company:**  
 [Your Company Name]  

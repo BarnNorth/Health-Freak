@@ -187,7 +187,6 @@ export function cleanupRateLimitStore(): void {
     }
   }
   
-  console.log(`🧹 Cleaned up rate limit store. Entries: ${rateLimitStore.size}`);
 }
 
 /**

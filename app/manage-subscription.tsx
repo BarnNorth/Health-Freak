@@ -50,6 +50,7 @@ export default function ManageSubscriptionScreen() {
     }
   };
 
+
   const handleCancelSubscription = async (instant: boolean = false) => {
     if (!user) return;
 
@@ -154,7 +155,7 @@ export default function ManageSubscriptionScreen() {
     console.error('[MANAGE_SUB] Invalid state: active subscription with no payment method');
     Alert.alert(
       'Subscription Error',
-      'There is an issue with your subscription data. Please try refreshing or contact support.',
+      'There is an issue with your subscription data. Please try refreshing or contact support@healthfreak.io.',
       [{ text: 'OK', onPress: () => router.back() }]
     );
     return (
@@ -170,7 +171,7 @@ export default function ManageSubscriptionScreen() {
   if (!subscriptionInfo.paymentMethod) {
     Alert.alert(
       'Subscription Error',
-      'Unable to determine payment method. Please contact support.',
+      'Unable to determine payment method. Please contact support@healthfreak.io.',
       [{ text: 'OK', onPress: () => router.back() }]
     );
     return (
@@ -305,6 +306,7 @@ export default function ManageSubscriptionScreen() {
                     )}
                   </TouchableOpacity>
                 )}
+
               </>
             )
           ) : (

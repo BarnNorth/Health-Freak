@@ -73,7 +73,7 @@ export default function PrivacyScreen() {
             {'\n'}• Delete your data: Request account deletion by contacting support
             {'\n'}• Export your data: Request a copy of your data
             {'\n'}• Cancel subscription: Manage in app settings at any time
-            {'\n\n'}To exercise these rights, contact us at healthfreak.ai@gmail.com
+            {'\n\n'}To exercise these rights, contact us at support@healthfreak.io
           </Text>
 
           <Text style={styles.sectionTitle}>6. Photo and Camera Usage</Text>
@@ -98,7 +98,7 @@ export default function PrivacyScreen() {
 
           <Text style={styles.sectionTitle}>8. Children's Privacy</Text>
           <Text style={styles.sectionText}>
-            This app is not intended for use by children under 13 years of age. We do not knowingly collect information from children under 13. If we discover that we have collected personal information from a child under 13, we will delete that information immediately. If you believe we have collected information from a child under 13, please contact us at healthfreak.ai@gmail.com. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately at healthfreak.ai@gmail.com and we will delete such information from our systems.
+            This app is not intended for use by children under 13 years of age. We do not knowingly collect information from children under 13. If we discover that we have collected personal information from a child under 13, we will delete that information immediately. If you believe we have collected information from a child under 13, please contact us at support@healthfreak.io. If you are a parent or guardian and believe your child has provided us with personal information, please contact us immediately at support@healthfreak.io and we will delete such information from our systems.
           </Text>
 
           <Text style={styles.sectionTitle}>9. Changes to This Privacy Policy</Text>
@@ -113,7 +113,7 @@ export default function PrivacyScreen() {
           <Text style={styles.sectionTitle}>10. Contact Us</Text>
           <Text style={styles.sectionText}>
             If you have questions, concerns, or requests regarding this privacy policy or your personal data, please contact us:
-            {'\n\n'}Email: healthfreak.ai@gmail.com
+            {'\n\n'}Email: support@healthfreak.io
             {'\n\n'}For privacy concerns, data requests, or questions about this policy, we will respond to your inquiry as soon as possible.
           </Text>
 
@@ -124,7 +124,7 @@ export default function PrivacyScreen() {
             {'\n'}• Right to Delete: Request deletion of your personal data, subject to certain exceptions
             {'\n'}• Right to Opt-Out: Opt-out of the sale of your personal data (note: we do not sell your personal data)
             {'\n'}• Right to Non-Discrimination: Exercise your privacy rights without receiving discriminatory treatment
-            {'\n\n'}To exercise any of these rights, please email us at healthfreak.ai@gmail.com with "California Privacy Request" in the subject line. We will respond to your request within 45 days as required by law.
+            {'\n\n'}To exercise any of these rights, please email us at support@healthfreak.io with "California Privacy Request" in the subject line. We will respond to your request within 45 days as required by law.
           </Text>
         </View>
 

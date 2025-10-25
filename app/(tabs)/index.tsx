@@ -97,7 +97,6 @@ export default function CameraScreen() {
       ai: metrics.aiEnd > 0 ? metrics.aiEnd - metrics.aiStart : 0,
       total: metrics.navigationStart > 0 ? metrics.navigationStart - metrics.captureStart : 0
     };
-    console.log(`⏱️ PERF: capture=${m.capture}ms ocr=${m.ocr}ms ai=${m.ai}ms total=${m.total}ms (${(m.total/1000).toFixed(1)}s) ${m.total < 5000 ? '✅' : '❌'}`);
     return m;
   };
 

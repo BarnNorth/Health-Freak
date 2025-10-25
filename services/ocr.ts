@@ -4,6 +4,7 @@ import { config } from '@/lib/config';
 import { logDetailedError, getUserFriendlyErrorMessage } from './errorHandling';
 import { withRateLimit, validateImageData, validateExtractedText } from './security';
 import { AI_VISION_MODEL } from './aiAnalysis';
+import { supabase } from '../lib/supabase';
 
 /**
  * OCR and Ingredient Parsing Service
@@ -21,8 +22,8 @@ import { AI_VISION_MODEL } from './aiAnalysis';
  * - Allergen/company info filtering
  */
 
-// OpenAI GPT-4 Vision configuration
-const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+// Get Supabase URL for Edge Function
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 
 /**
  * Redact API keys from logs for security
@@ -54,87 +55,131 @@ async function quickImageQualityCheck(imageUri: string): Promise<{ shouldProcess
 }
 
 /**
+ * Compress image for OCR processing with conservative settings
+ */
+async function compressImageForOCR(base64Image: string): Promise<{
+  compressed: string;
+  originalSize: number;
+  compressedSize: number;
+  reductionPercent: number;
+}> {
+  const originalSize = base64Image.length;
+  
+  // Skip compression for small images (< 500KB) to avoid overhead
+  if (originalSize < 500 * 1024) {
+    return {
+      compressed: base64Image,
+      originalSize,
+      compressedSize: originalSize,
+      reductionPercent: 0
+    };
+  }
+  
+  const { manipulateAsync, SaveFormat } = await import('expo-image-manipulator');
+  
+  const uri = `data:image/jpeg;base64,${base64Image}`;
+  
+  // Conservative compression for OCR (maintains high quality)
+  const compressed = await manipulateAsync(
+    uri,
+    [{ resize: { width: 1500 } }], // Conservative width for safety
+    { compress: 0.7, format: SaveFormat.JPEG } // 70% quality (high quality)
+  );
+  
+  const response = await fetch(compressed.uri);
+  const blob = await response.blob();
+  const compressedBase64 = await new Promise<string>((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = (reader.result as string).split(',')[1];
+      resolve(base64);
+    };
+    reader.readAsDataURL(blob);
+  });
+  
+  const compressedSize = compressedBase64.length;
+  const reductionPercent = Math.round((1 - compressedSize / originalSize) * 100);
+  
+  
+  return {
+    compressed: compressedBase64,
+    originalSize,
+    compressedSize,
+    reductionPercent
+  };
+}
+
+/**
+ * Extract with compression and fallback to original if confidence is low
+ */
+async function extractWithCompression(base64Image: string): Promise<OCRResult> {
+  const { compressed } = await compressImageForOCR(base64Image);
+  return await extractIngredientsWithGPT4Vision(compressed);
+}
+
+/**
+ * Extract with original image (no compression)
+ */
+async function extractWithOriginal(base64Image: string): Promise<OCRResult> {
+  return await extractIngredientsWithGPT4Vision(base64Image);
+}
+
+/**
+ * Main extraction function with automatic fallback
+ */
+export async function extractTextWithFallback(base64Image: string): Promise<OCRResult> {
+  // Try compressed first
+  const compressedResult = await extractWithCompression(base64Image);
+  
+  // If confidence is low, retry with original
+  if (compressedResult.confidence < 0.7) {
+    return await extractWithOriginal(base64Image);
+  }
+  
+  return compressedResult;
+}
+
+/**
  * Extract ingredients from food label using GPT-4 Vision
  * This is simpler and more accurate than Google Vision + complex parsing
  */
 async function extractIngredientsWithGPT4Vision(base64Image: string): Promise<OCRResult> {
-  const apiKey = config.openai.apiKey;
-  if (!apiKey) {
-    return {
-      text: '',
-      confidence: 0,
-      error: 'OpenAI API key not configured',
-    };
-  }
-
   try {
-    const prompt = `You are analyzing a food product label. Extract ONLY the ingredients list.
+    const startTime = Date.now();
+    
+    // Get Supabase session for authentication
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      return {
+        text: '',
+        confidence: 0,
+        error: 'User not authenticated',
+      };
+    }
 
-CRITICAL RULES:
-1. Extract ONLY the actual ingredients (after "INGREDIENTS:" label)
-2. IGNORE the Nutrition Facts table completely (all % DV values, calories, etc.)
-3. IGNORE allergen warnings (CONTAINS, MAY CONTAIN sections)
-4. Return ingredients as a clean, comma-separated list
-5. Preserve sub-ingredients in parentheses exactly as shown
-6. Remove any nutrition data that got mixed in (like "4%", "12%", etc.)
-7. Extract ALL ingredients - do not skip any - look carefully for every single ingredient
+    const apiStartTime = Date.now();
 
-MARKER EXTRACTION (CRITICAL):
-8. If you see certification markers (*, †, °, etc.) printed DIRECTLY AFTER ingredient names, preserve them EXACTLY
-9. Look VERY CAREFULLY for these markers - they are often small and easy to miss
-10. Check EVERY ingredient for markers - they may appear on many or most ingredients
-11. Example: If you see "Peanut Butter*" or "Peanut Butter *" → write "Peanut Butter*"
-12. Example: If you see just "Peanut Butter" with no marker → write "Peanut Butter"
-13. Do NOT add markers that aren't visible, but do NOT skip markers that ARE visible
-14. If "Organic" or "Fairtrade" appears as a WORD before the ingredient, keep it: "Organic Honey"
-15. Pay special attention to small superscript markers (*, †) - they're important!
-
-FOOTER NOTES:
-16. At the end of ingredients, there may be a note like "*Organic" or "†Fair Trade" - INCLUDE THIS
-17. This footer note explains what the markers mean - it's important to capture it
-
-Format: Return ONLY the comma-separated ingredient list exactly as printed, including any markers and footer notes.
-
-Example with markers: "Peanut Butter*, Dark Chocolate* (Chocolate*†, Cane Sugar*†), Organic Honey, Sea Salt, *Organic †Fair Trade"
-Example without markers: "Peanut Butter, Dark Chocolate, Honey, Sea Salt"`;
-
-    const requestBody = {
-      model: AI_VISION_MODEL, // GPT-4o-mini for vision/OCR tasks
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: prompt },
-            { 
-              type: 'image_url', 
-              image_url: { 
-                url: `data:image/jpeg;base64,${base64Image}`,
-                detail: 'high' // High detail needed for accurate extraction of all ingredients
-              } 
-            }
-          ]
-        }
-      ],
-      max_tokens: 1000,
-      temperature: 0.1, // Low temperature for consistent, accurate extraction
-    };
-
-    const response = await fetch(OPENAI_API_URL, {
+    const response = await fetch(`${supabaseUrl}/functions/v1/openai-proxy`, {
       method: 'POST',
       headers: {
+        'Authorization': `Bearer ${session.access_token}`,
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
       },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify({
+        type: 'extract_text',
+        base64Image: base64Image
+      }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
+      throw new Error(`OpenAI Edge Function error: ${response.status} - ${errorText}`);
     }
 
-    const result = await response.json();
-    const extractedText = result.choices?.[0]?.message?.content?.trim() || '';
+    const parseStartTime = Date.now();
+
+    const result = await response.json() as OCRResult;
+    const extractedText = result.text?.trim() || '';
     
     if (!extractedText || extractedText.length < 5) {
       return {
@@ -144,9 +189,10 @@ Example without markers: "Peanut Butter, Dark Chocolate, Honey, Sea Salt"`;
       };
     }
 
+
     return {
       text: extractedText,
-      confidence: 0.95, // GPT-4 Vision is highly accurate for this task
+      confidence: result.confidence || 0.95, // Use confidence from Edge Function
     };
 
   } catch (error) {
@@ -157,7 +203,7 @@ Example without markers: "Peanut Butter, Dark Chocolate, Honey, Sea Salt"`;
         return {
           text: '',
           confidence: 0,
-          error: 'OpenAI API key error. Please check configuration.',
+          error: 'Authentication error. Please check your session.',
         };
       }
       
@@ -269,8 +315,8 @@ export async function extractTextFromImage(
         };
       }
 
-      // Use GPT-4 Vision for ingredient extraction
-      return await extractIngredientsWithGPT4Vision(base64Image);
+      // Use GPT-4 Vision for ingredient extraction with compression fallback
+      return await extractTextWithFallback(base64Image);
   } catch (error) {
       // If it's a rate limit error, re-throw it
       if (error instanceof Error && error.message.includes('Rate limit')) {
@@ -606,7 +652,7 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
   try {
     text = validateExtractedText(text);
   } catch (error) {
-    console.error('❌ Invalid extracted text:', error instanceof Error ? error.message : 'Unknown error');
+    console.error('Invalid extracted text:', error instanceof Error ? error.message : 'Unknown error');
     return [];
   }
 

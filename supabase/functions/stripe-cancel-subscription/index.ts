@@ -25,25 +25,38 @@ Deno.serve(async (req) => {
 
     // Get the current user from the request
     const authHeader = req.headers.get('Authorization');
+    
     if (!authHeader) {
-      return new Response('No authorization header', { status: 401 });
+      return Response.json({ error: 'No authorization header' }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
-    if (authError || !user) {
-      return new Response('Invalid token', { status: 401 });
+    let user;
+    try {
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
+      
+      if (authError) {
+        return Response.json({ error: 'Authentication failed', details: authError.message }, { status: 401 });
+      }
+      
+      if (!authUser) {
+        return Response.json({ error: 'No user found' }, { status: 401 });
+      }
+      
+      user = authUser;
+    } catch (authException) {
+      return Response.json({ error: 'Authentication exception', details: authException.message }, { status: 401 });
+    }
+
+    // Ensure user is defined before proceeding
+    if (!user) {
+      return Response.json({ error: 'User not defined' }, { status: 401 });
     }
 
     // Parse request body for instant cancellation flag (DEV only)
     const body = await req.json().catch(() => ({}));
     const instantCancel = body.instant === true;
-
-    console.log('Cancelling subscription for user:', user.id);
-    if (instantCancel) {
-      console.log('⚡ DEV MODE: Instant cancellation requested');
-    }
 
     // Get the customer ID from the database
     const { data: customerData, error: customerError } = await supabase
@@ -51,10 +64,14 @@ Deno.serve(async (req) => {
       .select('customer_id')
       .eq('user_id', user.id)
       .single();
-
+    
     if (customerError || !customerData) {
-      console.error('No customer found for user:', user.id);
-      return new Response('No subscription found', { status: 404 });
+      console.error('No customer found for user:', user.id, 'Error:', customerError);
+      return Response.json({ 
+        success: false,
+        error: 'No subscription found',
+        details: 'User does not have a Stripe customer record'
+      }, { status: 404 });
     }
 
     // Get the active subscription from Stripe
@@ -65,75 +82,128 @@ Deno.serve(async (req) => {
     });
 
     if (subscriptions.data.length === 0) {
-      // Check if subscription was already cancelled
+      // No active subscriptions found, check all subscriptions
       const allSubscriptions = await stripe.subscriptions.list({
         customer: customerData.customer_id,
-        limit: 1,
+        limit: 10,
       });
-      
-      if (allSubscriptions.data.length > 0 && allSubscriptions.data[0].status === 'canceled') {
-        console.log('Subscription already cancelled:', allSubscriptions.data[0].id);
+
+      if (allSubscriptions.data.length === 0) {
         return Response.json({ 
-          success: true, 
-          message: 'Subscription already cancelled' 
+          success: false,
+          error: 'No subscription found',
+          details: 'No subscriptions found for this customer'
+        }, { status: 404 });
+      }
+
+      // Check if any subscription is already cancelled or canceling
+      const cancelledSub = allSubscriptions.data.find(sub => sub.status === 'canceled');
+      const cancelingSub = allSubscriptions.data.find(sub => sub.status === 'active' && sub.cancel_at_period_end);
+
+      if (cancelledSub) {
+        // Subscription is already cancelled, update database
+        await supabase
+          .from('users')
+          .update({ 
+            subscription_status: 'free',
+            payment_method: null,
+            cancels_at_period_end: false,
+            subscription_renewal_date: null
+          })
+          .eq('id', user.id);
+
+        return Response.json({ 
+          success: true,
+          message: 'Subscription was already cancelled',
+          cancelled_immediately: true
         });
       }
-      
-      console.error('No active subscription found for customer:', customerData.customer_id);
+
+      if (cancelingSub) {
+        // Subscription is set to cancel at period end, update database
+        const renewalDate = new Date(cancelingSub.current_period_end * 1000).toISOString();
+        await supabase
+          .from('users')
+          .update({ 
+            cancels_at_period_end: true,
+            subscription_renewal_date: renewalDate
+          })
+          .eq('id', user.id);
+
+        return Response.json({ 
+          success: true,
+          message: 'Subscription is already set to cancel at period end',
+          cancelled_immediately: false
+        });
+      }
+
       return Response.json({ 
         success: false,
-        error: 'No active subscription found' 
+        error: 'No active subscription found',
+        details: 'No active subscriptions found for this customer'
       }, { status: 404 });
     }
 
     const subscription = subscriptions.data[0];
 
-    let cancelledSubscription;
-
-    if (instantCancel) {
-      // DEV MODE: Cancel immediately for easy testing
-      console.log('⚡ DEV MODE: Cancelling subscription immediately');
-      cancelledSubscription = await stripe.subscriptions.cancel(subscription.id);
-      
-      // Update database immediately to free status
-      await supabase
-        .from('users')
-        .update({
-          subscription_status: 'free',
-          payment_method: null,
-          stripe_subscription_id: null,
-          subscription_renewal_date: null,
-          cancels_at_period_end: false
-        })
-        .eq('id', user.id);
+    try {
+      if (instantCancel) {
+        // DEV MODE: Cancel immediately
+        await stripe.subscriptions.cancel(subscription.id);
         
-      console.log('✅ Database updated to free status immediately');
-    } else {
-      // Production mode: Cancel at end of period (industry standard)
-      console.log('PRODUCTION MODE: Cancelling at end of billing period');
-      cancelledSubscription = await stripe.subscriptions.update(subscription.id, {
-        cancel_at_period_end: true,
-      });
+        // Update database to free status
+        await supabase
+          .from('users')
+          .update({ 
+            subscription_status: 'free',
+            payment_method: null,
+            cancels_at_period_end: false,
+            subscription_renewal_date: null
+          })
+          .eq('id', user.id);
+
+        return Response.json({ 
+          success: true,
+          message: 'Subscription cancelled immediately',
+          cancelled_immediately: true
+        });
+      } else {
+        // Normal cancellation: cancel at period end
+        await stripe.subscriptions.update(subscription.id, {
+          cancel_at_period_end: true
+        });
+
+        // Update database with cancellation info
+        const renewalDate = new Date(subscription.current_period_end * 1000).toISOString();
+        await supabase
+          .from('users')
+          .update({ 
+            cancels_at_period_end: true,
+            subscription_renewal_date: renewalDate
+          })
+          .eq('id', user.id);
+
+        return Response.json({ 
+          success: true,
+          message: 'Subscription will be cancelled at the end of the billing period',
+          cancelled_immediately: false
+        });
+      }
+    } catch (stripeError) {
+      console.error('Stripe API error:', stripeError);
+      return Response.json({ 
+        success: false,
+        error: 'Failed to cancel subscription',
+        details: stripeError.message
+      }, { status: 500 });
     }
 
-    console.log('Subscription cancellation processed:', {
-      subscription_id: cancelledSubscription.id,
-      cancel_at_period_end: cancelledSubscription.cancel_at_period_end,
-      current_period_end: cancelledSubscription.current_period_end,
-      status: cancelledSubscription.status,
-      mode: instantCancel ? 'immediate' : 'end-of-period'
-    });
-
+  } catch (error) {
+    console.error('Edge function error:', error);
     return Response.json({ 
-      success: true, 
-      subscription_id: cancelledSubscription.id,
-      cancel_at_period_end: cancelledSubscription.cancel_at_period_end,
-      current_period_end: cancelledSubscription.current_period_end,
-      cancelled_immediately: instantCancel
-    });
-
-  } catch (error: any) {
-    console.error('Error cancelling subscription:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+      success: false,
+      error: 'Internal server error',
+      details: error.message
+    }, { status: 500 });
   }
 });

@@ -1,4 +1,4 @@
-import OpenAI from 'openai';
+import { supabase } from '../lib/supabase';
 import { config } from '../lib/config';
 import { isRetryableError, isAPIDownError, retryWithBackoff, logDetailedError, getUserFriendlyErrorMessage } from './errorHandling';
 import { withRateLimit, validateIngredientName } from './security';
@@ -20,18 +20,11 @@ export const AI_TEXT_MODEL = 'gpt-3.5-turbo'; // For text analysis - optimized f
 export const AI_MODEL_CONTEXT_WINDOW = 128000;
 export const AI_MODEL_MAX_TOKENS = 16000;
 
-// Initialize OpenAI client
-console.log('🔧 Initializing OpenAI client...');
-console.log('🔧 API Key from config:', config.openai?.apiKey ? 'SET' : 'NOT SET');
-console.log('🔧 API Key from env:', process.env.EXPO_PUBLIC_OPENAI_API_KEY ? 'SET' : 'NOT SET');
-console.log('🤖 Vision Model:', AI_VISION_MODEL);
-console.log('🤖 Text Model:', AI_TEXT_MODEL);
-
-const openai = new OpenAI({
-  apiKey: config.openai?.apiKey || process.env.EXPO_PUBLIC_OPENAI_API_KEY,
-});
-
-console.log('✅ OpenAI client initialized');
+// Get Supabase URL for Edge Function
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+if (!supabaseUrl) {
+  console.error('EXPO_PUBLIC_SUPABASE_URL not configured');
+}
 
 // Helper functions for thought streaming
 function getIngredientEmoji(name: string): string {
@@ -53,56 +46,43 @@ function getClassificationMessage(status: string, name: string): string {
   return msgs[Math.floor(Math.random() * msgs.length)];
 }
 
-// Special ingredient reactions for easter eggs
-const SPECIAL: Record<string, { emoji: string; msg: string }> = {
-  'high fructose corn syrup': { emoji: '😬', msg: 'Yikes! HFCS detected...' },
-  'hfcs': { emoji: '😬', msg: 'Oh no, not HFCS...' },
-  'organic': { emoji: '🌱', msg: 'Love organic!' },
-  'artificial flavor': { emoji: '🤨', msg: 'Artificial detected...' },
-  'vitamin': { emoji: '💊', msg: 'Getting vitamins!' },
-  'msg': { emoji: '🚨', msg: 'MSG alert!' },
-  'aspartame': { emoji: '🤔', msg: 'Aspartame debate...' },
-  'stevia': { emoji: '🍃', msg: 'Natural sweetness!' },
-  'red dye': { emoji: '🔴', msg: 'Colorful concerns...' },
-  'blue dye': { emoji: '🔵', msg: 'Blue mystery...' },
-  'yellow dye': { emoji: '🟡', msg: 'Yellow warning...' },
-  'sodium benzoate': { emoji: '🧪', msg: 'Preservative alert!' },
-  'bht': { emoji: '⚗️', msg: 'BHT spotted!' },
-  'bha': { emoji: '⚗️', msg: 'BHA detected!' },
-  'natural flavor': { emoji: '🤷', msg: 'Natural... but what?' },
-  'sugar': { emoji: '🍭', msg: 'Sweet tooth activated!' },
-  'salt': { emoji: '🧂', msg: 'Salty situation!' },
-  'water': { emoji: '💧', msg: 'H2O - the good stuff!' },
-};
+// Special ingredient reactions removed for performance optimization
 
-function checkSpecial(name: string): { emoji: string; msg: string } | null {
-  const l = name.toLowerCase();
-  for (const [key, reaction] of Object.entries(SPECIAL)) {
-    if (l.includes(key)) return { emoji: reaction.emoji, msg: reaction.msg };
-  }
-  return null;
-}
-
-// Test API key validity
+// Test OpenAI Edge Function connectivity
 export async function testOpenAIAPIKey(): Promise<boolean> {
   try {
-    console.log('🧪 Testing OpenAI API key...');
-    const testResponse = await openai.chat.completions.create({
-      model: AI_TEXT_MODEL,
-      messages: [{ role: 'user', content: 'Say "API key is working"' }],
-      max_tokens: 10,
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      console.error('No valid session for OpenAI Edge Function test');
+      return false;
+    }
+
+    const response = await fetch(`${supabaseUrl}/functions/v1/openai-proxy`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        type: 'analyze_ingredient',
+        ingredientName: 'test ingredient'
+      }),
     });
-    
-    console.log('✅ OpenAI API key test successful:', testResponse.choices[0]?.message?.content);
-    return true;
+
+    if (response.ok) {
+      return true;
+    } else {
+      console.error('OpenAI Edge Function test failed:', response.status, response.statusText);
+      return false;
+    }
   } catch (error) {
-    console.error('❌ OpenAI API key test failed:', error);
+    console.error('OpenAI Edge Function test failed:', error);
     return false;
   }
 }
 
 export interface AIAnalysisResult {
-  status: 'generally_clean' | 'potentially_toxic';
+  status: 'generally_clean' | 'potentially_toxic' | 'unknown';
   confidence: number;
   educational_note: string;
   basic_note: string;
@@ -238,108 +218,56 @@ export async function analyzeIngredientWithAI(
   
   // Apply rate limiting for AI analysis operations
   return await withRateLimit(userId, 'ai_analysis', async () => {
-    const startTime = Date.now();
+    const ingredientStartTime = Date.now();
 
     try {
-      console.log(`🤖 Starting AI analysis for ingredient: "${ingredientName}"`);
-      console.log(`👑 Premium user: ${isPremium}`);
-      console.log(`🔧 OpenAI API Key configured: ${!!config.openai?.apiKey}`);
-      console.log(`🔧 OpenAI API Key value: ${config.openai?.apiKey ? 'SET' : 'NOT SET'}`);
-      console.log(`⚙️ Model: ${AI_TEXT_MODEL}`);
-      console.log(`🔧 OpenAI enabled: ${config.openai?.enabled}`);
-
-      if (!config.openai?.apiKey) {
-        throw new Error('OpenAI API key not configured');
-      }
-
       if (!config.openai?.enabled) {
         throw new Error('OpenAI analysis is disabled in configuration');
       }
 
-      const requestPayload = {
-        model: AI_TEXT_MODEL, // GPT-3.5-turbo optimized for speed
-        messages: [
-          {
-            role: "system" as const,
-            content: SYSTEM_PROMPT
-          },
-          {
-            role: "user" as const,
-            content: `Analyze this food ingredient: "${sanitizedName}"`
-          }
-        ],
-        temperature: 0.1,
-        max_tokens: config.openai?.maxTokens || 300,
-        response_format: { type: "json_object" as const }
-      };
+      // Get Supabase session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('User not authenticated');
+      }
 
-    console.log(`📤 Sending request to OpenAI:`, {
-      model: requestPayload.model,
-      temperature: requestPayload.temperature,
-      max_tokens: requestPayload.max_tokens,
-      ingredient: ingredientName,
-      apiKeyLength: config.openai?.apiKey?.length || 0
-    });
-
-    const completion = await openai.chat.completions.create(requestPayload);
-
-    console.log(`📥 Received response from OpenAI:`, {
-      model: completion.model,
-      usage: completion.usage,
-      finish_reason: completion.choices[0]?.finish_reason,
-      processing_time: Date.now() - startTime
-    });
-
-    const response = completion.choices[0]?.message?.content;
-    if (!response) {
-      throw new Error('No response content from AI');
-    }
-
-    console.log(`📄 Raw AI response:`, response);
-
-    const analysis = JSON.parse(response) as AIAnalysisResult;
-    
-    console.log(`🔍 Parsed AI analysis:`, analysis);
-    
-    // Validate the response structure
-    if (!analysis.status || !analysis.educational_note || !analysis.basic_note) {
-      console.error(`❌ Invalid AI response structure:`, {
-        hasStatus: !!analysis.status,
-        hasEducationalNote: !!analysis.educational_note,
-        hasBasicNote: !!analysis.basic_note,
-        fullResponse: analysis
+      const response = await fetch(`${supabaseUrl}/functions/v1/openai-proxy`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type: 'analyze_ingredient',
+          ingredientName: sanitizedName
+        }),
       });
-      throw new Error('Invalid AI response structure');
-    }
 
-    // Ensure confidence is within valid range
-    const originalConfidence = analysis.confidence;
-    analysis.confidence = Math.max(0, Math.min(1, analysis.confidence || 0.5));
-    
-    if (originalConfidence !== analysis.confidence) {
-      console.log(`🔧 Adjusted confidence from ${originalConfidence} to ${analysis.confidence}`);
-    }
+      if (!response.ok) {
+        throw new Error(`OpenAI Edge Function error: ${response.status} ${response.statusText}`);
+      }
 
-    console.log(`✅ AI Analysis completed for "${ingredientName}":`, {
-      status: analysis.status,
-      confidence: analysis.confidence,
-      reasoning: analysis.reasoning,
-      processing_time: Date.now() - startTime,
-      tokens_used: completion.usage?.total_tokens || 0
-    });
-    
-    return analysis;
+      const analysis = await response.json() as AIAnalysisResult;
+      
+      // Validate the response structure
+      if (!analysis.status || !analysis.educational_note || !analysis.basic_note) {
+        console.error(`Invalid AI response structure:`, {
+          hasStatus: !!analysis.status,
+          hasEducationalNote: !!analysis.educational_note,
+          hasBasicNote: !!analysis.basic_note,
+          fullResponse: analysis
+        });
+        throw new Error('Invalid AI response structure');
+      }
+
+      // Ensure confidence is within valid range
+      analysis.confidence = Math.max(0, Math.min(1, analysis.confidence || 0.5));
+
+      
+      return analysis;
 
   } catch (error) {
-    console.error(`❌ AI Analysis failed for "${ingredientName}":`, error);
-    console.error(`❌ Error details:`, {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      processing_time: Date.now() - startTime,
-      ingredient: ingredientName,
-      errorType: typeof error,
-      errorConstructor: error?.constructor?.name
-    });
+    console.error(`AI Analysis failed for "${ingredientName}":`, error);
     
     // Fallback to conservative classification
     const fallbackResult = {
@@ -350,7 +278,6 @@ export async function analyzeIngredientWithAI(
       reasoning: 'AI analysis failed, using conservative fallback'
     };
 
-    console.log(`🔄 Using conservative fallback for "${sanitizedName}":`, fallbackResult);
     
     return fallbackResult;
   }
@@ -374,75 +301,52 @@ export async function analyzeSingleBatch(
     const startTime = Date.now();
   
     try {
-      console.log(`🤖 Starting batch AI analysis for ${sanitizedNames.length} ingredients:`, sanitizedNames);
-      console.log(`👑 Premium user: ${isPremium}`);
-      console.log(`🔧 OpenAI API Key configured: ${!!config.openai?.apiKey}`);
-      console.log(`⚙️ Model: ${AI_TEXT_MODEL}`);
 
-    const batchPrompt = `Analyze these food ingredients and classify each one. Return a JSON array with analysis for each ingredient.
-
-Ingredients to analyze: ${ingredientNames.map(name => `"${name.trim()}"`).join(', ')}
-
-Return format:
-{
-  "ingredients": [
-    {
-      "name": "ingredient name",
-      "analysis": {
-        "status": "generally_clean" | "potentially_toxic",
-        "confidence": 0.0-1.0,
-        "educational_note": "Detailed explanation for premium users",
-        "basic_note": "Simple explanation for free users",
-        "reasoning": "Brief technical reasoning"
+      // Get Supabase session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('User not authenticated');
       }
-    }
-  ]
-}`;
 
-    const requestPayload = {
-      model: AI_TEXT_MODEL, // GPT-3.5-turbo optimized for speed
-      messages: [
-        {
-          role: "system" as const,
-          content: SYSTEM_PROMPT
+      // Process ingredients using batch endpoint
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/openai-proxy`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
         },
-        {
-          role: "user" as const,
-          content: batchPrompt
-        }
-      ],
-      temperature: 0, // Optimized for speed - deterministic responses
-      max_tokens: 2000, // Prevents worst-case truncation for batches of 8 ingredients
-      response_format: { type: "json_object" as const }
+        body: JSON.stringify({
+          type: 'analyze_batch',
+          ingredientNames: sanitizedNames
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Batch analysis failed: ${response.status} ${response.statusText}`);
+      }
+
+      const batchResult = await response.json();
+      const results = batchResult.ingredients;
+      
+      // Stream progress updates for each ingredient
+      results.forEach((result: any, i: number) => {
+        onProgress?.({ 
+          type: 'analyzing', 
+          message: `Analyzed ${result.name}...`, 
+          emoji: getIngredientEmoji(result.name), 
+          current: i + 1, 
+          total: results.length, 
+          progress: Math.round(((i + 1) / results.length) * 100)
+        });
+      });
+
+      const completion = { model: AI_TEXT_MODEL };
+
+    const result: BatchAIAnalysisResult = {
+      ingredients: results
     };
-
-    console.log(`📤 Sending batch request to OpenAI:`, {
-      model: requestPayload.model,
-      temperature: requestPayload.temperature,
-      max_tokens: requestPayload.max_tokens,
-      ingredient_count: ingredientNames.length,
-      ingredients: ingredientNames
-    });
-
-    const completion = await openai.chat.completions.create(requestPayload);
-
-    console.log(`📥 Received batch response from OpenAI:`, {
-      model: completion.model,
-      usage: completion.usage,
-      finish_reason: completion.choices[0]?.finish_reason,
-      processing_time: Date.now() - startTime
-    });
-
-    const response = completion.choices[0]?.message?.content;
-    if (!response) {
-      throw new Error('No response content from AI batch analysis');
-    }
-
-    console.log(`📄 Raw batch AI response:`, response);
-
-    const result = JSON.parse(response) as BatchAIAnalysisResult;
     
-    console.log(`🔍 Parsed batch AI result:`, result);
     
     // Validate the response structure
     if (!result.ingredients || !Array.isArray(result.ingredients)) {
@@ -454,80 +358,51 @@ Return format:
       throw new Error('Invalid batch AI response structure');
     }
 
-    // Validate and clean up the results with streaming progress
+    // Validate and clean up the results - OPTIMIZED: Process instantly, queue progress updates
     const validatedIngredients = [];
+    const progressUpdates = [];
     const total = result.ingredients.length;
     
     for (let index = 0; index < result.ingredients.length; index++) {
       const item = result.ingredients[index];
       const name = item.name;
       
-      console.log(`🔍 Validating ingredient ${index + 1}: "${name}"`);
-      
-      // Stream analyzing progress
-      onProgress?.({ 
-        type: 'analyzing', 
-        message: `Analyzing ${name}...`, 
-        emoji: getIngredientEmoji(name), 
-        current: index + 1, 
-        total: total, 
-        ingredient: name 
-      });
-      
-      // Minimum display time so users can read the thought
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Check for special ingredient reactions (easter eggs)
-      const special = checkSpecial(name);
-      if (special) {
-        onProgress?.({ type: 'encouragement', message: special.msg, emoji: special.emoji });
-        await new Promise(resolve => setTimeout(resolve, 600));
-      }
-      
-      if (!item.analysis || !item.analysis.status) {
-        console.error(`❌ Invalid ingredient analysis for "${name}":`, item);
+      // Handle both individual and batch response formats
+      const analysis = item.analysis || item;
+      if (!analysis || !analysis.status) {
+        console.error(`Invalid ingredient analysis for "${name}":`, item);
         throw new Error(`Invalid analysis for ingredient: ${name}`);
       }
 
-      const originalConfidence = item.analysis.confidence;
-      const adjustedConfidence = Math.max(0, Math.min(1, item.analysis.confidence || 0.5));
-      
-      if (originalConfidence !== adjustedConfidence) {
-        console.log(`🔧 Adjusted confidence for "${name}" from ${originalConfidence} to ${adjustedConfidence}`);
-      }
+      const originalConfidence = analysis.confidence;
+      const adjustedConfidence = Math.max(0, Math.min(1, analysis.confidence || 0.5));
 
-      // Stream classification result
-      onProgress?.({ 
-        type: 'classified', 
-        message: getClassificationMessage(item.analysis.status, name), 
-        emoji: item.analysis.status === 'generally_clean' ? '✨' : '⚠️', 
-        current: index + 1, 
+      // Collect progress update (don't send immediately)
+      progressUpdates.push({
+        type: 'classified',
+        message: getClassificationMessage(analysis.status, name),
+        emoji: analysis.status === 'generally_clean' ? '✨' : '⚠️',
+        current: index + 1,
         total: total,
-        status: item.analysis.status === 'generally_clean' ? 'clean' : 'potentially_toxic',
-        isToxic: item.analysis.status === 'potentially_toxic'
+        status: analysis.status === 'generally_clean' ? 'clean' : 'potentially_toxic',
+        isToxic: analysis.status === 'potentially_toxic'
       });
-      
-      // Minimum display time for classification result
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      // Add encouragement every 5 ingredients
-      if (index > 0 && index % 5 === 0) {
-        const encouragements = ['🕵️ Detective mode...', '🧠 Thinking cap on...', '💪 I was trained for this...'];
-        onProgress?.({ 
-          type: 'encouragement', 
-          message: encouragements[Math.floor(Math.random() * encouragements.length)], 
-          emoji: '💭' 
-        });
-        // Display time for encouragement
-        await new Promise(resolve => setTimeout(resolve, 800));
-      }
 
       validatedIngredients.push({
         ...item,
         analysis: {
-          ...item.analysis,
+          ...analysis,
           confidence: adjustedConfidence
         }
+      });
+    }
+
+    // Send all progress updates asynchronously (non-blocking) with staggered timing for smooth UX
+    if (onProgress) {
+      Promise.resolve().then(() => {
+        progressUpdates.forEach((update, i) => {
+          setTimeout(() => onProgress(update), i * 150); // 150ms stagger for smooth display
+        });
       });
     }
 
@@ -535,16 +410,6 @@ Return format:
     result.processing_time = Date.now() - startTime;
     result.tokens_used = completion.usage?.total_tokens || 0;
 
-    console.log(`✅ Batch AI Analysis completed successfully:`, {
-      ingredients_analyzed: result.ingredients.length,
-      processing_time: result.processing_time,
-      tokens_used: result.tokens_used,
-      results_summary: result.ingredients.map(item => ({
-        name: item.name,
-        status: item.analysis.status,
-        confidence: item.analysis.confidence
-      }))
-    });
 
     return result;
 
@@ -557,7 +422,6 @@ Return format:
     
     // Check for retryable errors (temporary issues)
     if (isRetryableError(error)) {
-      console.log('[AI_BATCH_ANALYSIS] Retryable error detected, attempting retry with backoff...');
       try {
         const retryResult = await retryWithBackoff(async () => {
           const retryBatchPrompt = `Analyze these food ingredients and classify each one. Return a JSON array with analysis for each ingredient.
@@ -619,19 +483,16 @@ Return format:
           };
         }, 2); // Max 2 retries for batch analysis
         
-        console.log('[AI_BATCH_ANALYSIS] ✅ Retry successful after temporary error');
         return retryResult;
       } catch (retryError) {
         logDetailedError('AI_BATCH_ANALYSIS_RETRY', retryError, {
           original_error: error instanceof Error ? error.message : String(error)
         });
-        console.log('[AI_BATCH_ANALYSIS] ❌ Retry failed, proceeding to fallback strategy');
       }
     }
     
     // Check if API is completely down
     if (isAPIDownError(error)) {
-      console.log('[AI_BATCH_ANALYSIS] ⚠️ API unavailable, using conservative fallback for all ingredients');
       const errorMessage = getUserFriendlyErrorMessage(error);
       
       return {
@@ -651,14 +512,11 @@ Return format:
     }
     
     // For other errors (likely parsing or validation errors), try individual analysis
-    console.log('[AI_BATCH_ANALYSIS] 🔄 Non-retryable error detected, falling back to individual ingredient analysis');
-    console.log(`[AI_BATCH_ANALYSIS] Processing ${ingredientNames.length} ingredients individually...`);
     const individualStartTime = Date.now();
     
     const individualResults = await Promise.all(
       ingredientNames.map(async (name, index) => {
         try {
-          console.log(`[AI_BATCH_ANALYSIS] 🔄 Processing ingredient ${index + 1}/${ingredientNames.length}: "${name}"`);
           const result = await analyzeIngredientWithAI(name, userId, isPremium);
           return {
             name,
@@ -692,11 +550,6 @@ Return format:
       tokens_used: 0
     };
 
-    console.log(`[AI_BATCH_ANALYSIS] ✅ Individual analysis fallback completed:`, {
-      ingredients_analyzed: fallbackResult.ingredients.length,
-      total_processing_time: fallbackResult.processing_time,
-      individual_processing_time: Date.now() - individualStartTime
-    });
 
     return fallbackResult;
   }
@@ -712,6 +565,8 @@ export async function analyzeIngredientsBatch(
   isPremium: boolean = false,
   onProgress?: (update: any) => void
 ): Promise<BatchAIAnalysisResult> {
+  const batchStartTime = Date.now();
+  
   // For small batches, use single batch processing
   if (ingredientNames.length <= 8) {
     return analyzeSingleBatch(ingredientNames, userId, isPremium, onProgress);
@@ -725,7 +580,6 @@ export async function analyzeIngredientsBatch(
     batches.push(ingredientNames.slice(i, i + BATCH_SIZE));
   }
 
-  console.log(`🚀 Starting parallel processing of ${ingredientNames.length} ingredients in ${batches.length} batches`);
   const startTime = Date.now();
 
   // Process all batches in parallel
@@ -756,21 +610,13 @@ export async function analyzeIngredientsBatch(
       tokens_used: results.reduce((sum, r) => sum + r.tokens_used, 0)
     };
 
-    console.log(`✅ Parallel batch processing completed:`, {
-      total_ingredients: combinedResult.ingredients.length,
-      batches_processed: results.length,
-      total_processing_time: combinedResult.processing_time,
-      total_tokens_used: combinedResult.tokens_used,
-      average_batch_time: combinedResult.processing_time / results.length
-    });
 
     return combinedResult;
     
   } catch (error) {
-    console.error('❌ Parallel batch processing failed:', error);
+    console.error('Parallel batch processing failed:', error);
     
     // Fallback to single batch processing if parallel fails
-    console.log('🔄 Falling back to single batch processing...');
     return analyzeSingleBatch(ingredientNames, userId, isPremium, onProgress);
   }
 }
@@ -784,17 +630,15 @@ export function getAIAnalysisStatus(): {
   model: string;
   message: string;
 } {
-  const configured = !!(config.openai?.apiKey || process.env.EXPO_PUBLIC_OPENAI_API_KEY);
+  const configured = true; // Always true since we use Edge Function
   const enabled = config.openai?.enabled !== false;
   const model = AI_TEXT_MODEL;
 
   let message = '';
   if (!enabled) {
     message = 'AI analysis is disabled in configuration';
-  } else if (!configured) {
-    message = 'OpenAI API key is not configured';
   } else {
-    message = 'AI analysis is ready';
+    message = 'AI analysis is ready (using secure Edge Function)';
   }
 
   const status = {
@@ -804,15 +648,6 @@ export function getAIAnalysisStatus(): {
     message,
   };
 
-  console.log('🔧 AI Analysis Status Check:', {
-    configured,
-    enabled,
-    model,
-    message,
-    hasApiKey: !!config.openai?.apiKey,
-    hasEnvKey: !!process.env.EXPO_PUBLIC_OPENAI_API_KEY,
-    configEnabled: config.openai?.enabled
-  });
 
   return status;
 }
@@ -825,38 +660,26 @@ export async function testAIAnalysis(): Promise<{
   message: string;
   details?: any;
 }> {
-  console.log('🧪 Starting AI Analysis Test...');
   
   try {
     const status = getAIAnalysisStatus();
-    console.log('📊 AI Status for test:', status);
     
     if (!status.configured) {
-      console.log('❌ AI Test failed: API key not configured');
       return {
         success: false,
-        message: 'OpenAI API key is not configured. Please set EXPO_PUBLIC_OPENAI_API_KEY environment variable.',
+        message: 'AI analysis is not configured. Please check Supabase Edge Function setup.',
       };
     }
 
     if (!status.enabled) {
-      console.log('❌ AI Test failed: AI analysis disabled');
       return {
         success: false,
         message: 'AI analysis is disabled in configuration',
       };
     }
-
-    console.log('✅ AI configuration valid, running test analysis...');
     
     // Test with a simple ingredient
     const testResult = await analyzeIngredientWithAI('organic olive oil', 'test-user');
-    
-    console.log('✅ AI Analysis Test completed successfully:', {
-      test_ingredient: 'organic olive oil',
-      result: testResult,
-      model: status.model,
-    });
     
     return {
       success: true,
@@ -869,10 +692,7 @@ export async function testAIAnalysis(): Promise<{
     };
 
   } catch (error) {
-    console.error('❌ AI Analysis Test failed:', {
-      error: error instanceof Error ? error.message : error,
-      stack: error instanceof Error ? error.stack : undefined
-    });
+    console.error('AI Analysis Test failed:', error);
     
     return {
       success: false,
@@ -888,33 +708,32 @@ export async function identifyProductFromIngredients(
   ingredientList: string
 ): Promise<string> {
   try {
-    const prompt = `Based on this ingredient list, identify the product.
+    // Get Supabase session for authentication
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      return 'A packaged food product'; // Fallback if not authenticated
+    }
 
-Ingredient list:
-"${ingredientList}"
-
-Rules:
-1. If you can identify a specific product with high confidence, return: "[Brand] [Product Name]"
-   Example: "Dave's Killer Bread - 21 Whole Grains & Seeds"
-2. If you recognize the category but not the exact product, return: "A [category] product"
-   Example: "An organic bread product" or "A protein bar"
-3. Keep it concise (under 50 characters)
-4. Don't include unnecessary words like "This is" or "Appears to be"
-
-Return ONLY the product identification string, nothing else.`;
-
-    const completion = await openai.chat.completions.create({
-      model: AI_VISION_MODEL, // Use vision model for product identification
-      messages: [
-        { role: 'system', content: 'You are a product identification expert. Return only the product name or category.' },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.3,
-      max_tokens: 50,
+    const response = await fetch(`${supabaseUrl}/functions/v1/openai-proxy`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        type: 'identify_product',
+        ingredientList: ingredientList
+      }),
     });
 
-    const identification = completion.choices[0]?.message?.content?.trim();
-    return identification || 'A packaged food product';
+    if (!response.ok) {
+      throw new Error(`OpenAI Edge Function error: ${response.status} ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    const productName = result.productName?.trim();
+    
+    return productName || 'A packaged food product';
   } catch (error) {
     console.error('Error identifying product:', error);
     return 'A packaged food product'; // Fallback

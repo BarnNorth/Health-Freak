@@ -389,7 +389,8 @@ Create `.env` file with:
 # ============================================
 # AI Analysis & OCR (OpenAI)
 # ============================================
-EXPO_PUBLIC_OPENAI_API_KEY=sk-proj-your-actual-openai-key
+# OpenAI API key is now stored securely in Supabase Edge Function
+# No client-side API key needed
 
 # ============================================
 # Database & Authentication

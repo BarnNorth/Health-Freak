@@ -85,7 +85,7 @@ export default function TermsScreen() {
             Premium subscriptions are billed monthly at $10. You may cancel your subscription at any time 
             through your account settings, and you will retain premium access until the end of your current 
             billing period.
-            {'\n\n'}Refund requests must be submitted to healthfreak.ai@gmail.com within 7 days of purchase. Approved refunds will be processed within 5-10 business days and issued to your original payment method. Prorated refunds are not available for partial months of service.
+            {'\n\n'}Refund requests must be submitted to support@healthfreak.io within 7 days of purchase. Approved refunds will be processed within 5-10 business days and issued to your original payment method. Prorated refunds are not available for partial months of service.
             {'\n\n'}Important: Subscriptions purchased through the Apple App Store or Google Play Store are subject to their respective refund policies. You may also request refunds directly through Apple or Google using their standard refund request processes.
           </Text>
 
@@ -113,7 +113,7 @@ export default function TermsScreen() {
 
           <Text style={styles.sectionTitle}>11. Contact Information</Text>
           <Text style={styles.sectionText}>
-            Questions about these terms? Contact us at healthfreak.ai@gmail.com
+            Questions about these terms? Contact us at support@healthfreak.io
           </Text>
         </View>
 

@@ -12,7 +12,7 @@ interface AnalysisResult {
   overallVerdict: 'CLEAN' | 'TOXIC';
   ingredients?: Array<{
     name: string;
-    status: 'generally_clean' | 'potentially_toxic';
+    status: 'generally_clean' | 'potentially_toxic' | 'unknown';
     educational_note: string;
     communityAccuracy?: number;
     totalFeedback?: number;
@@ -106,7 +106,7 @@ export default function ResultsScreen() {
   // Handle user feedback submission
   const handleFeedback = async (
     ingredientName: string,
-    ingredientStatus: 'generally_clean' | 'potentially_toxic',
+    ingredientStatus: 'generally_clean' | 'potentially_toxic' | 'unknown',
     isCorrect: boolean,
     confidence: number = 0.5
   ) => {
@@ -167,6 +167,7 @@ export default function ResultsScreen() {
 
   const cleanIngredients = analysisResult.ingredients?.filter(r => r.status === 'generally_clean') || [];
   const toxicIngredients = analysisResult.ingredients?.filter(r => r.status === 'potentially_toxic') || [];
+  const unknownIngredients = analysisResult.ingredients?.filter(r => r.status === 'unknown') || [];
   
   // All ingredients in original OCR order (no separation by clean/toxic)
   const allIngredients = analysisResult.ingredients || [];
@@ -243,7 +244,9 @@ export default function ResultsScreen() {
                   return (
                     <View key={index} style={[
                       styles.ingredientCard, 
-                      ingredient.status === 'generally_clean' ? styles.cleanCard : styles.toxicCard
+                      ingredient.status === 'generally_clean' ? styles.cleanCard : 
+                      ingredient.status === 'potentially_toxic' ? styles.toxicCard : 
+                      styles.unknownCard
                     ]}>
                       {/* Clickable ingredient name header */}
                       <TouchableOpacity 
@@ -557,6 +560,10 @@ const styles = StyleSheet.create({
   toxicCard: {
     borderColor: COLORS.toxicRed,
     backgroundColor: COLORS.toxicRed,
+  },
+  unknownCard: {
+    borderColor: COLORS.accentYellow,
+    backgroundColor: COLORS.accentYellow,
   },
   ingredientHeader: {
     flexDirection: 'row',

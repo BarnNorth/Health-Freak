@@ -7,6 +7,10 @@
       "developmentClient": true,
       "distribution": "internal",
       "channel": "development",
+      "environment": "development",
+      "env": {
+        "APP_VARIANT": "development"
+      },
       "ios": {
         "simulator": false
       }
@@ -15,7 +19,9 @@
       "distribution": "store",
       "developmentClient": false,
       "channel": "preview",
+      "environment": "preview",
       "env": {
+        "APP_VARIANT": "preview",
         "EXPO_PUBLIC_APP_URL": "healthfreak://"
       },
       "ios": {
@@ -27,7 +33,9 @@
     },
     "production": {
       "channel": "production",
+      "environment": "production",
       "env": {
+        "APP_VARIANT": "production",
         "EXPO_PUBLIC_APP_URL": "healthfreak://"
       },
       "ios": {

@@ -105,6 +105,8 @@ async function handleLowConfidenceOCR(
   for (let i = 0; i < Math.min(RETRY_STRATEGIES.length, MAX_RETRIES); i++) {
     const strategy = RETRY_STRATEGIES[i];
     try {
+      const retryStartTime = Date.now();
+      
       onProgress?.(`Low confidence detected, trying ${strategy.description.toLowerCase()}...`);
       
       strategies.push(strategy.name);
@@ -117,6 +119,7 @@ async function handleLowConfidenceOCR(
       
       // Extract text with strategy-specific preprocessing
       const retryResult = await extractTextFromImage(processedImageUri, undefined, strategy.preprocessingOptions);
+      
       
       // Early exit for high confidence results (0.8+)
       if (retryResult.confidence >= 0.8 && !retryResult.error) {
@@ -191,14 +194,14 @@ export async function analyzePhoto(
   onProgress?: (message: string) => void
 ): Promise<PhotoAnalysisResult> {
   try {
-    // Check if OCR is enabled and configured
-    if (!config.ocr.enabled || !config.openai.apiKey) {
+    // Check if OCR is enabled (removed apiKey check since we use Edge Function)
+    if (!config.ocr.enabled) {
       return {
         success: false,
         extractedText: '',
         ingredients: [],
         confidence: 0,
-        error: 'OCR service is not configured. Please set up OpenAI API credentials.',
+        error: 'OCR service is disabled in configuration.',
       };
     }
     onProgress?.('Extracting text from image...');
@@ -292,16 +295,14 @@ export function getOCRStatus(): {
   enabled: boolean;
   message: string;
 } {
-  const configured = !!config.openai.apiKey;
+  const configured = true; // Always true since we use Edge Function
   const enabled = config.ocr.enabled;
 
   let message = '';
   if (!enabled) {
     message = 'OCR is disabled in configuration';
-  } else if (!configured) {
-    message = 'OpenAI API is not configured';
   } else {
-    message = 'OCR service is ready';
+    message = 'OCR service is ready (using secure Edge Function)';
   }
 
   return {
@@ -355,18 +356,13 @@ export async function testOCR(imageUri?: string): Promise<{
       };
     }
 
-    if (!config.openai.apiKey) {
-      return {
-        success: false,
-        message: 'OpenAI API is not configured. Please set up credentials.',
-      };
-    }
+    // Removed - Edge Function handles authentication
 
     // If no image provided, just test configuration
     if (!imageUri) {
       return {
         success: true,
-        message: 'OCR configuration is valid',
+        message: 'OCR configuration is valid (using secure Edge Function)',
       };
     }
 

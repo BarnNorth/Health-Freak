@@ -37,6 +37,8 @@ export async function analyzeIngredients(
   onProgress?: (update: any) => void
 ): Promise<AnalysisResult> {
   
+  const aiStartTime = Date.now();
+  
   // Parse ingredient list from extracted text
   // Use the improved parsing from OCR service
   const parsedIngredients = parseIngredientsFromText(extractedText);
@@ -86,6 +88,7 @@ export async function analyzeIngredients(
   // Wait for database lookup to complete
   const cachedIngredientsMap = await cachedIngredientsPromise;
   
+  
   // Process cached ingredients and collect unknown ones
   for (const ingredient of ingredients) {
     const normalizedIngredient = ingredient.toLowerCase();
@@ -108,6 +111,7 @@ export async function analyzeIngredients(
 
   // Step 2: Analyze unknown ingredients with AI
   if (unknownIngredients.length > 0) {
+    const batchStartTime = Date.now();
     
     const aiStatus = getAIAnalysisStatus();
 
@@ -115,8 +119,11 @@ export async function analyzeIngredients(
       try {
         // Use batch analysis for efficiency
         const batchResult = await analyzeIngredientsBatch(unknownIngredients, userId, isPremium, onProgress);
+        
 
         // Process AI results
+        const cachePromises = []; // Collect caching operations for background processing
+        
         for (const item of batchResult.ingredients) {
           const aiAnalysis = item.analysis;
           const ingredientName = item.name;
@@ -132,39 +139,47 @@ export async function analyzeIngredients(
             minorThreshold: minorInfo?.threshold,
           });
 
-          // Cache the AI result with 180-day expiration (6 months)
-          // Scientific understanding may evolve, so we don't cache forever
-          await cacheIngredientInfo(
-            ingredientName,
-            aiAnalysis.status,
-            aiAnalysis.educational_note,
-            180 // Expires in 6 months
+          // Queue caching operation for background processing (non-blocking)
+          cachePromises.push(
+            cacheIngredientInfo(
+              ingredientName,
+              aiAnalysis.status,
+              aiAnalysis.educational_note,
+              180 // Expires in 6 months
+            ).catch(error => {
+              console.error(`[DATABASE] Failed to cache ${ingredientName}:`, error);
+            })
           );
         }
+
+        // Start background caching (don't await - let it happen in background)
+        Promise.all(cachePromises).catch(err => 
+          console.error('[DATABASE] Background caching error:', err)
+        );
       } catch (error) {
         
-        // Fallback: mark all unknown ingredients as potentially toxic
+        // Fallback: mark all unknown ingredients as unknown status
         for (const ingredient of unknownIngredients) {
           const normalized = ingredient.toLowerCase();
           resultsByName.set(normalized, {
             name: capitalizeIngredientName(ingredient),
-            status: 'potentially_toxic',
-            educational_note: 'Unable to analyze this ingredient with AI. For safety, we recommend caution and consulting with healthcare providers about potential concerns.',
-            basic_note: 'Unknown ingredient - upgrade for detailed analysis',
+            status: 'unknown',
+            educational_note: `${capitalizeIngredientName(ingredient)} - Not analyzed. Please try again.`,
+            basic_note: 'Not analyzed - try scanning again',
             isMinorIngredient: minorIngredientsMap.get(normalized) || false,
           });
         }
       }
     } else {
       
-      // Fallback: mark all unknown ingredients as potentially toxic
+      // Fallback: mark all unknown ingredients as unknown status
       for (const ingredient of unknownIngredients) {
         const normalized = ingredient.toLowerCase();
         resultsByName.set(normalized, {
           name: capitalizeIngredientName(ingredient),
-          status: 'potentially_toxic',
-          educational_note: 'Unable to analyze this ingredient with AI. For safety, we recommend caution and consulting with healthcare providers about potential concerns.',
-          basic_note: 'Unknown ingredient - upgrade for detailed analysis',
+          status: 'unknown',
+          educational_note: `${capitalizeIngredientName(ingredient)} - Not analyzed. Please try again.`,
+          basic_note: 'Not analyzed - try scanning again',
           isMinorIngredient: minorIngredientsMap.get(normalized) || false,
         });
       }
@@ -189,6 +204,7 @@ export async function analyzeIngredients(
   const overallVerdict = toxicCount > 0 ? 'TOXIC' : 'CLEAN';
 
   // Await product identification (started earlier in parallel)
+  const productIdStartTime = Date.now();
   const productIdentification = await productIdentificationPromise;
 
   const finalResult = {

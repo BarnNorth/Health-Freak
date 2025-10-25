@@ -224,7 +224,7 @@ EXPO_PUBLIC_APP_URL=https://yourapp.com
 
 ```bash
 # OpenAI - Production key (handles both AI analysis and OCR)
-EXPO_PUBLIC_OPENAI_API_KEY=sk-proj-your-production-key
+# OpenAI API key is stored in Supabase Edge Function (use: supabase secrets set)
 
 # Supabase - Should already be production
 EXPO_PUBLIC_SUPABASE_URL=your-supabase-url

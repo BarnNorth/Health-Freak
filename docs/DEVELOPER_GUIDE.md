@@ -77,8 +77,10 @@ Complete technical documentation for setting up and developing Health Freak.
 
 2. **Add your API keys to `.env`:**
    ```bash
-   # Required API Keys
-   EXPO_PUBLIC_OPENAI_API_KEY=sk-proj-your-actual-openai-key
+   # OpenAI API Key (Secure - Server-side only)
+   # The OpenAI API key is stored in Supabase Edge Function secrets
+   # Set it using: supabase secrets set OPENAI_API_KEY=sk-proj-your-key
+   # No client-side EXPO_PUBLIC_OPENAI_API_KEY needed
    
    # Database & Auth
    EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co

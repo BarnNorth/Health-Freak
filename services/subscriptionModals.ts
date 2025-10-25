@@ -11,18 +11,55 @@ interface CancelSubscriptionResponse {
 
 export async function cancelSubscription(instant: boolean = false): Promise<CancelSubscriptionResponse> {
   try {
+    // Check if user is authenticated and refresh if needed
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      // Try to refresh the session
+      const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+      
+      if (refreshError || !refreshedSession) {
+        throw new Error('User not authenticated and session refresh failed');
+      }
+      
+      // Use the refreshed session
+      if (!refreshedSession?.access_token) {
+        throw new Error('No valid session token found');
+      }
+      
+      // Use refreshedSession for the API call
+      const { data, error} = await supabase.functions.invoke('stripe-cancel-subscription', {
+        body: { instant: instant && __DEV__ }, // Only allow instant in DEV mode
+        headers: {
+          'Authorization': `Bearer ${refreshedSession.access_token}`
+        }
+      });
+      
+      if (error) {
+        throw error;
+      }
+      
+      return data as CancelSubscriptionResponse;
+    }
+    
+    // Use the original session
+    if (!session?.access_token) {
+      throw new Error('No valid session token found');
+    }
+    
     const { data, error} = await supabase.functions.invoke('stripe-cancel-subscription', {
       body: { instant: instant && __DEV__ }, // Only allow instant in DEV mode
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`
+      }
     });
 
     if (error) {
-      console.error('❌ Error cancelling subscription:', error);
       throw error;
     }
 
     return data as CancelSubscriptionResponse;
   } catch (error: any) {
-    console.error('❌ Failed to cancel subscription:', error);
     throw error;
   }
 }
@@ -56,7 +93,6 @@ export async function showCancelSubscriptionPrompt(): Promise<void> {
               );
             }
           } catch (error) {
-            console.error('❌ Subscription cancellation failed:', error);
             Alert.alert(
               'Cancellation Failed',
               'Unable to cancel your subscription. Please try again or contact support.',
@@ -82,7 +118,7 @@ export async function showPremiumUpgradePrompt(): Promise<void> {
             const { startPremiumSubscription } = require('./stripe');
             await startPremiumSubscription();
           } catch (error) {
-            console.error('Failed to start subscription:', error);
+            // Handle subscription start error
           }
         }
       }
@@ -107,7 +143,7 @@ export async function showScanLimitReachedModal(): Promise<void> {
             const { startPremiumSubscription } = require('./stripe');
             await startPremiumSubscription();
           } catch (error) {
-            console.error('Failed to start subscription:', error);
+            // Handle subscription start error
           }
         }
       }

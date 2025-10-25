@@ -29,7 +29,7 @@ EXPO_PUBLIC_APP_URL=exp://localhost:8081
 All API keys are now in environment variables (never in code):
 ```bash
 # Required in .env file:
-EXPO_PUBLIC_OPENAI_API_KEY=sk-your-test-key-here
+# OpenAI API key is stored in Supabase Edge Function secrets
 EXPO_PUBLIC_SUPABASE_URL=your-supabase-url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-key
 ```
