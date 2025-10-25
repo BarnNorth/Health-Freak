@@ -3,6 +3,11 @@ import Stripe from 'npm:stripe@17.7.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+// Allowed Stripe Price IDs - whitelist for security
+const ALLOWED_PRICE_IDS = [
+  'price_1S5GO7APP9PA4b0C3pBw2yvN', // Premium subscription
+];
+
 const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')!;
 const stripe = new Stripe(stripeSecret, {
   appInfo: {
@@ -59,6 +64,12 @@ Deno.serve(async (req) => {
       return corsResponse({ error }, 400);
     }
 
+    // Validate price ID against whitelist
+    if (!ALLOWED_PRICE_IDS.includes(price_id)) {
+      console.warn(`⚠️ Invalid price ID attempted: ${price_id} by user ${user?.id}`);
+      return corsResponse({ error: 'Invalid product selected' }, 400);
+    }
+
     const authHeader = req.headers.get('Authorization')!;
     const token = authHeader.replace('Bearer ', '');
     const {
@@ -84,7 +95,7 @@ Deno.serve(async (req) => {
     if (getCustomerError) {
       console.error('Failed to fetch customer information from the database', getCustomerError);
 
-      return corsResponse({ error: 'Failed to fetch customer information' }, 500);
+      return corsResponse({ error: 'Unable to process request. Please try again.' }, 500);
     }
 
     let customerId;
@@ -118,7 +129,7 @@ Deno.serve(async (req) => {
           console.error('Failed to clean up after customer mapping error:', deleteError);
         }
 
-        return corsResponse({ error: 'Failed to create customer mapping' }, 500);
+        return corsResponse({ error: 'Unable to process request. Please try again.' }, 500);
       }
 
       if (mode === 'subscription') {
@@ -137,7 +148,7 @@ Deno.serve(async (req) => {
             console.error('Failed to delete Stripe customer after subscription creation error:', deleteError);
           }
 
-          return corsResponse({ error: 'Unable to save the subscription in the database' }, 500);
+          return corsResponse({ error: 'Unable to process request. Please try again.' }, 500);
         }
       }
 
@@ -158,7 +169,7 @@ Deno.serve(async (req) => {
         if (getSubscriptionError) {
           console.error('Failed to fetch subscription information from the database', getSubscriptionError);
 
-          return corsResponse({ error: 'Failed to fetch subscription information' }, 500);
+          return corsResponse({ error: 'Unable to process request. Please try again.' }, 500);
         }
 
         if (!subscription) {
@@ -171,7 +182,7 @@ Deno.serve(async (req) => {
           if (createSubscriptionError) {
             console.error('Failed to create subscription record for existing customer', createSubscriptionError);
 
-            return corsResponse({ error: 'Failed to create subscription record for existing customer' }, 500);
+            return corsResponse({ error: 'Unable to process request. Please try again.' }, 500);
           }
         }
       }
@@ -196,8 +207,8 @@ Deno.serve(async (req) => {
 
     return corsResponse({ sessionId: session.id, url: session.url });
   } catch (error: any) {
-    console.error(`Checkout error: ${error.message}`);
-    return corsResponse({ error: error.message }, 500);
+    console.error(`Checkout error:`, error.message, error.stack);
+    return corsResponse({ error: 'An error occurred processing your request. Please try again.' }, 500);
   }
 });
 

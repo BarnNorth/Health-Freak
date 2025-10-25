@@ -193,8 +193,7 @@ Deno.serve(async (req) => {
       console.error('Stripe API error:', stripeError);
       return Response.json({ 
         success: false,
-        error: 'Failed to cancel subscription',
-        details: stripeError.message
+        error: 'Unable to cancel subscription. Please try again or contact support.'
       }, { status: 500 });
     }
 
@@ -202,8 +201,7 @@ Deno.serve(async (req) => {
     console.error('Edge function error:', error);
     return Response.json({ 
       success: false,
-      error: 'Internal server error',
-      details: error.message
+      error: 'An error occurred. Please try again or contact support.'
     }, { status: 500 });
   }
 });
