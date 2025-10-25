@@ -1,7 +1,8 @@
-import React, { useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Alert, TouchableWithoutFeedback } from 'react-native';
+import React, { useRef, useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Alert, TouchableWithoutFeedback, Platform } from 'react-native';
 import { User, Crown, FileText, Shield, LogOut, CreditCard, RefreshCw } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
+import Purchases from 'react-native-purchases';
 import { useAuth } from '@/contexts/AuthContext';
 import { showCancelSubscriptionPrompt } from '@/services/subscriptionModals';
 import { getPaymentMethod } from '@/lib/database';
@@ -33,6 +34,30 @@ export default function ProfileScreen() {
       }
     }, [user?.id, initializing])
   );
+
+  // Listen for RevenueCat subscription updates (real-time UI refresh)
+  useEffect(() => {
+    // Only set up listener on iOS where RevenueCat is available
+    if (Platform.OS !== 'ios' || !user?.id) return;
+
+    console.log('🔔 [Profile] Setting up RevenueCat customer info listener');
+
+    // This listener fires whenever RevenueCat syncs with Apple servers
+    const customerInfoListener = Purchases.addCustomerInfoUpdateListener((customerInfo) => {
+      console.log('🔔 [Profile] RevenueCat customer info updated from Apple');
+      console.log('📊 [Profile] Active subscriptions:', customerInfo.activeSubscriptions);
+      console.log('📊 [Profile] Active entitlements:', Object.keys(customerInfo.entitlements.active));
+      
+      // Reload subscription info to update UI
+      loadSubscriptionInfo();
+    });
+
+    // Cleanup listener when component unmounts or user changes
+    return () => {
+      console.log('🧹 [Profile] Cleaning up RevenueCat listener');
+      customerInfoListener.remove();
+    };
+  }, [user?.id]);
 
   // Load subscription information using unified service
   const loadSubscriptionInfo = async () => {
