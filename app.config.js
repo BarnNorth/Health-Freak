@@ -13,7 +13,7 @@ export default {
       bundleIdentifier: process.env.APP_VARIANT === 'development' 
         ? 'com.tommymulder.healthfreak' 
         : 'com.healthfreak.app',
-      buildNumber: "7",
+      buildNumber: "8",
       supportsTablet: true,
       associatedDomains: [
         "applinks:vuiaqdkbpkbcvyrzpmzv.supabase.co"
