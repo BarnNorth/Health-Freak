@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Platform,
+  Linking,
 } from 'react-native';
 import Svg, { Path, Rect, Polygon } from 'react-native-svg';
 import { X, CreditCard } from 'lucide-react-native';
@@ -231,6 +232,22 @@ export function PaymentMethodModal({ visible, onClose, onSuccess }: PaymentMetho
           {/* Footer */}
           <View style={styles.footer}>
             <Text style={styles.priceText}>$10/month • Cancel anytime</Text>
+            
+            {/* Legal Links - Required for Apple App Store Compliance */}
+            <View style={styles.legalLinks}>
+              <Text style={styles.legalText}>By subscribing, you agree to our </Text>
+              <TouchableOpacity 
+                onPress={() => Linking.openURL('https://barnnorth.github.io/healthfreak-legal/terms.html')}
+              >
+                <Text style={styles.linkText}>Terms of Service</Text>
+              </TouchableOpacity>
+              <Text style={styles.legalText}> and </Text>
+              <TouchableOpacity 
+                onPress={() => Linking.openURL('https://barnnorth.github.io/healthfreak-legal/privacy.html')}
+              >
+                <Text style={styles.linkText}>Privacy Policy</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
@@ -368,6 +385,28 @@ const styles = StyleSheet.create({
   },
   stripeBadge: {
     opacity: 0.9,
+  },
+  legalLinks: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingHorizontal: 20,
+  },
+  legalText: {
+    fontFamily: FONTS.terminalGrotesque,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  linkText: {
+    fontFamily: FONTS.terminalGrotesque,
+    fontSize: 11,
+    color: COLORS.cleanGreen,
+    textDecorationLine: 'underline',
+    lineHeight: 16,
   },
 });
 

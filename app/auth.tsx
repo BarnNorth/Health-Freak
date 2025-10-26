@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, Alert, ScrollView, KeyboardAvoidingView, Platform, Linking } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { User, Mail, Lock } from 'lucide-react-native';
+import { User, Mail, Lock, Eye, EyeOff } from 'lucide-react-native';
 import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
 
@@ -11,6 +11,8 @@ export default function AuthScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { signIn, signUp, loading } = useAuth();
   const { error } = useLocalSearchParams();
 
@@ -110,9 +112,16 @@ export default function AuthScreen() {
               placeholderTextColor={COLORS.textSecondary}
               value={password}
               onChangeText={setPassword}
-              secureTextEntry
+              secureTextEntry={!showPassword}
               autoCapitalize="none"
             />
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.toggleButton}>
+              {showPassword ? (
+                <EyeOff size={20} color={COLORS.textSecondary} />
+              ) : (
+                <Eye size={20} color={COLORS.textSecondary} />
+              )}
+            </TouchableOpacity>
           </View>
 
           {isSignUp && (
@@ -124,9 +133,16 @@ export default function AuthScreen() {
                 placeholderTextColor={COLORS.textSecondary}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
-                secureTextEntry
+                secureTextEntry={!showConfirmPassword}
                 autoCapitalize="none"
               />
+              <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.toggleButton}>
+                {showConfirmPassword ? (
+                  <EyeOff size={20} color={COLORS.textSecondary} />
+                ) : (
+                  <Eye size={20} color={COLORS.textSecondary} />
+                )}
+              </TouchableOpacity>
             </View>
           )}
 
@@ -254,6 +270,9 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     marginLeft: 12,
     fontFamily: FONTS.terminalGrotesque,
+  },
+  toggleButton: {
+    padding: 4,
   },
   authButton: {
     backgroundColor: COLORS.cleanGreen,
