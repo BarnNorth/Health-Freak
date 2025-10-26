@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Alert, TouchableWithoutFeedback, Platform } from 'react-native';
-import { User, Crown, FileText, Shield, LogOut, CreditCard, RefreshCw } from 'lucide-react-native';
+import { User, Crown, FileText, Shield, LogOut, CreditCard, RefreshCw, Film } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 import Purchases from 'react-native-purchases';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,6 +10,9 @@ import { PaymentMethodModal } from '@/components/PaymentMethodModal';
 import { getSubscriptionInfo, isPremiumActive, SubscriptionInfo } from '@/services/subscription';
 import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
+import { resetIntroLocally } from '@/services/introStorage';
+import { supabase } from '@/lib/supabase';
+import { triggerIntro } from '@/services/introTrigger';
 
 export default function ProfileScreen() {
   const { user, signOut, initializing, refreshUserProfile } = useAuth();
@@ -135,6 +138,29 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleReplayIntro = async () => {
+    try {
+      if (!user?.id) return;
+      
+      // Reset database flag
+      const { error } = await supabase
+        .from('users')
+        .update({ onboarding_completed: false })
+        .eq('id', user.id);
+      
+      if (error) throw error;
+      
+      // Reset local cache
+      await resetIntroLocally();
+      
+      // Trigger intro immediately
+      triggerIntro();
+    } catch (error) {
+      console.error('Error resetting intro:', error);
+      Alert.alert('Error', 'Failed to reset intro. Please try again.');
+    }
+  };
+
   const handleSignOut = () => {
     Alert.alert(
       'Sign Out',
@@ -231,6 +257,12 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/privacy')}>
             <Shield size={20} color={COLORS.textSecondary} />
             <Text style={styles.menuText}>Privacy Policy</Text>
+            <Text style={styles.menuArrow}>›</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.menuItem} onPress={handleReplayIntro}>
+            <Film size={20} color={COLORS.textSecondary} />
+            <Text style={styles.menuText}>Replay Intro Story</Text>
             <Text style={styles.menuArrow}>›</Text>
           </TouchableOpacity>
         </View>

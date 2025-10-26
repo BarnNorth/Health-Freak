@@ -57,8 +57,11 @@ export default function AuthCallbackScreen() {
           const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
           console.log(`✅ Auth completed in ${totalTime}s`);
           
-          await new Promise(resolve => setTimeout(resolve, 500));
-          router.replace('/(tabs)');
+          // Small delay to ensure session is fully established
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Navigate to auth group to trigger layout's navigation logic
+          router.replace('/auth');
           return;
         }
       }
@@ -79,8 +82,11 @@ export default function AuthCallbackScreen() {
           const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
           console.log(`✅ Auth completed in ${totalTime}s`);
           
-          await new Promise(resolve => setTimeout(resolve, 500));
-          router.replace('/(tabs)');
+          // Small delay to ensure session is fully established
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Navigate to auth group to trigger layout's navigation logic
+          router.replace('/auth');
           return;
         }
       }
@@ -97,8 +103,12 @@ export default function AuthCallbackScreen() {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
       console.log('✅ Session already exists');
-      await new Promise(resolve => setTimeout(resolve, 500));
-      router.replace('/(tabs)');
+      
+      // Small delay to ensure session is fully established
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Navigate to auth group to trigger layout's navigation logic
+      router.replace('/auth');
       return;
     }
     

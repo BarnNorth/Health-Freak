@@ -1,5 +1,5 @@
 /**
- * Stardew Valley-Inspired Pixel Art Color Palette
+ * Pixel Art Color Palette
  * 
  * A fun, vibrant color scheme inspired by farm games and nature.
  * Used consistently throughout the entire app for a cohesive pixel art aesthetic.

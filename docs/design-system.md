@@ -1,7 +1,5 @@
 # Health Freak Design System
 
-> A Stardew Valley-inspired pixel art design system for the Health Freak app
-
 ---
 
 ## 🎨 Colors
@@ -464,7 +462,7 @@ import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
 
 ### Version 1.0.0
 - Initial design system implementation
-- Stardew Valley-inspired pixel art theme
+- Pixel art theme
 - Forest green and farm color palette
 - Dual-font typography system
 - Complete app-wide consistency

@@ -57,6 +57,7 @@ export async function createUserProfile(userId: string, email: string): Promise<
         email,
         subscription_status: 'free',
         total_scans_used: 0,
+        onboarding_completed: false,
       })
       .select()
       .single();
@@ -528,6 +529,23 @@ export async function checkUserLimits(userId: string): Promise<{
 }
 
 // Database connection test
+export async function markOnboardingComplete(userId: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('users')
+      .update({ onboarding_completed: true })
+      .eq('id', userId);
+      
+    if (error) {
+      console.error('Error marking onboarding complete:', error);
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error marking onboarding complete:', error);
+    throw error;
+  }
+}
+
 export async function testDatabaseConnection(): Promise<{
   connected: boolean;
   tablesExist: boolean;

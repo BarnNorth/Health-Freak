@@ -12,6 +12,7 @@ interface User {
   stripe_subscription_id?: string;
   created_at: string;
   updated_at: string;
+  onboarding_completed?: boolean;
 }
 
 interface AuthContextType {

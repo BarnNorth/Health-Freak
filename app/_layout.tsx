@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts as useCustomFonts } from 'expo-font';
@@ -10,6 +10,10 @@ import { View, ActivityIndicator } from 'react-native';
 import { configureRevenueCat, restorePurchases, logEnvironmentInfo } from '@/services/revenueCat';
 import { isPremiumActive } from '@/services/subscription';
 import { Platform } from 'react-native';
+import { IntroStory } from '@/components/IntroStory';
+import { markOnboardingComplete } from '@/lib/database';
+import { hasSeenIntroLocally, markIntroAsSeenLocally, resetIntroLocally } from '@/services/introStorage';
+import { registerIntroTrigger, unregisterIntroTrigger } from '@/services/introTrigger';
 
 function RootLayoutNav() {
   const { user, initializing } = useAuth();
@@ -17,6 +21,31 @@ function RootLayoutNav() {
   const router = useRouter();
   const revenueCatInitialized = useRef(false);
   const subscriptionRestored = useRef(false);
+  const [showIntro, setShowIntro] = useState(false);
+  const introChecked = useRef(false);
+  const isReplayMode = useRef(false);
+
+  // Register intro trigger so it can be called from anywhere
+  useEffect(() => {
+    const handleTrigger = async () => {
+      // Reset local cache
+      await resetIntroLocally();
+      // Reset the checked flag so intro can show again
+      introChecked.current = false;
+      // Mark as replay mode so completion doesn't mark onboarding as done
+      isReplayMode.current = true;
+      // Small delay to ensure state is ready
+      setTimeout(() => {
+        setShowIntro(true);
+      }, 100);
+    };
+
+    registerIntroTrigger(handleTrigger);
+    
+    return () => {
+      unregisterIntroTrigger();
+    };
+  }, []);
 
   // Initialize RevenueCat when user is authenticated
   useEffect(() => {
@@ -83,14 +112,97 @@ function RootLayoutNav() {
     restoreSubscription();
   }, [user, initializing, revenueCatInitialized.current]);
 
+  // Check if user needs to see intro (first time after signup + email confirmation)
+  useEffect(() => {
+    if (initializing || !user || introChecked.current) {
+      return;
+    }
+
+    const checkIntroStatus = async () => {
+      try {
+        // First check AsyncStorage for fast response
+        const seenLocally = await hasSeenIntroLocally();
+        
+        if (seenLocally) {
+          introChecked.current = true;
+          return;
+        }
+        
+        // Check database for authoritative status
+        // Show intro if onboarding NOT completed
+        const needsIntro = user.onboarding_completed === false;
+        
+        if (needsIntro) {
+          console.log('[LAYOUT] New user detected - showing intro');
+          setShowIntro(true);
+        } else {
+          // Mark as seen locally to avoid future checks
+          await markIntroAsSeenLocally();
+        }
+        
+        introChecked.current = true;
+      } catch (error) {
+        console.error('[LAYOUT] Error checking intro status:', error);
+        introChecked.current = true;
+      }
+    };
+
+    checkIntroStatus();
+  }, [user, initializing]);
+
+  const handleIntroComplete = async () => {
+    try {
+      // Mark that intro check has been completed to prevent re-checking
+      introChecked.current = true;
+      
+      // Only mark onboarding complete if this is the first time (not replay mode)
+      if (user?.id && !isReplayMode.current) {
+        // Mark in database (authoritative)
+        await markOnboardingComplete(user.id);
+        
+        // Mark in AsyncStorage (cache)
+        await markIntroAsSeenLocally();
+        
+        // Refresh user profile to get updated onboarding_completed status
+        // This is handled by AuthContext's real-time subscription
+      } else if (isReplayMode.current) {
+        // In replay mode, just mark as seen locally so it doesn't auto-show again
+        await markIntroAsSeenLocally();
+      }
+    } catch (error) {
+      console.error('[LAYOUT] Error marking intro complete:', error);
+    } finally {
+      // Reset replay mode flag
+      isReplayMode.current = false;
+      // Hide intro first
+      setShowIntro(false);
+      // Small delay to ensure intro is hidden before navigation
+      setTimeout(() => {
+        // Navigate to camera screen (main tab)
+        router.replace('/(tabs)');
+      }, 100);
+    }
+  };
+
   useEffect(() => {
     if (initializing) return;
+
+    // CRITICAL: Wait for intro check to complete before any navigation
+    if (!introChecked.current) {
+      console.log('[LAYOUT] Waiting for intro check to complete before navigation');
+      return;
+    }
+
+    // CRITICAL: Don't redirect if intro is showing
+    if (showIntro) {
+      console.log('[LAYOUT] Intro is showing - blocking all navigation redirects');
+      return;
+    }
 
     const inAuthGroup = segments[0] === 'auth' || segments[0] === 'email-confirmation';
     const inCallbackGroup = segments[0] === 'auth' && segments[1] === 'callback';
 
     // IMPORTANT: Allow callback route to complete its authentication flow
-    // The callback handler will navigate to the correct screen after establishing the session
     if (inCallbackGroup) {
       console.log('[LAYOUT] In callback route - skipping automatic redirects');
       return;
@@ -98,15 +210,13 @@ function RootLayoutNav() {
 
     // Redirect logic for non-callback routes
     if (!user && !inAuthGroup) {
-      // Redirect to auth if not authenticated
       console.log('[LAYOUT] No user, not in auth group - redirecting to /auth');
       router.replace('/auth');
     } else if (user && inAuthGroup) {
-      // Redirect to main app if authenticated
       console.log('[LAYOUT] User authenticated, in auth group - redirecting to /(tabs)');
       router.replace('/(tabs)');
     }
-  }, [user, initializing, segments]);
+  }, [user, initializing, segments, showIntro]);
 
   // Show loading spinner while initializing
   if (initializing) {
@@ -118,17 +228,25 @@ function RootLayoutNav() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="auth" options={{ headerShown: false }} />
-      <Stack.Screen name="email-confirmation" options={{ headerShown: false }} />
-      <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
-      <Stack.Screen name="results" options={{ headerShown: false }} />
-      <Stack.Screen name="terms" options={{ headerShown: false }} />
-      <Stack.Screen name="subscription-success" options={{ headerShown: false }} />
-      <Stack.Screen name="subscription-cancel" options={{ headerShown: false }} />
-      <Stack.Screen name="+not-found" />
-    </Stack>
+    <>
+      {showIntro && (
+        <IntroStory 
+          visible={showIntro} 
+          onComplete={handleIntroComplete} 
+        />
+      )}
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="auth" options={{ headerShown: false }} />
+        <Stack.Screen name="email-confirmation" options={{ headerShown: false }} />
+        <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
+        <Stack.Screen name="results" options={{ headerShown: false }} />
+        <Stack.Screen name="terms" options={{ headerShown: false }} />
+        <Stack.Screen name="subscription-success" options={{ headerShown: false }} />
+        <Stack.Screen name="subscription-cancel" options={{ headerShown: false }} />
+        <Stack.Screen name="+not-found" />
+      </Stack>
+    </>
   );
 }
 

@@ -1,5 +1,5 @@
 /**
- * Stardew Valley-Inspired Typography System
+ * Typography System
  * 
  * A consistent typography hierarchy for the entire app:
  * - Headers/Titles: Karma Future (custom font)
