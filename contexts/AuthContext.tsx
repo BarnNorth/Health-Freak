@@ -278,19 +278,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     setLoading(true);
     try {
+      // Clear user state first to prevent race conditions with UI updates
+      setUser(null);
+      
+      // Small delay to let React Native finish pending UI updates
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const { error } = await supabase.auth.signOut();
       
       if (error) {
         console.error('[AUTH] Sign out error:', error);
-        throw error;
+        // Don't throw - user state is already cleared
       }
-      
-      setUser(null);
       
     } catch (error) {
       console.error('[AUTH] Error signing out:', error);
-      // Even if Supabase call fails, clear the local user state
-      setUser(null);
+      // User state already cleared above
     } finally {
       setLoading(false);
     }

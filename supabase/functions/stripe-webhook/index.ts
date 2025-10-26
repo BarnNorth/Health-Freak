@@ -1,5 +1,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
+// @ts-ignore - Deno npm: imports are valid but not recognized by TypeScript linter
 import Stripe from 'npm:stripe@17.7.0';
+// @ts-ignore - Deno npm: imports are valid but not recognized by TypeScript linter
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 
 // Deno and Edge Runtime types

@@ -55,7 +55,9 @@ export default function ProfileScreen() {
     // Cleanup listener when component unmounts or user changes
     return () => {
       console.log('🧹 [Profile] Cleaning up RevenueCat listener');
-      customerInfoListener.remove();
+      if (customerInfoListener && typeof customerInfoListener.remove === 'function') {
+        customerInfoListener.remove();
+      }
     };
   }, [user?.id]);
 
@@ -233,16 +235,6 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Legal Disclaimer */}
-        <View style={styles.legalDisclaimer}>
-          <Text style={styles.legalTitle}>Important Legal Notice</Text>
-          <Text style={styles.legalText}>
-            This app provides educational information only. It is not intended as medical, 
-            health, or nutritional advice. Always consult qualified healthcare professionals 
-            for dietary decisions and health concerns.
-          </Text>
-        </View>
-
         {/* Sign Out */}
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
           <LogOut size={20} color={COLORS.toxicRed} />
@@ -256,8 +248,7 @@ export default function ProfileScreen() {
         >
           <View style={styles.versionContainer}>
             <Text style={styles.versionText}>
-              Health Freak v1.0.0{'\n'}
-              Educational purposes only
+              Health Freak v1.0.0
             </Text>
           </View>
         </TouchableWithoutFeedback>

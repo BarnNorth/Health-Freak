@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, Alert, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, Alert, ScrollView, KeyboardAvoidingView, Platform, Linking } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { User, Mail, Lock } from 'lucide-react-native';
@@ -7,7 +7,7 @@ import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
 
 export default function AuthScreen() {
-  const [isSignUp, setIsSignUp] = useState(true); // Default to sign up
+  const [isSignUp, setIsSignUp] = useState(false); // Default to sign in
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -150,14 +150,27 @@ export default function AuthScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.disclaimer}>
-          <Text style={styles.disclaimerText}>
-            {isSignUp 
-              ? 'By creating an account, you agree to our Terms. For educational purposes only.'
-              : 'For educational purposes only. Not medical advice.'
-            }
-          </Text>
-        </View>
+        {isSignUp && (
+          <View style={styles.disclaimer}>
+            <Text style={styles.disclaimerText}>
+              By creating an account, you agree to our{' '}
+              <Text 
+                style={styles.linkText}
+                onPress={() => Linking.openURL('https://barnnorth.github.io/healthfreak-legal/terms.html')}
+              >
+                Terms of Service
+              </Text>
+              {' '}and{' '}
+              <Text 
+                style={styles.linkText}
+                onPress={() => Linking.openURL('https://barnnorth.github.io/healthfreak-legal/privacy.html')}
+              >
+                Privacy Policy
+              </Text>
+              . This app is for educational purposes only.
+            </Text>
+          </View>
+        )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -282,6 +295,13 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.bodySmall,
     color: COLORS.textPrimary,
     textAlign: 'center',
+    lineHeight: LINE_HEIGHTS.bodySmall,
+    fontFamily: FONTS.terminalGrotesque,
+  },
+  linkText: {
+    fontSize: FONT_SIZES.bodySmall,
+    color: COLORS.cleanGreen,
+    textDecorationLine: 'underline',
     lineHeight: LINE_HEIGHTS.bodySmall,
     fontFamily: FONTS.terminalGrotesque,
   },

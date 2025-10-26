@@ -11,7 +11,7 @@ export default {
     newArchEnabled: true,
     ios: {
       bundleIdentifier: 'com.healthfreak.app',
-      buildNumber: "8",
+      buildNumber: "9",
       supportsTablet: true,
       associatedDomains: [
         "applinks:vuiaqdkbpkbcvyrzpmzv.supabase.co"

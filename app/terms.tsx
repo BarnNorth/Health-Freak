@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Linking } from 'react-native';
 import { ArrowLeft, TriangleAlert as AlertTriangle } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { COLORS } from '@/constants/colors';
@@ -65,11 +65,18 @@ export default function TermsScreen() {
 
           <Text style={styles.sectionTitle}>5. Subscription Terms</Text>
           <Text style={styles.sectionText}>
-            Free users receive 10 analyses total with full ingredient analysis. Premium subscription ($10/month) provides:
+            Free Tier (No payment required):
+            {'\n'}• 10 total scans (lifetime limit)
+            {'\n'}• Full ingredient analysis for all scans
+            {'\n'}• Complete toxicity assessment
+            {'\n'}• Scan history saved and accessible
+            {'\n'}• All premium features during your 10 scans
+            {'\n\n'}Premium Subscription ($10/month):
             {'\n'}• Unlimited analyses
             {'\n'}• Complete analysis history
             {'\n'}• Priority support
             {'\n'}• Ad-free experience
+            {'\n\n'}Payment Methods: You may choose to pay via Apple In-App Purchase (managed through your Apple ID) or Credit/Debit Card via Stripe (managed in-app). Switching between payment methods requires canceling your current subscription and creating a new one with your preferred method. This may result in a brief lapse in service.
             {'\n\n'}Subscriptions auto-renew monthly unless cancelled. Cancel anytime in your account settings.
           </Text>
 
@@ -85,8 +92,16 @@ export default function TermsScreen() {
             Premium subscriptions are billed monthly at $10. You may cancel your subscription at any time 
             through your account settings, and you will retain premium access until the end of your current 
             billing period.
-            {'\n\n'}Refund requests must be submitted to support@healthfreak.io within 7 days of purchase. Approved refunds will be processed within 5-10 business days and issued to your original payment method. Prorated refunds are not available for partial months of service.
-            {'\n\n'}Important: Subscriptions purchased through the Apple App Store or Google Play Store are subject to their respective refund policies. You may also request refunds directly through Apple or Google using their standard refund request processes.
+            {'\n\n'}For Stripe Subscriptions (Credit/Debit Card):
+            {'\n'}• Refund requests must be submitted to support@healthfreak.io within 7 days of purchase
+            {'\n'}• Approved refunds will be processed within 5-10 business days
+            {'\n'}• Refunds issued to your original payment method
+            {'\n'}• Prorated refunds are not available for partial months of service
+            {'\n\n'}For Apple In-App Purchases:
+            {'\n'}• All refund requests must be made directly through Apple
+            {'\n'}• Request refunds via reportaproblem.apple.com or through iPhone Settings → Apple ID → Subscriptions
+            {'\n'}• Refund eligibility is determined by Apple's refund policy
+            {'\n'}• We cannot process refunds for Apple IAP subscriptions directly
           </Text>
 
           <Text style={styles.sectionTitle}>8. Disclaimers and Limitations</Text>
@@ -98,30 +113,53 @@ export default function TermsScreen() {
             {'\n'}• Technical issues or service interruptions
           </Text>
 
-          <Text style={styles.sectionTitle}>9. Acceptance of Terms</Text>
+          <Text style={styles.sectionTitle}>9. Service Modifications</Text>
+          <Text style={styles.sectionText}>
+            We may modify or discontinue features of this app:
+            {'\n'}• Minor changes: No notice required
+            {'\n'}• Major changes affecting core functionality: 30 days notice via email
+            {'\n'}• Service discontinuation: 60 days notice
+            {'\n\n'}Continued use after changes constitutes acceptance of those changes.
+          </Text>
+
+          <Text style={styles.sectionTitle}>10. Acceptance of Terms</Text>
           <Text style={styles.sectionText}>
             Continued use of this app constitutes acceptance of these terms. We may update these 
             terms periodically, and continued use implies acceptance of any changes.
           </Text>
 
-          <Text style={styles.sectionTitle}>10. Dispute Resolution and Governing Law</Text>
+          <Text style={styles.sectionTitle}>11. Dispute Resolution and Governing Law</Text>
           <Text style={styles.sectionText}>
             These Terms of Service are governed by and construed in accordance with the laws of the State of California, without regard to conflict of law principles. Any disputes arising from or relating to these terms or your use of this app shall be resolved through binding arbitration conducted in California in accordance with the rules of the American Arbitration Association.
+            {'\n\n'}Arbitration costs will be shared as follows:
+            {'\n'}• You pay AAA's initial filing fee (currently $200-$300)
+            {'\n'}• We pay remaining arbitration costs
+            {'\n'}• Each party pays own attorney fees unless arbiter rules otherwise
             {'\n\n'}By using this app, you waive your right to participate in class action lawsuits or class-wide arbitration. Each party may bring claims against the other only in an individual capacity.
-            {'\n\n'}Exception: Either party may bring a claim in small claims court in California for disputes that qualify for small claims jurisdiction.
+            {'\n\n'}Small Claims Exception: Either party may bring a claim in small claims court in California for disputes qualifying under California small claims jurisdiction (currently claims under $12,500).
           </Text>
 
-          <Text style={styles.sectionTitle}>11. Contact Information</Text>
+          <Text style={styles.sectionTitle}>12. Contact Information</Text>
           <Text style={styles.sectionText}>
-            Questions about these terms? Contact us at support@healthfreak.io
+            For questions about these terms:
+            {'\n'}• Email: support@healthfreak.io
+            {'\n'}• Subject line: "Terms of Service Inquiry"
+            {'\n\n'}We will respond to your inquiry within 5 business days.
           </Text>
         </View>
 
         {/* Bottom Notice */}
         <View style={styles.bottomNotice}>
           <Text style={styles.bottomNoticeText}>
-            Last updated: October 18, 2025
-            {'\n\n'}Remember: This app provides educational information only. 
+            Last updated: October 26, 2025
+            {'\n'}Effective Date: October 26, 2025
+            {'\n\n'}Full Terms of Service available at:
+          </Text>
+          <TouchableOpacity onPress={() => Linking.openURL('https://barnnorth.github.io/healthfreak-legal/terms.html')}>
+            <Text style={styles.linkText}>https://barnnorth.github.io/healthfreak-legal/terms.html</Text>
+          </TouchableOpacity>
+          <Text style={styles.bottomNoticeText}>
+            {'\n'}Remember: This app provides educational information only. 
             Always consult healthcare professionals for dietary and health decisions.
           </Text>
         </View>
@@ -217,6 +255,14 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.bodySmall,
     color: COLORS.textSecondary,
     textAlign: 'center',
+    lineHeight: LINE_HEIGHTS.bodySmall,
+    fontFamily: FONTS.terminalGrotesque,
+  },
+  linkText: {
+    fontSize: FONT_SIZES.bodySmall,
+    color: COLORS.cleanGreen,
+    textAlign: 'center',
+    textDecorationLine: 'underline',
     lineHeight: LINE_HEIGHTS.bodySmall,
     fontFamily: FONTS.terminalGrotesque,
   },

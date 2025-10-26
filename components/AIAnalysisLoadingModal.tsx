@@ -303,6 +303,12 @@ export function AIAnalysisLoadingModal({ visible, thoughts, progress, ingredient
 
   // Show summary after completion (only if we have actual thoughts)
   useEffect(() => {
+    // Reset summary if not complete
+    if (!isComplete) {
+      setShowSummary(false);
+      return;
+    }
+    
     if (isComplete && !showSummary && thoughts.length > 1 && visible) {
       const toxic = thoughts.filter(t => t.isToxic).length;
       const clean = ingredientCount - toxic;
@@ -314,7 +320,7 @@ export function AIAnalysisLoadingModal({ visible, thoughts, progress, ingredient
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       }
     }
-  }, [isComplete, visible, thoughts.length]);
+  }, [isComplete, visible, thoughts.length, hasToxicIngredients, ingredientCount]);
 
 
   // Context-aware emoji display
