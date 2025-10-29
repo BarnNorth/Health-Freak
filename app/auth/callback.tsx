@@ -35,14 +35,19 @@ export default function AuthCallbackScreen() {
     try {
       const startTime = Date.now();
       
-      // Validate we received a universal link
-      if (!url.includes('healthfreak.io')) {
-        console.warn('[CALLBACK] ⚠️ Received non-universal link:', url);
+      // Accept both universal links and deep links
+      const isUniversalLink = url.includes('healthfreak.io');
+      const isDeepLink = url.startsWith('healthfreak://');
+      
+      if (!isUniversalLink && !isDeepLink) {
+        console.warn('[CALLBACK] ⚠️ Received invalid link:', url);
         setError('Invalid authentication link format');
         return;
       }
       
-      console.log('[CALLBACK] Processing universal link:', url);
+      console.log('[CALLBACK] Processing auth URL');
+      console.log('[CALLBACK] Type:', isUniversalLink ? 'Universal Link' : 'Deep Link');
+      console.log('[CALLBACK] URL:', url);
       
       const { params, errorCode } = QueryParams.getQueryParams(url);
       

@@ -8,6 +8,7 @@ export default {
     icon: "./assets/AppIcons v2/appstore.png",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
+    scheme: "healthfreak",
     ios: {
       bundleIdentifier: 'com.healthfreak.app',
       buildNumber: "10",

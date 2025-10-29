@@ -50,20 +50,21 @@ AppState.addEventListener('change', (state) => {
   }
 });
 
-// Set up universal link handling for Supabase auth
+// Set up link handling for Supabase auth (supports both universal links and deep links)
 Linking.addEventListener('url', async ({ url }) => {
   if (__DEV__) {
-    console.log('🔗 [SUPABASE] Universal link received:', url);
+    console.log('🔗 [SUPABASE] URL received:', url);
   }
   
-  // Only handle healthfreak.io URLs
-  if (url.includes('healthfreak.io')) {
+  // Handle both universal links (https://) and deep links (healthfreak://)
+  if (url.includes('healthfreak.io') || url.startsWith('healthfreak://')) {
     if (__DEV__) {
-      console.log('🔐 [SUPABASE] Auth URL detected, letting Supabase handle it');
+      console.log('🔐 [SUPABASE] Auth URL detected');
+      console.log('   Type:', url.includes('healthfreak.io') ? 'Universal Link' : 'Deep Link');
     }
     // Supabase's detectSessionInUrl will handle this automatically
   } else if (__DEV__) {
-    console.warn('⚠️ [SUPABASE] Received non-universal link (should not happen):', url);
+    console.log('ℹ️ [SUPABASE] Non-auth URL received:', url);
   }
 });
 
