@@ -117,11 +117,7 @@ function RootLayoutNav() {
     if (initializing) return;
 
     if (!user) {
-      // No user - no intro check needed, but mark as checked so navigation can proceed
-      if (!introChecked) {
-        setIntroChecked(true);
-      }
-      return;
+      return; // Don't set introChecked - just return
     }
 
     if (introChecked) return;
@@ -188,29 +184,36 @@ function RootLayoutNav() {
   useEffect(() => {
     if (initializing) return;
 
-    // CRITICAL: Don't redirect if intro is showing
+    // Don't redirect if intro is showing
     if (showIntro) {
-      return;
-    }
-
-    // Wait for intro check to complete only if we haven't checked yet
-    if (!introChecked) {
       return;
     }
 
     const inAuthGroup = segments[0] === 'auth' || segments[0] === 'email-confirmation';
     const inCallbackGroup = segments[0] === 'auth' && segments[1] === 'callback';
 
-    // IMPORTANT: Allow callback route to complete its authentication flow
+    // Allow callback route to complete
     if (inCallbackGroup) {
       return;
     }
 
-    // Redirect logic for non-callback routes
+    // FOR UNAUTHENTICATED USERS: Redirect immediately without waiting for intro check
     if (!user && !inAuthGroup) {
       router.replace('/auth');
-    } else if (user && inAuthGroup) {
-      router.replace('/(tabs)');
+      return;
+    }
+
+    // FOR AUTHENTICATED USERS: Wait for intro check before navigating
+    if (user) {
+      if (!introChecked) {
+        console.log('[LAYOUT] Waiting for intro check to complete');
+        return;
+      }
+      
+      // Navigate authenticated users out of auth group
+      if (inAuthGroup) {
+        router.replace('/(tabs)');
+      }
     }
   }, [user, initializing, segments, showIntro, introChecked]);
 
