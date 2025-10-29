@@ -6,15 +6,14 @@ export default {
     sdkVersion: "54.0.0",
     orientation: "portrait",
     icon: "./assets/AppIcons v2/appstore.png",
-    scheme: "healthfreak",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
     ios: {
       bundleIdentifier: 'com.healthfreak.app',
-      buildNumber: "9",
+      buildNumber: "10",
       supportsTablet: true,
       associatedDomains: [
-        "applinks:vuiaqdkbpkbcvyrzpmzv.supabase.co"
+        "applinks:healthfreak.io"
       ],
       infoPlist: {
         "NSCameraUsageDescription": "This app needs camera access to scan ingredient labels on food products.",
@@ -26,23 +25,6 @@ export default {
       versionCode: 1,
       permissions: [
         "CAMERA"
-      ],
-      intentFilters: [
-        {
-          action: "VIEW",
-          autoVerify: true,
-          data: [
-            {
-              scheme: "https",
-              host: "vuiaqdkbpkbcvyrzpmzv.supabase.co",
-              pathPrefix: "/auth/v1/verify"
-            }
-          ],
-          category: [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        }
       ],
       adaptiveIcon: {
         foregroundImage: "./assets/AppIcons v2/playstore.png",

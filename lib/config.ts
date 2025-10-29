@@ -66,65 +66,27 @@ if (__DEV__) {
 
 /**
  * Redirect URL configuration for auth callbacks and payment redirects
- * Automatically switches between development and production based on EXPO_PUBLIC_APP_URL
+ * Uses universal links (https://healthfreak.io) only
  */
 export const redirectConfig = {
-  // Base URL for the app - defaults to localhost for development
-  baseUrl: process.env.EXPO_PUBLIC_APP_URL || 'exp://localhost:8081',
+  authCallback: function() {
+    return 'https://healthfreak.io/auth/callback';
+  },
   
-  // Subscription redirect URLs
   subscriptionSuccess: function() {
-    const base = this.baseUrl;
-    
-    // Custom scheme (healthfreak://) should use simple format without /--/
-    if (base.startsWith('healthfreak://') || base.startsWith('healthfreak:')) {
-      return 'healthfreak://subscription-success';
-    }
-    
-    // Clean any trailing slash from baseUrl before appending path
-    const cleanBase = base.replace(/\/$/, '');
-    return `${cleanBase}/subscription-success`;
+    return 'https://healthfreak.io/subscription-success';
   },
   
   subscriptionCancel: function() {
-    const base = this.baseUrl;
-    
-    // Custom scheme (healthfreak://) should use simple format without /--/
-    if (base.startsWith('healthfreak://') || base.startsWith('healthfreak:')) {
-      return 'healthfreak://subscription-cancel';
-    }
-    
-    // Clean any trailing slash from baseUrl before appending path
-    const cleanBase = base.replace(/\/$/, '');
-    return `${cleanBase}/subscription-cancel`;
-  },
-  
-  // Auth callback URL
-  authCallback: function() {
-    const base = this.baseUrl;
-    
-    // Custom scheme (healthfreak://) should use simple format without /--/
-    if (base.startsWith('healthfreak://') || base.startsWith('healthfreak:')) {
-      return 'healthfreak://auth/callback';
-    }
-    
-    // The /--/ prefix is only for Expo development scheme (exp://)
-    if (base.startsWith('exp://')) {
-      return `${base}/--/auth/callback`;
-    }
-    
-    // Clean any trailing slash from baseUrl before appending path
-    const cleanBase = base.replace(/\/$/, '');
-    return `${cleanBase}/auth/callback`;
+    return 'https://healthfreak.io/subscription-cancel';
   },
 };
 
 // Debug redirect configuration (development only)
 if (__DEV__) {
-  console.log('🔗 Redirect Configuration:', {
-    baseUrl: redirectConfig.baseUrl,
+  console.log('🔗 Redirect Configuration (Universal Links Only):', {
+    authCallback: redirectConfig.authCallback(),
     subscriptionSuccess: redirectConfig.subscriptionSuccess(),
     subscriptionCancel: redirectConfig.subscriptionCancel(),
-    authCallback: redirectConfig.authCallback(),
   });
 }

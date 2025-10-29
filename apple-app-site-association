@@ -1,0 +1,21 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "SW99H47UHS.com.healthfreak.app",
+        "paths": [
+          "/auth/callback",
+          "/update-password",
+          "/subscription-success",
+          "/subscription-cancel",
+          "NOT /api/*",
+          "NOT /.well-known/*"
+        ]
+      }
+    ]
+  }
+}
+
+
+

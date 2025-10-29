@@ -22,23 +22,23 @@ function RootLayoutNav() {
   const revenueCatInitialized = useRef(false);
   const subscriptionRestored = useRef(false);
   const [showIntro, setShowIntro] = useState(false);
-  const introChecked = useRef(false);
+  const [introChecked, setIntroChecked] = useState(false);
   const isReplayMode = useRef(false);
 
   // Register intro trigger so it can be called from anywhere
   useEffect(() => {
-    const handleTrigger = async () => {
-      // Reset local cache
-      await resetIntroLocally();
-      // Reset the checked flag so intro can show again
-      introChecked.current = false;
-      // Mark as replay mode so completion doesn't mark onboarding as done
-      isReplayMode.current = true;
-      // Small delay to ensure state is ready
-      setTimeout(() => {
-        setShowIntro(true);
-      }, 100);
-    };
+      const handleTrigger = async () => {
+        // Reset local cache
+        await resetIntroLocally();
+        // Reset the checked flag so intro can show again
+        setIntroChecked(false);
+        // Mark as replay mode so completion doesn't mark onboarding as done
+        isReplayMode.current = true;
+        // Small delay to ensure state is ready
+        setTimeout(() => {
+          setShowIntro(true);
+        }, 100);
+      };
 
     registerIntroTrigger(handleTrigger);
     
@@ -114,46 +114,47 @@ function RootLayoutNav() {
 
   // Check if user needs to see intro (first time after signup + email confirmation)
   useEffect(() => {
-    if (initializing || !user || introChecked.current) {
+    if (initializing) return;
+
+    if (!user) {
+      // No user - no intro check needed, but mark as checked so navigation can proceed
+      if (!introChecked) {
+        setIntroChecked(true);
+      }
       return;
     }
 
+    if (introChecked) return;
+
     const checkIntroStatus = async () => {
       try {
-        // First check AsyncStorage for fast response
-        const seenLocally = await hasSeenIntroLocally();
-        
-        if (seenLocally) {
-          introChecked.current = true;
-          return;
-        }
-        
-        // Check database for authoritative status
+        // Check database for authoritative status first
         // Show intro if onboarding NOT completed
         const needsIntro = user.onboarding_completed === false;
         
         if (needsIntro) {
-          console.log('[LAYOUT] New user detected - showing intro');
+          // Clear AsyncStorage cache for new users to prevent stale data
+          await resetIntroLocally();
           setShowIntro(true);
         } else {
-          // Mark as seen locally to avoid future checks
+          // Mark as seen locally for fast future checks
           await markIntroAsSeenLocally();
         }
         
-        introChecked.current = true;
+        setIntroChecked(true);
       } catch (error) {
-        console.error('[LAYOUT] Error checking intro status:', error);
-        introChecked.current = true;
+        console.error('[INTRO CHECK] Error checking intro status:', error);
+        setIntroChecked(true);
       }
     };
 
     checkIntroStatus();
-  }, [user, initializing]);
+  }, [user?.id, initializing, introChecked]);
 
   const handleIntroComplete = async () => {
     try {
       // Mark that intro check has been completed to prevent re-checking
-      introChecked.current = true;
+      setIntroChecked(true);
       
       // Only mark onboarding complete if this is the first time (not replay mode)
       if (user?.id && !isReplayMode.current) {
@@ -170,7 +171,7 @@ function RootLayoutNav() {
         await markIntroAsSeenLocally();
       }
     } catch (error) {
-      console.error('[LAYOUT] Error marking intro complete:', error);
+      console.error('[INTRO COMPLETE] Error marking intro complete:', error);
     } finally {
       // Reset replay mode flag
       isReplayMode.current = false;
@@ -187,15 +188,13 @@ function RootLayoutNav() {
   useEffect(() => {
     if (initializing) return;
 
-    // CRITICAL: Wait for intro check to complete before any navigation
-    if (!introChecked.current) {
-      console.log('[LAYOUT] Waiting for intro check to complete before navigation');
+    // CRITICAL: Don't redirect if intro is showing
+    if (showIntro) {
       return;
     }
 
-    // CRITICAL: Don't redirect if intro is showing
-    if (showIntro) {
-      console.log('[LAYOUT] Intro is showing - blocking all navigation redirects');
+    // Wait for intro check to complete only if we haven't checked yet
+    if (!introChecked) {
       return;
     }
 
@@ -204,19 +203,16 @@ function RootLayoutNav() {
 
     // IMPORTANT: Allow callback route to complete its authentication flow
     if (inCallbackGroup) {
-      console.log('[LAYOUT] In callback route - skipping automatic redirects');
       return;
     }
 
     // Redirect logic for non-callback routes
     if (!user && !inAuthGroup) {
-      console.log('[LAYOUT] No user, not in auth group - redirecting to /auth');
       router.replace('/auth');
     } else if (user && inAuthGroup) {
-      console.log('[LAYOUT] User authenticated, in auth group - redirecting to /(tabs)');
       router.replace('/(tabs)');
     }
-  }, [user, initializing, segments, showIntro]);
+  }, [user, initializing, segments, showIntro, introChecked]);
 
   // Show loading spinner while initializing
   if (initializing) {

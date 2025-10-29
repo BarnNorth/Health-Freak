@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Alert, TouchableWithoutFeedback, Platform } from 'react-native';
-import { User, Crown, FileText, Shield, LogOut, CreditCard, RefreshCw, Film } from 'lucide-react-native';
+import { User, Crown, FileText, Shield, LogOut, CreditCard, RefreshCw, Film, Lock } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 import Purchases from 'react-native-purchases';
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,7 +11,6 @@ import { getSubscriptionInfo, isPremiumActive, SubscriptionInfo } from '@/servic
 import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
 import { resetIntroLocally } from '@/services/introStorage';
-import { supabase } from '@/lib/supabase';
 import { triggerIntro } from '@/services/introTrigger';
 
 export default function ProfileScreen() {
@@ -142,15 +141,8 @@ export default function ProfileScreen() {
     try {
       if (!user?.id) return;
       
-      // Reset database flag
-      const { error } = await supabase
-        .from('users')
-        .update({ onboarding_completed: false })
-        .eq('id', user.id);
-      
-      if (error) throw error;
-      
-      // Reset local cache
+      // Reset local cache only - don't touch database flag
+      // The replay mode will prevent the intro from updating the database
       await resetIntroLocally();
       
       // Trigger intro immediately
@@ -263,6 +255,15 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.menuItem} onPress={handleReplayIntro}>
             <Film size={20} color={COLORS.textSecondary} />
             <Text style={styles.menuText}>Replay Intro Story</Text>
+            <Text style={styles.menuArrow}>›</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.menuItem} 
+            onPress={() => router.push('/account/update-password')}
+          >
+            <Lock size={20} color={COLORS.textSecondary} />
+            <Text style={styles.menuText}>Change Password</Text>
             <Text style={styles.menuArrow}>›</Text>
           </TouchableOpacity>
         </View>

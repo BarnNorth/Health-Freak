@@ -150,8 +150,8 @@ export default function PrivacyScreen() {
             {'\n'}Effective Date: October 26, 2025
             {'\n\n'}Full Privacy Policy available at:
           </Text>
-          <TouchableOpacity onPress={() => Linking.openURL('https://barnnorth.github.io/healthfreak-legal/privacy.html')}>
-            <Text style={styles.linkText}>https://barnnorth.github.io/healthfreak-legal/privacy.html</Text>
+          <TouchableOpacity onPress={() => Linking.openURL('https://healthfreak.io/privacy.html')}>
+            <Text style={styles.linkText}>https://healthfreak.io/privacy.html</Text>
           </TouchableOpacity>
           <Text style={styles.bottomNoticeText}>
             {'\n'}Your privacy and data security are important to us. 

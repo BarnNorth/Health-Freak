@@ -35,14 +35,65 @@ export default function AuthCallbackScreen() {
     try {
       const startTime = Date.now();
       
+      // Validate we received a universal link
+      if (!url.includes('healthfreak.io')) {
+        console.warn('[CALLBACK] ⚠️ Received non-universal link:', url);
+        setError('Invalid authentication link format');
+        return;
+      }
+      
+      console.log('[CALLBACK] Processing universal link:', url);
+      
       const { params, errorCode } = QueryParams.getQueryParams(url);
       
       if (errorCode) {
+        console.error('[CALLBACK] Error code in URL:', errorCode);
         setError(`Authentication error: ${errorCode}`);
         return;
       }
 
-      const { access_token, refresh_token, code } = params;
+      const { access_token, refresh_token, code, token_hash, type, next } = params;
+      
+      console.log('[CALLBACK] Extracted params:', { 
+        hasCode: !!code, 
+        hasTokens: !!(access_token && refresh_token),
+        hasTokenHash: !!token_hash,
+        type,
+        next
+      });
+
+      // Handle password recovery flow (with token_hash)
+      if (token_hash && type === 'recovery') {
+        console.log('[CALLBACK] Processing password recovery token');
+        
+        const { data, error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: String(token_hash),
+          type: 'recovery',
+        });
+        
+        if (verifyError) {
+          console.error('[CALLBACK] Recovery verification failed:', verifyError);
+          setError(`Password reset failed: ${verifyError.message}`);
+          return;
+        }
+        
+        if (data?.session) {
+          const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
+          console.log(`✅ Recovery auth completed in ${totalTime}s`);
+          
+          // Small delay to ensure session is fully established
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Navigate to password update screen
+          console.log('[CALLBACK] Navigating to password update screen');
+          router.replace('/account/update-password' as any);
+          return;
+        } else {
+          console.error('[CALLBACK] Recovery verified but no session created');
+          setError('Password reset verification succeeded but no session was created. Please try again.');
+          return;
+        }
+      }
 
       // Handle PKCE flow (with code)
       if (code) {
@@ -57,11 +108,33 @@ export default function AuthCallbackScreen() {
           const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
           console.log(`✅ Auth completed in ${totalTime}s`);
           
+          // Check if this is a password reset (recovery) flow
+          // Check URL, type parameter, and redirect_to parameter
+          const redirectTo = params.redirect_to;
+          const hasRecoveryInRedirect = redirectTo?.includes('type=recovery');
+          const isPasswordReset = url.includes('type=recovery') || 
+                                 url.includes('recovery=true') || 
+                                 type === 'recovery' ||
+                                 hasRecoveryInRedirect;
+          
+          console.log('[CALLBACK] Recovery check:', { 
+            isPasswordReset, 
+            urlHasType: url.includes('type=recovery'),
+            typeParam: type,
+            redirectTo,
+            hasRecoveryInRedirect
+          });
+          
           // Small delay to ensure session is fully established
           await new Promise(resolve => setTimeout(resolve, 100));
           
-          // Navigate to auth group to trigger layout's navigation logic
-          router.replace('/auth');
+          if (isPasswordReset) {
+            console.log('[CALLBACK] Navigating to password update screen');
+            router.replace('/account/update-password' as any);
+          } else {
+            // Navigate to auth group to trigger layout's navigation logic
+            router.replace('/auth');
+          }
           return;
         }
       }
@@ -82,11 +155,25 @@ export default function AuthCallbackScreen() {
           const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
           console.log(`✅ Auth completed in ${totalTime}s`);
           
+          // Check if this is a password reset (recovery) flow
+          const isPasswordReset = url.includes('type=recovery') || url.includes('recovery=true') || type === 'recovery';
+          
+          console.log('[CALLBACK] Recovery check:', { 
+            isPasswordReset, 
+            urlHasType: url.includes('type=recovery'),
+            typeParam: type 
+          });
+          
           // Small delay to ensure session is fully established
           await new Promise(resolve => setTimeout(resolve, 100));
           
-          // Navigate to auth group to trigger layout's navigation logic
-          router.replace('/auth');
+          if (isPasswordReset) {
+            console.log('[CALLBACK] Navigating to password update screen');
+            router.replace('/account/update-password' as any);
+          } else {
+            // Navigate to auth group to trigger layout's navigation logic
+            router.replace('/auth');
+          }
           return;
         }
       }
@@ -104,11 +191,20 @@ export default function AuthCallbackScreen() {
     if (session) {
       console.log('✅ Session already exists');
       
+      // Check if this is a password reset flow by checking URL
+      const currentUrl = url || (await Linking.getInitialURL()) || '';
+      const isPasswordReset = currentUrl.includes('type=recovery') || currentUrl.includes('recovery=true');
+      
       // Small delay to ensure session is fully established
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      // Navigate to auth group to trigger layout's navigation logic
-      router.replace('/auth');
+      if (isPasswordReset) {
+        // Navigate to password update screen
+        router.replace('/account/update-password' as any);
+      } else {
+        // Navigate to auth group to trigger layout's navigation logic
+        router.replace('/auth');
+      }
       return;
     }
     
@@ -146,7 +242,7 @@ export default function AuthCallbackScreen() {
             style={styles.backButton} 
             onPress={() => router.replace('/auth')}
           >
-            <ArrowLeft color={COLORS.text} size={24} />
+            <ArrowLeft color={COLORS.textPrimary} size={24} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Authentication Error</Text>
           <View style={styles.headerPlaceholder} />
@@ -202,9 +298,9 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   headerTitle: {
-    fontFamily: FONTS.bold,
-    fontSize: FONT_SIZES.lg,
-    color: COLORS.text,
+    fontFamily: FONTS.karmaFuture,
+    fontSize: FONT_SIZES.titleMedium,
+    color: COLORS.textPrimary,
   },
   headerPlaceholder: {
     width: 40,
@@ -216,33 +312,33 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   title: {
-    fontFamily: FONTS.bold,
-    fontSize: FONT_SIZES.xl,
-    color: COLORS.text,
+    fontFamily: FONTS.karmaFuture,
+    fontSize: FONT_SIZES.titleMedium,
+    color: COLORS.textPrimary,
     marginTop: 24,
     textAlign: 'center',
   },
   subtitle: {
-    fontFamily: FONTS.regular,
-    fontSize: FONT_SIZES.md,
+    fontFamily: FONTS.terminalGrotesque,
+    fontSize: FONT_SIZES.bodyMedium,
     color: COLORS.textSecondary,
     marginTop: 12,
     textAlign: 'center',
   },
   errorTitle: {
-    fontFamily: FONTS.bold,
-    fontSize: FONT_SIZES.xl,
-    color: COLORS.alertRed,
+    fontFamily: FONTS.karmaFuture,
+    fontSize: FONT_SIZES.titleMedium,
+    color: COLORS.toxicRed,
     marginBottom: 16,
     textAlign: 'center',
   },
   errorMessage: {
-    fontFamily: FONTS.regular,
-    fontSize: FONT_SIZES.md,
-    color: COLORS.text,
+    fontFamily: FONTS.terminalGrotesque,
+    fontSize: FONT_SIZES.bodyMedium,
+    color: COLORS.textPrimary,
     marginBottom: 32,
     textAlign: 'center',
-    lineHeight: LINE_HEIGHTS.relaxed,
+    lineHeight: LINE_HEIGHTS.bodyMedium,
   },
   retryButton: {
     backgroundColor: COLORS.cleanGreen,
@@ -251,8 +347,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   retryButtonText: {
-    fontFamily: FONTS.bold,
-    fontSize: FONT_SIZES.md,
-    color: COLORS.background,
+    fontFamily: FONTS.terminalGrotesque,
+    fontSize: FONT_SIZES.bodyMedium,
+    fontWeight: 'bold',
+    color: COLORS.white,
   },
 });

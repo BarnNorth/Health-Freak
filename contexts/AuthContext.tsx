@@ -24,6 +24,8 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   resendConfirmation: (email: string) => Promise<boolean>;
   refreshUserProfile: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -191,6 +193,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           total_scans_used: 0,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
+          onboarding_completed: false,
         };
         setUser(userObj);
       }
@@ -204,6 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         total_scans_used: 0,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        onboarding_completed: false,
       };
       setUser(userObj);
     } finally {
@@ -318,6 +322,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const resetPassword = async (email: string): Promise<void> => {
+    try {
+      console.log('[AUTH] Sending password reset email to:', email);
+      
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: redirectConfig.authCallback(),
+      });
+      
+      if (error) {
+        console.error('[AUTH] Password reset error:', error);
+        throw error;
+      }
+      
+      console.log('[AUTH] Password reset email sent successfully');
+    } catch (error) {
+      console.error('[AUTH] Error in resetPassword:', error);
+      throw error;
+    }
+  };
+
+  const updatePassword = async (newPassword: string): Promise<void> => {
+    try {
+      console.log('[AUTH] Updating password');
+      
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+      
+      if (error) {
+        console.error('[AUTH] Password update error:', error);
+        throw error;
+      }
+      
+      console.log('[AUTH] Password updated successfully');
+    } catch (error) {
+      console.error('[AUTH] Error in updatePassword:', error);
+      throw error;
+    }
+  };
+
 
   return (
     <AuthContext.Provider value={{
@@ -329,6 +373,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       resendConfirmation,
       refreshUserProfile,
+      resetPassword,
+      updatePassword,
     }}>
       {children}
     </AuthContext.Provider>

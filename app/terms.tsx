@@ -155,8 +155,8 @@ export default function TermsScreen() {
             {'\n'}Effective Date: October 26, 2025
             {'\n\n'}Full Terms of Service available at:
           </Text>
-          <TouchableOpacity onPress={() => Linking.openURL('https://barnnorth.github.io/healthfreak-legal/terms.html')}>
-            <Text style={styles.linkText}>https://barnnorth.github.io/healthfreak-legal/terms.html</Text>
+          <TouchableOpacity onPress={() => Linking.openURL('https://healthfreak.io/terms.html')}>
+            <Text style={styles.linkText}>https://healthfreak.io/terms.html</Text>
           </TouchableOpacity>
           <Text style={styles.bottomNoticeText}>
             {'\n'}Remember: This app provides educational information only. 

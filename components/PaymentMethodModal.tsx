@@ -237,13 +237,13 @@ export function PaymentMethodModal({ visible, onClose, onSuccess }: PaymentMetho
             <View style={styles.legalLinks}>
               <Text style={styles.legalText}>By subscribing, you agree to our </Text>
               <TouchableOpacity 
-                onPress={() => Linking.openURL('https://barnnorth.github.io/healthfreak-legal/terms.html')}
+                onPress={() => Linking.openURL('https://healthfreak.io/terms.html')}
               >
                 <Text style={styles.linkText}>Terms of Service</Text>
               </TouchableOpacity>
               <Text style={styles.legalText}> and </Text>
               <TouchableOpacity 
-                onPress={() => Linking.openURL('https://barnnorth.github.io/healthfreak-legal/privacy.html')}
+                onPress={() => Linking.openURL('https://healthfreak.io/privacy.html')}
               >
                 <Text style={styles.linkText}>Privacy Policy</Text>
               </TouchableOpacity>

@@ -156,6 +156,15 @@ export default function AuthScreen() {
             </Text>
           </TouchableOpacity>
 
+          {!isSignUp && (
+            <TouchableOpacity 
+              onPress={() => router.push('/auth/forgot-password')}
+              style={styles.forgotPasswordLink}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             style={styles.switchButton}
             onPress={() => setIsSignUp(!isSignUp)}
@@ -172,14 +181,14 @@ export default function AuthScreen() {
               By creating an account, you agree to our{' '}
               <Text 
                 style={styles.linkText}
-                onPress={() => Linking.openURL('https://barnnorth.github.io/healthfreak-legal/terms.html')}
+                onPress={() => Linking.openURL('https://healthfreak.io/terms.html')}
               >
                 Terms of Service
               </Text>
               {' '}and{' '}
               <Text 
                 style={styles.linkText}
-                onPress={() => Linking.openURL('https://barnnorth.github.io/healthfreak-legal/privacy.html')}
+                onPress={() => Linking.openURL('https://healthfreak.io/privacy.html')}
               >
                 Privacy Policy
               </Text>
@@ -301,6 +310,16 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontFamily: FONTS.terminalGrotesque,
     lineHeight: LINE_HEIGHTS.bodyMedium,
+  },
+  forgotPasswordLink: {
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  forgotPasswordText: {
+    fontFamily: FONTS.terminalGrotesque,
+    fontSize: FONT_SIZES.bodyMedium,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
   },
   disclaimer: {
     backgroundColor: COLORS.accentYellow,

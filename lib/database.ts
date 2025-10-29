@@ -196,12 +196,15 @@ export async function getIngredientInfo(ingredientName: string): Promise<Ingredi
       return null;
     }
 
+    // Type assertion for RPC response
+    const ingredientData = data as IngredientCache;
+
     console.log('[DATABASE] Found fresh ingredient in cache:', {
-      name: data.ingredient_name,
-      expires_at: data.expires_at
+      name: ingredientData.ingredient_name,
+      expires_at: ingredientData.expires_at
     });
     
-    return data;
+    return ingredientData;
   } catch (error) {
     console.error('[DATABASE] Exception fetching ingredient info:', error);
     return null;
@@ -482,6 +485,10 @@ export async function incrementAnalysisCount(userId: string): Promise<boolean> {
   }
 }
 
+// Constants for limits
+const FREE_TIER_SCAN_LIMIT = 10;
+const PREMIUM_TIER_SCAN_LIMIT = 999;
+
 export async function checkUserLimits(userId: string): Promise<{
   canAnalyze: boolean;
   totalUsed: number;
@@ -494,29 +501,49 @@ export async function checkUserLimits(userId: string): Promise<{
     // Call the database function to get user analysis stats
     const { data, error } = await supabase
       .rpc('get_user_analysis_stats', { user_id: userId })
-      .single();
+      .maybeSingle();
 
     if (error) {
-      // If no profile exists yet (new user), default to free tier
-      if (error.code === 'PGRST116' || error.details?.includes('0 rows')) {
-        console.log('[LIMITS] Profile not ready yet, defaulting to free tier');
-        return {
-          canAnalyze: true,
-          remaining: 10,
-          totalUsed: 0,
-          subscriptionStatus: 'free'
-        };
-      }
       console.error('[LIMITS] Error checking user limits:', error);
       // Default to allowing analysis on error
-      return { canAnalyze: true, totalUsed: 0, subscriptionStatus: 'free', remaining: 10 };
+      return { 
+        canAnalyze: true, 
+        totalUsed: 0, 
+        subscriptionStatus: 'free', 
+        remaining: FREE_TIER_SCAN_LIMIT 
+      };
     }
 
+    // If no data returned (new user or profile not ready), default to free tier
+    if (!data) {
+      console.log('[LIMITS] No profile data found, defaulting to free tier');
+      return {
+        canAnalyze: true,
+        totalUsed: 0,
+        subscriptionStatus: 'free',
+        remaining: FREE_TIER_SCAN_LIMIT
+      };
+    }
+
+    // Type-safe data extraction with proper defaults
+    const typedData = data as {
+      can_analyze: boolean;
+      total_used: number;
+      subscription_status: string;
+    };
+
+    const canAnalyze = typedData.can_analyze ?? true;
+    const totalUsed = typedData.total_used ?? 0;
+    const subscriptionStatus = typedData.subscription_status ?? 'free';
+    const remaining = subscriptionStatus === 'premium'
+      ? PREMIUM_TIER_SCAN_LIMIT
+      : Math.max(0, FREE_TIER_SCAN_LIMIT - totalUsed);
+
     const result = {
-      canAnalyze: data.can_analyze,
-      totalUsed: data.total_used,
-      subscriptionStatus: data.subscription_status,
-      remaining: data.subscription_status === 'premium' ? 999 : Math.max(0, 10 - data.total_used)
+      canAnalyze,
+      totalUsed,
+      subscriptionStatus,
+      remaining
     };
 
     console.log('[LIMITS] Scan limit check result:', result);
@@ -524,7 +551,12 @@ export async function checkUserLimits(userId: string): Promise<{
   } catch (error) {
     console.error('[LIMITS] Exception checking user limits:', error);
     // Default to allowing analysis on exception
-    return { canAnalyze: true, totalUsed: 0, subscriptionStatus: 'free', remaining: 10 };
+    return { 
+      canAnalyze: true, 
+      totalUsed: 0, 
+      subscriptionStatus: 'free', 
+      remaining: FREE_TIER_SCAN_LIMIT 
+    };
   }
 }
 

@@ -26,7 +26,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true, // Enable for deep link handling!
+    detectSessionInUrl: true, // Enable for universal link handling!
     flowType: 'pkce',
   },
   global: {
@@ -50,18 +50,20 @@ AppState.addEventListener('change', (state) => {
   }
 });
 
-// Set up deep link URL handling for Supabase auth
+// Set up universal link handling for Supabase auth
 Linking.addEventListener('url', async ({ url }) => {
   if (__DEV__) {
-    console.log('🔗 [SUPABASE] Deep link received:', url);
+    console.log('🔗 [SUPABASE] Universal link received:', url);
   }
   
-  // Let Supabase handle auth URLs automatically
-  if (url.includes('auth/callback') || url.includes('access_token') || url.includes('code=')) {
+  // Only handle healthfreak.io URLs
+  if (url.includes('healthfreak.io')) {
     if (__DEV__) {
       console.log('🔐 [SUPABASE] Auth URL detected, letting Supabase handle it');
     }
     // Supabase's detectSessionInUrl will handle this automatically
+  } else if (__DEV__) {
+    console.warn('⚠️ [SUPABASE] Received non-universal link (should not happen):', url);
   }
 });
 
