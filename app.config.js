@@ -11,8 +11,8 @@ export default {
     scheme: "healthfreak",
     ios: {
       bundleIdentifier: 'com.healthfreak.app',
-      buildNumber: "11",
-      supportsTablet: true,
+      buildNumber: "12",
+      supportsTablet: false,
       associatedDomains: [
         "applinks:healthfreak.io"
       ],

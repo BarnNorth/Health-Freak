@@ -183,7 +183,7 @@ export default function CameraScreen() {
             We need camera permission to photograph ingredient lists for analysis.
           </Text>
           <TouchableOpacity style={styles.grantButton} onPress={requestPermission}>
-            <Text style={styles.grantButtonText}>Grant Camera Access</Text>
+            <Text style={styles.grantButtonText}>Continue</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>

@@ -178,10 +178,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: FONT_SIZES.titleMedium,
+    fontSize: FONT_SIZES.titleLarge,
     fontWeight: '400',
     color: COLORS.textPrimary,
     fontFamily: FONTS.karmaFuture,
+    lineHeight: LINE_HEIGHTS.titleLarge,
   },
   keyboardAvoid: {
     flex: 1,

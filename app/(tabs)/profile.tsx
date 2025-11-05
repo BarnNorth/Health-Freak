@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Alert, TouchableWithoutFeedback, Platform } from 'react-native';
-import { User, Crown, FileText, Shield, LogOut, CreditCard, RefreshCw, Film, Lock } from 'lucide-react-native';
+import { User, Crown, FileText, Shield, LogOut, CreditCard, RefreshCw, Film, Lock, Trash2 } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 import Purchases from 'react-native-purchases';
 import { useAuth } from '@/contexts/AuthContext';
@@ -12,6 +12,7 @@ import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
 import { resetIntroLocally } from '@/services/introStorage';
 import { triggerIntro } from '@/services/introTrigger';
+import { deleteUserAccount } from '@/services/deleteAccount';
 
 export default function ProfileScreen() {
   const { user, signOut, initializing, refreshUserProfile } = useAuth();
@@ -57,8 +58,15 @@ export default function ProfileScreen() {
     // Cleanup listener when component unmounts or user changes
     return () => {
       console.log('🧹 [Profile] Cleaning up RevenueCat listener');
-      if (customerInfoListener && typeof customerInfoListener.remove === 'function') {
-        customerInfoListener.remove();
+      // RevenueCat listener cleanup - type assertion needed due to TS definitions
+      try {
+        const listener = customerInfoListener as any;
+        if (listener && typeof listener.remove === 'function') {
+          listener.remove();
+        }
+      } catch (error) {
+        // Listener cleanup failed - non-critical error
+        console.warn('[Profile] Failed to cleanup RevenueCat listener:', error);
       }
     };
   }, [user?.id]);
@@ -170,6 +178,46 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account and all your scan history. This action cannot be undone.\n\nAny active subscriptions will be cancelled.',
+      [
+        { 
+          text: 'Cancel', 
+          style: 'cancel' 
+        },
+        { 
+          text: 'Delete My Account', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (!user?.id) {
+                Alert.alert('Error', 'Unable to delete account. Please try signing out and back in.');
+                return;
+              }
+
+              await deleteUserAccount(user.id);
+              signOut();
+              Alert.alert(
+                'Account Deleted',
+                'Your account has been permanently deleted.',
+                [{ text: 'OK' }]
+              );
+            } catch (error: any) {
+              console.error('Error deleting account:', error);
+              Alert.alert(
+                'Deletion Failed',
+                `Unable to delete your account. Please contact support.\n\nError: ${error.message || 'Unknown error'}`,
+                [{ text: 'OK' }]
+              );
+            }
+          }
+        }
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -273,6 +321,15 @@ export default function ProfileScreen() {
           <LogOut size={20} color={COLORS.toxicRed} />
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
+
+        {/* Danger Zone */}
+        <View style={styles.dangerZone}>
+          <Text style={styles.dangerZoneTitle}>Danger Zone</Text>
+          <TouchableOpacity style={styles.deleteAccountButton} onPress={handleDeleteAccount}>
+            <Trash2 size={20} color={COLORS.toxicRed} />
+            <Text style={styles.deleteAccountText}>Delete Account</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* App Version (with secret debug gesture in dev mode) */}
         <TouchableWithoutFeedback 
@@ -654,6 +711,45 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   signOutText: {
+    fontSize: FONT_SIZES.bodyLarge,
+    color: COLORS.toxicRed,
+    fontWeight: '400',
+    marginLeft: 8,
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodyLarge,
+  },
+  dangerZone: {
+    marginHorizontal: 16,
+    marginTop: 24,
+    marginBottom: 16,
+    paddingTop: 20,
+    borderTopWidth: 2,
+    borderTopColor: COLORS.toxicRed,
+  },
+  dangerZoneTitle: {
+    fontSize: FONT_SIZES.titleSmall,
+    fontWeight: '400',
+    color: COLORS.toxicRed,
+    marginBottom: 16,
+    fontFamily: FONTS.karmaFuture,
+    lineHeight: LINE_HEIGHTS.titleSmall,
+  },
+  deleteAccountButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    backgroundColor: COLORS.background,
+    borderRadius: 2,
+    borderWidth: 2,
+    borderColor: COLORS.toxicRed,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.8,
+    shadowRadius: 0,
+    elevation: 3,
+  },
+  deleteAccountText: {
     fontSize: FONT_SIZES.bodyLarge,
     color: COLORS.toxicRed,
     fontWeight: '400',

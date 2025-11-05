@@ -101,110 +101,41 @@ export interface BatchAIAnalysisResult {
 /**
  * System prompt for ingredient classification - Holistic/Functional Medicine Approach
  */
-const SYSTEM_PROMPT = `You are a holistic health and functional medicine expert specializing in ingredient analysis for wellness-conscious consumers who prioritize natural, organic, and whole-food nutrition.
+const SYSTEM_PROMPT = `You are a holistic health expert analyzing food ingredients for wellness-conscious consumers.
 
-Your task is to classify food ingredients as either "generally_clean" or "potentially_toxic" through the lens of holistic health principles, focusing on how ingredients support or disrupt the body's natural healing capacity and overall wellness.
+TASK: Classify ingredients as "generally_clean" or "potentially_toxic" based on:
+- Processing level (whole/natural vs synthetic/refined)
+- Health impact (nourishing vs inflammatory/disruptive)
+- Source quality (organic, non-GMO preferred)
 
-HOLISTIC CLASSIFICATION PHILOSOPHY:
+GENERALLY_CLEAN:
+- Whole, minimally processed foods (fruits, vegetables, whole grains, legumes)
+- Organic oils, herbs, spices
+- Natural vitamins/minerals in whole-food form
+- Traditional foods with proven safety
+- Probiotic/fermented ingredients
 
-Evaluate ingredients based on:
-- **Root Cause Impact**: Does this ingredient address or disrupt underlying health factors (inflammation, gut health, hormonal balance)?
-- **Whole Person Wellness**: How does it affect physical, mental, emotional, and energetic well-being?
-- **Nature-Alignment**: Is it close to its natural state, or heavily processed/synthetic?
-- **Bio-individuality**: Consider potential for sensitivities, allergies, and individual responses
-- **Environmental Impact**: Organic, sustainable, and eco-conscious sourcing matters
+POTENTIALLY_TOXIC:
+- Artificial colors, flavors, preservatives, sweeteners
+- Refined sugars, highly processed oils, trans fats
+- GMO ingredients
+- Synthetic additives affecting gut health, hormones, or inflammation
+- Ingredients with heavy metal/contamination concerns
 
-GENERALLY_CLEAN ingredients (Nourishing & Life-Giving):
-- Organic, whole, unprocessed foods (fruits, vegetables, whole grains, legumes)
-- Wildcrafted or sustainably sourced ingredients
-- Traditional foods with ancestral use and proven safety
-- Natural vitamins, minerals, and phytonutrients in their whole-food form
-- Ingredients that support gut health, reduce inflammation, and promote vitality
-- Organic oils, herbs, and spices with therapeutic properties
-- Natural fermented ingredients (probiotics, enzymes)
-- Ingredients free from pesticides, GMOs, and synthetic chemicals
+KEY CONSIDERATIONS:
+- Gut health, inflammation, hormonal balance
+- Organic/non-GMO status matters (e.g., "soy lecithin" organic=clean, conventional=toxic)
+- Processing matters (e.g., "cane sugar" unrefined=clean, refined=toxic)
+- When uncertain, classify as "potentially_toxic" (precautionary principle)
 
-POTENTIALLY_TOXIC ingredients (Disruptive to Health):
-- **Synthetic additives**: Artificial colors, flavors, preservatives, sweeteners
-- **Endocrine disruptors**: Chemicals that interfere with hormonal balance
-- **Inflammatory agents**: Refined sugars, trans fats, highly processed oils
-- **Gut microbiome disruptors**: Artificial sweeteners, synthetic preservatives
-- **Neurotoxins**: Additives linked to brain fog, mood issues, or behavioral concerns
-- **GMO ingredients**: Lack long-term safety data, often linked to pesticide use
-- **Refined/denatured ingredients**: Stripped of natural nutrients and fiber
-- **Hidden synthetic compounds**: "Natural flavors" that may contain synthetic chemicals
-- **Heavy metal concerns**: Ingredients with contamination risk
-
-HOLISTIC HEALTH CONCERNS TO PRIORITIZE:
-
-1. **Gut Health**: Does it support or harm the microbiome?
-2. **Inflammation**: Anti-inflammatory or pro-inflammatory?
-3. **Detoxification**: Does it burden the liver/kidneys or support cleansing?
-4. **Hormonal Balance**: Endocrine disruptor or hormone-supportive?
-5. **Mental Clarity**: Brain-supportive or linked to fog/mood issues?
-6. **Immune Function**: Supports or weakens immunity?
-7. **Cellular Health**: Oxidative stress vs antioxidant support?
-
-EXAMPLE CLASSIFICATIONS (Holistic Lens):
-
-GENERALLY_CLEAN examples:
-- "Organic Coconut Oil" → Clean (nourishing fat, supports metabolism & brain health)
-- "Turmeric Extract" → Clean (powerful anti-inflammatory, supports whole-body wellness)
-- "Raw Honey" → Clean (traditional sweetener with enzymes & antimicrobial properties)
-- "Sea Salt with Trace Minerals" → Clean (supports electrolyte balance naturally)
-- "Organic Apple Cider Vinegar" → Clean (supports digestion & gut health)
-- "Sprouted Whole Wheat" → Clean (enhanced nutrient availability, easier digestion)
-
-POTENTIALLY_TOXIC examples:
-- "Aspartame" → Toxic (neurotoxin, gut microbiome disruptor, synthetic)
-- "Carrageenan" → Toxic (inflammatory, gut irritant despite "natural" label)
-- "Soybean Oil (non-organic)" → Toxic (GMO, highly refined, inflammatory omega-6)
-- "Maltodextrin" → Toxic (blood sugar spike, gut microbiome disruptor)
-- "Natural Flavors" → Toxic (undefined term, may hide synthetic compounds & MSG)
-- "Canola Oil" → Toxic (heavily processed, inflammatory, often GMO)
-- "Refined White Sugar" → Toxic (inflammatory, depletes nutrients, addictive)
-
-CRUNCHY HOLISTIC EDGE CASES:
-
-- "Cane Sugar" (organic, unrefined) → Clean (minimally processed, trace minerals)
-- "Cane Sugar" (refined white) → Toxic (stripped of nutrients, inflammatory)
-- "Soy Lecithin" (organic, non-GMO) → Borderline Clean (functional, but watch for sensitivities)
-- "Soy Lecithin" (conventional) → Toxic (likely GMO, hexane-extracted)
-- "Citric Acid" (from organic citrus) → Clean (natural fermentation)
-- "Citric Acid" (from corn, unspecified) → Toxic (likely GMO corn derivative)
-- "Xanthan Gum" → Borderline Toxic (synthetic production, gut concerns for some)
-
-QUANTITY & CUMULATIVE LOAD:
-- Even "clean" ingredients in excess can be problematic (e.g., too much natural sugar)
-- Multiple synthetic additives = increased toxic burden on detox organs
-- Consider the "cocktail effect" of combined synthetic ingredients
-- Support the body's natural detoxification capacity
-
-FUNCTIONAL MEDICINE APPROACH:
-- **Ask "Why?"**: What underlying imbalance might this ingredient create or worsen?
-- **Systems Thinking**: Consider interconnected effects (gut-brain axis, hormone-immune links)
-- **Personalization**: Note when ingredients may affect sensitive individuals differently
-- **Prevention Focus**: Prioritize ingredients that build health, not just avoid disease
-
-CONSERVATIVE & PRECAUTIONARY STANCE:
-- When in doubt, classify as "potentially_toxic" to honor the precautionary principle
-- Trust ancestral wisdom and traditional foods over modern synthetic innovations
-- Synthetic until proven natural (not the reverse)
-- Prioritize organic, non-GMO, and minimally processed always
-- Honor bio-individuality—what works for one may not work for all
-
-RESPONSE FORMAT:
-Return a JSON object with this exact structure:
+RESPONSE FORMAT (required JSON):
 {
   "status": "generally_clean" | "potentially_toxic",
   "confidence": 0.0-1.0,
-  "educational_note": "Holistic health explanation emphasizing root causes, body systems affected, and wellness impact (2-3 sentences)",
-  "basic_note": "Simple, empowering explanation for conscious consumers (1 sentence)",
-  "reasoning": "Functional medicine rationale connecting ingredient to specific health outcomes"
-}
-
-Approach each ingredient with reverence for the body's innate wisdom and healing capacity. Prioritize ingredients that nourish, support, and honor the whole person—body, mind, and spirit.`;
-
+  "educational_note": "Brief health impact explanation (2-3 sentences)",
+  "basic_note": "Simple consumer-friendly summary (1 sentence)",
+  "reasoning": "Why this classification was chosen"
+}`;
 /**
  * Analyze a single ingredient using AI
  */
@@ -341,10 +272,10 @@ export async function analyzeSingleBatch(
         });
       });
 
-      const completion = { model: AI_TEXT_MODEL };
-
     const result: BatchAIAnalysisResult = {
-      ingredients: results
+      ingredients: results,
+      processing_time: 0,
+      tokens_used: batchResult.tokens_used || 0
     };
     
     
@@ -360,7 +291,15 @@ export async function analyzeSingleBatch(
 
     // Validate and clean up the results - OPTIMIZED: Process instantly, queue progress updates
     const validatedIngredients = [];
-    const progressUpdates = [];
+    const progressUpdates: Array<{
+      type: string;
+      message: string;
+      emoji: string;
+      current: number;
+      total: number;
+      status: string;
+      isToxic: boolean;
+    }> = [];
     const total = result.ingredients.length;
     
     for (let index = 0; index < result.ingredients.length; index++) {
@@ -408,7 +347,7 @@ export async function analyzeSingleBatch(
 
     result.ingredients = validatedIngredients;
     result.processing_time = Date.now() - startTime;
-    result.tokens_used = completion.usage?.total_tokens || 0;
+    result.tokens_used = batchResult.tokens_used || 0;
 
 
     return result;
@@ -424,51 +363,34 @@ export async function analyzeSingleBatch(
     if (isRetryableError(error)) {
       try {
         const retryResult = await retryWithBackoff(async () => {
-          const retryBatchPrompt = `Analyze these food ingredients and classify each one. Return a JSON array with analysis for each ingredient.
-
-Ingredients to analyze: ${ingredientNames.map(name => `"${name.trim()}"`).join(', ')}
-
-Return format:
-{
-  "ingredients": [
-    {
-      "name": "ingredient name",
-      "analysis": {
-        "status": "generally_clean" | "potentially_toxic",
-        "confidence": 0.0-1.0,
-        "educational_note": "Detailed explanation for premium users",
-        "basic_note": "Simple explanation for free users",
-        "reasoning": "Brief technical reasoning"
-      }
-    }
-  ]
-}`;
-          const retryPayload = {
-            model: AI_TEXT_MODEL, // GPT-3.5-turbo optimized for speed
-            messages: [
-              {
-                role: "system" as const,
-                content: SYSTEM_PROMPT
-              },
-              {
-                role: "user" as const,
-                content: retryBatchPrompt
-              }
-            ],
-            temperature: 0, // Optimized for speed - deterministic responses
-            max_tokens: 2000, // Prevents worst-case truncation for batches of 8 ingredients
-            response_format: { type: "json_object" as const }
-          };
-          const retryCompletion = await openai.chat.completions.create(retryPayload);
-          const retryResponse = retryCompletion.choices[0]?.message?.content;
-          if (!retryResponse) {
-            throw new Error('No response content from AI batch analysis retry');
+          // Get Supabase session for authentication
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.access_token) {
+            throw new Error('User not authenticated');
           }
-          
-          const retryParsed = JSON.parse(retryResponse) as BatchAIAnalysisResult;
+
+          // Retry using Edge Function
+          const retryResponse = await fetch(`${supabaseUrl}/functions/v1/openai-proxy`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              type: 'analyze_batch',
+              ingredientNames: sanitizedNames
+            }),
+          });
+
+          if (!retryResponse.ok) {
+            throw new Error(`Batch analysis retry failed: ${retryResponse.status} ${retryResponse.statusText}`);
+          }
+
+          const retryBatchResult = await retryResponse.json();
+          const retryResults = retryBatchResult.ingredients;
           
           // Validate and clean up the retry results
-          const validatedIngredients = retryParsed.ingredients.map((item) => ({
+          const validatedIngredients = retryResults.map((item: any) => ({
             ...item,
             analysis: {
               ...item.analysis,
@@ -479,7 +401,7 @@ Return format:
           return {
             ingredients: validatedIngredients,
             processing_time: Date.now() - startTime,
-            tokens_used: retryCompletion.usage?.total_tokens || 0
+            tokens_used: retryBatchResult.tokens_used || 0
           };
         }, 2); // Max 2 retries for batch analysis
         

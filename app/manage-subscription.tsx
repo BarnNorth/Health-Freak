@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
-import { ChevronLeft, CreditCard, Calendar, Zap, Settings, AlertCircle } from 'lucide-react-native';
+import { ChevronLeft, CreditCard, Calendar, Zap, AlertCircle } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { getSubscriptionInfo, cancelSubscription, SubscriptionInfo } from '@/services/subscription';
-import { openAppleSubscriptions } from '@/utils/deeplinks';
 import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
 
@@ -102,14 +101,6 @@ export default function ManageSubscriptionScreen() {
         }
       ]
     );
-  };
-
-  const handleManageAppleSubscription = async () => {
-    const opened = await openAppleSubscriptions();
-    if (!opened) {
-      // Instructions are shown automatically by the utility
-      console.log('[MANAGE_SUB] Deep link failed, showing manual instructions');
-    }
   };
 
   if (loading) {
@@ -309,27 +300,27 @@ export default function ManageSubscriptionScreen() {
 
               </>
             )
-          ) : (
-            // Apple IAP: Show Settings button
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.settingsButton]} 
-              onPress={handleManageAppleSubscription}
-            >
-              <Settings size={20} color={COLORS.cleanGreen} />
-              <Text style={styles.settingsButtonText}>Manage in iPhone Settings</Text>
-            </TouchableOpacity>
-          )}
+          ) : null}
         </View>
 
         {/* Educational Disclaimer */}
         <View style={styles.disclaimer}>
-          <Text style={styles.disclaimerText}>
-            {isStripe ? (
-              'Cancelling your subscription will stop future billing. You can continue using premium features until the end of your current billing period.'
-            ) : (
-              'Apple subscriptions are managed through your iPhone Settings. You can cancel or modify your subscription there at any time.'
-            )}
-          </Text>
+          {isStripe ? (
+            <Text style={styles.disclaimerText}>
+              Cancelling your subscription will stop future billing. You can continue using premium features until the end of your current billing period.
+            </Text>
+          ) : (
+            <>
+              <Text style={styles.disclaimerTitle}>How to Cancel</Text>
+              <Text style={styles.disclaimerInstructionsText}>
+                1. Open the Settings app{'\n'}
+                2. Tap your name at the top{'\n'}
+                3. Tap Subscriptions{'\n'}
+                4. Tap Health Freak{'\n'}
+                5. Tap Cancel Subscription
+              </Text>
+            </>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -362,11 +353,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: FONT_SIZES.titleMedium,
+    fontSize: FONT_SIZES.titleLarge,
     fontWeight: '400',
     color: COLORS.textPrimary,
     fontFamily: FONTS.karmaFuture,
-    lineHeight: LINE_HEIGHTS.titleMedium,
+    lineHeight: LINE_HEIGHTS.titleLarge,
   },
   loadingContainer: {
     flex: 1,
@@ -548,17 +539,6 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.terminalGrotesque,
     lineHeight: LINE_HEIGHTS.bodyMedium,
   },
-  settingsButton: {
-    backgroundColor: COLORS.cleanGreen,
-    borderColor: COLORS.border,
-  },
-  settingsButtonText: {
-    fontSize: FONT_SIZES.bodyLarge,
-    fontWeight: '400',
-    color: COLORS.background,
-    fontFamily: FONTS.terminalGrotesque,
-    lineHeight: LINE_HEIGHTS.bodyLarge,
-  },
   disclaimer: {
     marginHorizontal: 16,
     marginTop: 24,
@@ -568,10 +548,26 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: COLORS.border,
   },
+  disclaimerTitle: {
+    fontSize: FONT_SIZES.titleSmall,
+    fontWeight: '400',
+    color: COLORS.textPrimary,
+    marginBottom: 12,
+    fontFamily: FONTS.karmaFuture,
+    lineHeight: LINE_HEIGHTS.titleSmall,
+    textAlign: 'center',
+  },
   disclaimerText: {
     fontSize: FONT_SIZES.bodyMedium,
     color: COLORS.textSecondary,
     textAlign: 'center',
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodyMedium,
+  },
+  disclaimerInstructionsText: {
+    fontSize: FONT_SIZES.bodyMedium,
+    color: COLORS.textSecondary,
+    textAlign: 'left',
     fontFamily: FONTS.terminalGrotesque,
     lineHeight: LINE_HEIGHTS.bodyMedium,
   },
