@@ -19,6 +19,11 @@ interface IngredientInfo {
   basic_note?: string; // Short version for free users
   isMinorIngredient?: boolean; // true if ingredient is < X% of total product
   minorThreshold?: number; // Actual percentage threshold (e.g., 1.5, 2)
+  sources?: Array<{
+    title: string;
+    url: string;
+    type: 'research' | 'database' | 'regulatory' | 'other';
+  }>;
 }
 
 interface AnalysisResult {
@@ -137,6 +142,7 @@ export async function analyzeIngredients(
             basic_note: aiAnalysis.basic_note,
             isMinorIngredient: minorInfo?.isMinor || false,
             minorThreshold: minorInfo?.threshold,
+            sources: aiAnalysis.sources, // Add sources from AI analysis
           });
 
           // Queue caching operation for background processing (non-blocking)

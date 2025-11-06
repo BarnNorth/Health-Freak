@@ -26,26 +26,6 @@ if (!supabaseUrl) {
   console.error('EXPO_PUBLIC_SUPABASE_URL not configured');
 }
 
-// Helper functions for thought streaming
-function getIngredientEmoji(name: string): string {
-  const l = name.toLowerCase();
-  if (l.includes('sugar')) return '🍬';
-  if (l.includes('salt')) return '🧂';
-  if (l.includes('water')) return '💧';
-  if (l.includes('color')) return '🎨';
-  if (l.includes('acid')) return '🧪';
-  if (l.includes('vitamin')) return '💊';
-  if (l.includes('oil')) return '🫒';
-  return '🔬';
-}
-
-function getClassificationMessage(status: string, name: string): string {
-  const clean = [`✨ ${name} looks clean!`, `👍 ${name} passes`, `🌿 ${name} is natural`];
-  const toxic = [`⚠️ ${name} is concerning...`, `🚫 ${name} raises flags`, `🔬 ${name} needs scrutiny`];
-  const msgs = status === 'generally_clean' ? clean : toxic;
-  return msgs[Math.floor(Math.random() * msgs.length)];
-}
-
 // Special ingredient reactions removed for performance optimization
 
 // Test OpenAI Edge Function connectivity
@@ -87,6 +67,11 @@ export interface AIAnalysisResult {
   educational_note: string;
   basic_note: string;
   reasoning: string;
+  sources?: Array<{
+    title: string;
+    url: string;
+    type: 'research' | 'database' | 'regulatory' | 'other';
+  }>;
 }
 
 export interface BatchAIAnalysisResult {
@@ -98,44 +83,6 @@ export interface BatchAIAnalysisResult {
   tokens_used: number;
 }
 
-/**
- * System prompt for ingredient classification - Holistic/Functional Medicine Approach
- */
-const SYSTEM_PROMPT = `You are a holistic health expert analyzing food ingredients for wellness-conscious consumers.
-
-TASK: Classify ingredients as "generally_clean" or "potentially_toxic" based on:
-- Processing level (whole/natural vs synthetic/refined)
-- Health impact (nourishing vs inflammatory/disruptive)
-- Source quality (organic, non-GMO preferred)
-
-GENERALLY_CLEAN:
-- Whole, minimally processed foods (fruits, vegetables, whole grains, legumes)
-- Organic oils, herbs, spices
-- Natural vitamins/minerals in whole-food form
-- Traditional foods with proven safety
-- Probiotic/fermented ingredients
-
-POTENTIALLY_TOXIC:
-- Artificial colors, flavors, preservatives, sweeteners
-- Refined sugars, highly processed oils, trans fats
-- GMO ingredients
-- Synthetic additives affecting gut health, hormones, or inflammation
-- Ingredients with heavy metal/contamination concerns
-
-KEY CONSIDERATIONS:
-- Gut health, inflammation, hormonal balance
-- Organic/non-GMO status matters (e.g., "soy lecithin" organic=clean, conventional=toxic)
-- Processing matters (e.g., "cane sugar" unrefined=clean, refined=toxic)
-- When uncertain, classify as "potentially_toxic" (precautionary principle)
-
-RESPONSE FORMAT (required JSON):
-{
-  "status": "generally_clean" | "potentially_toxic",
-  "confidence": 0.0-1.0,
-  "educational_note": "Brief health impact explanation (2-3 sentences)",
-  "basic_note": "Simple consumer-friendly summary (1 sentence)",
-  "reasoning": "Why this classification was chosen"
-}`;
 /**
  * Analyze a single ingredient using AI
  */
@@ -259,18 +206,6 @@ export async function analyzeSingleBatch(
 
       const batchResult = await response.json();
       const results = batchResult.ingredients;
-      
-      // Stream progress updates for each ingredient
-      results.forEach((result: any, i: number) => {
-        onProgress?.({ 
-          type: 'analyzing', 
-          message: `Analyzed ${result.name}...`, 
-          emoji: getIngredientEmoji(result.name), 
-          current: i + 1, 
-          total: results.length, 
-          progress: Math.round(((i + 1) / results.length) * 100)
-        });
-      });
 
     const result: BatchAIAnalysisResult = {
       ingredients: results,
@@ -289,17 +224,8 @@ export async function analyzeSingleBatch(
       throw new Error('Invalid batch AI response structure');
     }
 
-    // Validate and clean up the results - OPTIMIZED: Process instantly, queue progress updates
+    // Validate and clean up the results
     const validatedIngredients = [];
-    const progressUpdates: Array<{
-      type: string;
-      message: string;
-      emoji: string;
-      current: number;
-      total: number;
-      status: string;
-      isToxic: boolean;
-    }> = [];
     const total = result.ingredients.length;
     
     for (let index = 0; index < result.ingredients.length; index++) {
@@ -316,32 +242,12 @@ export async function analyzeSingleBatch(
       const originalConfidence = analysis.confidence;
       const adjustedConfidence = Math.max(0, Math.min(1, analysis.confidence || 0.5));
 
-      // Collect progress update (don't send immediately)
-      progressUpdates.push({
-        type: 'classified',
-        message: getClassificationMessage(analysis.status, name),
-        emoji: analysis.status === 'generally_clean' ? '✨' : '⚠️',
-        current: index + 1,
-        total: total,
-        status: analysis.status === 'generally_clean' ? 'clean' : 'potentially_toxic',
-        isToxic: analysis.status === 'potentially_toxic'
-      });
-
       validatedIngredients.push({
         ...item,
         analysis: {
           ...analysis,
           confidence: adjustedConfidence
         }
-      });
-    }
-
-    // Send all progress updates asynchronously (non-blocking) with staggered timing for smooth UX
-    if (onProgress) {
-      Promise.resolve().then(() => {
-        progressUpdates.forEach((update, i) => {
-          setTimeout(() => onProgress(update), i * 150); // 150ms stagger for smooth display
-        });
       });
     }
 

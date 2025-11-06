@@ -236,8 +236,6 @@ export async function analyzePhoto(
       retryStrategies = retryResult.strategies;
     }
 
-    onProgress?.('Validating extracted text...');
-
     // Validate the extracted text
     const validation = validateIngredientList(ocrResult.text);
     
@@ -258,8 +256,6 @@ export async function analyzePhoto(
     // PERFORMANCE FIX: Remove redundant parsing here
     // Parsing will be done once in analyzeIngredients() in ingredients.ts
     // This eliminates duplicate parsing and improves performance by ~40%
-    
-    onProgress?.('Text extraction complete!');
 
     const result = {
       success: true,

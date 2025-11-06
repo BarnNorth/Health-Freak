@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { showPremiumUpgradePrompt, getIngredientCounts } from '@/services/subscriptionModals';
 import { submitIngredientFeedback, getBatchIngredientAccuracy } from '@/services/feedback';
+import { IngredientSources } from '@/components/IngredientSources';
 import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
 
@@ -19,6 +20,11 @@ interface AnalysisResult {
     confidence?: number;
     isMinorIngredient?: boolean;
     minorThreshold?: number;
+    sources?: Array<{
+      title: string;
+      url: string;
+      type: string;
+    }>;
   }>;
   totalIngredients: number;
   toxicCount: number;
@@ -116,6 +122,11 @@ export default function ResultsScreen() {
       return;
     }
 
+    // Don't submit feedback for unknown status
+    if (ingredientStatus === 'unknown') {
+      return;
+    }
+
     try {
       const userFeedback = isCorrect
         ? 'correct'
@@ -125,7 +136,7 @@ export default function ResultsScreen() {
 
       await submitIngredientFeedback(
         ingredientName,
-        ingredientStatus,
+        ingredientStatus, // TypeScript now knows this is 'generally_clean' | 'potentially_toxic'
         userFeedback,
         confidence,
         analysisResult?.productIdentification
@@ -315,6 +326,12 @@ export default function ResultsScreen() {
                               </Text>
                             </View>
                           )}
+                          
+                          {/* Ingredient Sources */}
+                          <IngredientSources 
+                            sources={ingredient.sources || []}
+                            ingredientName={ingredient.name}
+                          />
                         </>
                       )}
                     </View>

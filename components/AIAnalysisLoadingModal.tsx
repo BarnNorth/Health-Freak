@@ -6,6 +6,7 @@ import Animated, {
   withSpring, 
   withSequence, 
   withTiming,
+  withRepeat,
   interpolateColor,
   SlideInLeft,
   FadeOut
@@ -27,8 +28,9 @@ export interface AIThought {
 interface Props {
   visible: boolean;
   thoughts: AIThought[];
-  progress: number;
   ingredientCount: number;
+  cleanCount: number;
+  toxicCount: number;
 }
 
 interface ConfettiParticle {
@@ -39,6 +41,36 @@ interface ConfettiParticle {
   color: string;
   angle: number;
   rotation: number;
+}
+
+// Pulsing emoji component
+function PulsingEmoji({ emoji }: { emoji: string }) {
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(0.8);
+
+  useEffect(() => {
+    scale.value = withRepeat(
+      withTiming(1.15, { duration: 1500 }),
+      -1,
+      true
+    );
+    opacity.value = withRepeat(
+      withTiming(1, { duration: 1500 }),
+      -1,
+      true
+    );
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <Text style={{ fontSize: 120, marginBottom: 16 }}>{emoji}</Text>
+    </Animated.View>
+  );
 }
 
 // Thought cloud component for single thought display (retro game style)
@@ -130,85 +162,45 @@ function ThoughtCloudBubble({ thought }: { thought: AIThought }) {
   );
 }
 
-// Animated beaker progress bar
-function BeakerProgressBar({ progress }: { progress: number }) {
-  const progressValue = useSharedValue(0);
+// Spinning emoji loader
+function RotatingArrowsLoader({ isComplete }: { isComplete: boolean }) {
+  const rotation = useSharedValue(0);
+  const opacity = useSharedValue(1);
 
   useEffect(() => {
-    progressValue.value = withTiming(Math.min(progress, 100), { duration: 500 });
-  }, [progress]);
-
-  const liquidStyle = useAnimatedStyle(() => {
-    const height = (progressValue.value / 100) * 70; // 70px is the beaker body height
-    const color = interpolateColor(
-      progressValue.value,
-      [0, 100],
-      [COLORS.accentYellow, COLORS.cleanGreen]
+    rotation.value = withRepeat(
+      withTiming(360, { duration: 3000 }),
+      -1,
+      false
     );
+  }, []);
 
-    return {
-      position: 'absolute' as const,
-      bottom: 0,
-      left: 3,
-      right: 3,
-      height,
-      backgroundColor: color,
-    };
-  });
+  useEffect(() => {
+    if (isComplete) {
+      opacity.value = withTiming(0, { duration: 500 });
+    } else {
+      opacity.value = withTiming(1, { duration: 300 });
+    }
+  }, [isComplete]);
+
+  const emojiStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+    opacity: opacity.value,
+  }));
 
   return (
-    <View style={{ alignItems: 'center', marginBottom: 32 }}>
-      <View style={{
-        width: 60,
-        height: 80,
-        position: 'relative',
-      }}>
-        {/* Beaker rim */}
-        <View style={{
-          position: 'absolute',
-          top: 0,
-          left: -5,
-          right: -5,
-          height: 10,
-          backgroundColor: COLORS.border,
-          borderRadius: 2,
-          borderWidth: 3,
-          borderColor: COLORS.border,
-        }} />
-        
-        {/* Beaker body */}
-        <View style={{
-          position: 'absolute',
-          top: 10,
-          left: 0,
-          right: 0,
-          height: 70,
-          borderWidth: 3,
-          borderTopWidth: 0,
-          borderColor: COLORS.border,
-          borderBottomLeftRadius: 8,
-          borderBottomRightRadius: 8,
-          overflow: 'hidden',
-          backgroundColor: 'rgba(255, 255, 255, 0.3)',
-        }}>
-          {/* Liquid fill */}
-          <Animated.View style={liquidStyle} />
-        </View>
-
-        {/* Measurement marks */}
-        <View style={{ position: 'absolute', right: 5, top: 28, width: 8, height: 2, backgroundColor: COLORS.border }} />
-        <View style={{ position: 'absolute', right: 5, top: 45, width: 8, height: 2, backgroundColor: COLORS.border }} />
-        <View style={{ position: 'absolute', right: 5, top: 62, width: 8, height: 2, backgroundColor: COLORS.border }} />
-      </View>
-      
+    <View style={{ alignItems: 'center', marginBottom: 32, height: 120, justifyContent: 'center' }}>
+      <Animated.Text style={[{ fontSize: 64 }, emojiStyle]}>
+        ⏳
+      </Animated.Text>
       <Text style={{ 
-        fontSize: FONT_SIZES.bodySmall, 
+        fontSize: FONT_SIZES.bodyMedium, 
         color: COLORS.textSecondary, 
-        fontFamily: FONTS.terminalGrotesque, 
+        fontFamily: FONTS.terminalGrotesque,
         textAlign: 'center',
-        marginTop: 8
+        marginTop: 16
       }}>
-        {Math.round(progress)}%
+        Analyzing ingredients...
       </Text>
     </View>
   );
@@ -258,7 +250,13 @@ function ConfettiParticle({ particle }: { particle: ConfettiParticle }) {
   );
 }
 
-export function AIAnalysisLoadingModal({ visible, thoughts, progress, ingredientCount }: Props) {
+export function AIAnalysisLoadingModal({ 
+  visible, 
+  thoughts, 
+  ingredientCount, 
+  cleanCount, 
+  toxicCount 
+}: Props) {
   const [confettiParticles, setConfettiParticles] = useState<ConfettiParticle[]>([]);
   const [showSummary, setShowSummary] = useState(false);
   const [summaryData, setSummaryData] = useState({ cleanCount: 0, toxicCount: 0 });
@@ -310,9 +308,7 @@ export function AIAnalysisLoadingModal({ visible, thoughts, progress, ingredient
     }
     
     if (isComplete && !showSummary && thoughts.length > 1 && visible) {
-      const toxic = thoughts.filter(t => t.isToxic).length;
-      const clean = ingredientCount - toxic;
-      setSummaryData({ cleanCount: clean, toxicCount: toxic });
+      setSummaryData({ cleanCount, toxicCount }); // Use props directly
       setShowSummary(true);
       
       // Trigger haptic if toxic found
@@ -320,7 +316,7 @@ export function AIAnalysisLoadingModal({ visible, thoughts, progress, ingredient
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       }
     }
-  }, [isComplete, visible, thoughts.length, hasToxicIngredients, ingredientCount]);
+  }, [isComplete, visible, thoughts.length, hasToxicIngredients, cleanCount, toxicCount]);
 
 
   // Context-aware emoji display
@@ -344,8 +340,8 @@ export function AIAnalysisLoadingModal({ visible, thoughts, progress, ingredient
           ))}
 
           <View style={{ alignItems: 'center', paddingTop: 40, paddingBottom: 24 }}>
-            {/* Animated Emoji */}
-            <Text style={{ fontSize: 120, marginBottom: 16 }}>{getEmojiDisplay()}</Text>
+            {/* Pulsing Emoji */}
+            <PulsingEmoji emoji={getEmojiDisplay()} />
             
             <Text style={{ 
               fontSize: FONT_SIZES.titleXL, 
@@ -358,8 +354,8 @@ export function AIAnalysisLoadingModal({ visible, thoughts, progress, ingredient
             </Text>
           </View>
           
-          {/* Beaker Progress Bar */}
-          <BeakerProgressBar progress={progress} />
+          {/* Rotating Arrows Loader */}
+          {!showSummary && <RotatingArrowsLoader isComplete={isComplete} />}
           
           {/* Single Thought Bubble - Shows only latest thought */}
           <View style={{ flex: 1, justifyContent: 'center', paddingBottom: 40 }}>

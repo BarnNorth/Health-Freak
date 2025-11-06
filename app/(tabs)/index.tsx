@@ -28,6 +28,8 @@ import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
 import { AIAnalysisLoadingModal, AIThought } from '@/components/AIAnalysisLoadingModal';
 
+const AI_SUMMARY_DISPLAY_DURATION = 2500;
+
 export default function CameraScreen() {
   const [facing, setFacing] = useState<CameraType>('back');
   const [permission, requestPermission] = useCameraPermissions();
@@ -57,12 +59,25 @@ export default function CameraScreen() {
   // AI Loading Modal state
   const [showAILoading, setShowAILoading] = useState(false);
   const [aiThoughts, setAiThoughts] = useState<AIThought[]>([]);
-  const [aiProgress, setAiProgress] = useState(0);
   const [ingredientCount, setIngredientCount] = useState(0);
+  const [cleanCount, setCleanCount] = useState(0);
+  const [toxicCount, setToxicCount] = useState(0);
   
   const addAIThought = (thought: Omit<AIThought, 'timestamp'>) => {
     setAiThoughts(prev => [...prev, { ...thought, timestamp: Date.now() }]);
   };
+
+  // Cleanup AI loading modal on unmount
+  useEffect(() => {
+    return () => {
+      if (showAILoading) {
+        setShowAILoading(false);
+        setAiThoughts([]);
+        setCleanCount(0);
+        setToxicCount(0);
+      }
+    };
+  }, [showAILoading]);
 
   // Performance monitoring
   interface PerfMetrics { 
@@ -106,8 +121,11 @@ export default function CameraScreen() {
       setIsTabFocused(true);
       return () => {
         setIsTabFocused(false);
+        if (showAILoading) {
+          setShowAILoading(false);
+        }
       };
-    }, [])
+    }, [showAILoading])
   );
 
   useEffect(() => {
@@ -312,11 +330,9 @@ export default function CameraScreen() {
       setShowPreview(false);
       setShowAILoading(true);
       setAiThoughts([]);
-      setAiProgress(0);
       setIngredientCount(0);
-      
-      // Add initial OCR thought
-      addAIThought({ message: 'Scanning photo...', emoji: '📸', type: 'ocr' });
+      setCleanCount(0);
+      setToxicCount(0);
       
       setIsAnalyzing(true);
       setOcrProgress('Analyzing photo...');
@@ -370,21 +386,19 @@ export default function CameraScreen() {
       // Free users get basic analysis (overall verdict), premium users get detailed breakdown
       updatePerfMetric('aiStart');
       const isPremium = user?.subscription_status === 'premium';
-      let processedCount = 0;
       
-      // PERFORMANCE FIX: Parse only once in analyzeIngredients, get count from results
+      // Get ingredient count from results for modal summary display
       const results = await analyzeIngredients(photoAnalysis.extractedText, user?.id || 'anonymous', isPremium, (update) => {
-        // Track overall progress across all batches
-        if (update.type === 'classified') {
-          processedCount++;
-          // Use update.total instead of results.totalIngredients since results isn't available yet in callback
-          setAiProgress(Math.min((update.current / (update.total || 1)) * 100, 100));
+        // Only show stage updates, filter out any ingredient-level updates
+        if (update.type === 'ocr' || update.type === 'parsing' || update.type === 'complete') {
+          addAIThought({ message: update.message, emoji: update.emoji, type: update.type, isToxic: update.isToxic });
         }
-        addAIThought({ message: update.message, emoji: update.emoji, type: update.type, isToxic: update.isToxic });
       });
       
       // Set ingredient count from results (parsing happens once in analyzeIngredients)
       setIngredientCount(results.totalIngredients);
+      setCleanCount(results.cleanCount);
+      setToxicCount(results.toxicCount);
       updatePerfMetric('aiEnd');
       
       console.log('🎯 Ingredient Analysis Results:', {
@@ -394,9 +408,6 @@ export default function CameraScreen() {
         cleanCount: results.cleanCount,
         ingredients: results.ingredients
       });
-      
-      // Ensure progress reaches 100%
-      setAiProgress(100);
       
       // Add final AI thought
       addAIThought({
@@ -408,7 +419,7 @@ export default function CameraScreen() {
       });
       
       // Wait longer to show the final thought so users can see the verdict
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, AI_SUMMARY_DISPLAY_DURATION));
       setShowAILoading(false);
       
       // Run database operations in background (non-blocking)
@@ -459,35 +470,32 @@ export default function CameraScreen() {
       // Show AI modal immediately
       setShowAILoading(true);
       setAiThoughts([]);
-      setAiProgress(0);
+      setCleanCount(0);
+      setToxicCount(0);
       
       addAIThought({ message: 'Reading ingredient list...', emoji: '👀', type: 'parsing' });
       
       // Analyze ingredients with progress callbacks
       // Free users get basic analysis (overall verdict), premium users get detailed breakdown
       const isPremium = user?.subscription_status === 'premium';
-      let processedCount = 0;
       
-      // PERFORMANCE FIX: Parse only once in analyzeIngredients, get count from results
+      // Get ingredient count from results for modal summary display
       const results = await analyzeIngredients(extractedText, user?.id || 'anonymous', isPremium, (update) => {
-        // Track overall progress across all batches
-        if (update.type === 'classified') {
-          processedCount++;
-          setAiProgress(Math.min((processedCount / results.totalIngredients) * 100, 100));
+        // Only show stage updates, filter out any ingredient-level updates
+        if (update.type === 'ocr' || update.type === 'parsing' || update.type === 'complete') {
+          addAIThought({ 
+            message: update.message, 
+            emoji: update.emoji, 
+            type: update.type,
+            isToxic: update.isToxic 
+          });
         }
-        addAIThought({ 
-          message: update.message, 
-          emoji: update.emoji, 
-          type: update.type,
-          isToxic: update.isToxic 
-        });
       });
       
       // Set ingredient count from results (parsing happens once in analyzeIngredients)
       setIngredientCount(results.totalIngredients);
-      
-      // Ensure progress reaches 100%
-      setAiProgress(100);
+      setCleanCount(results.cleanCount);
+      setToxicCount(results.toxicCount);
       
       // Add final AI thought
       addAIThought({
@@ -499,7 +507,7 @@ export default function CameraScreen() {
       });
       
       // Wait longer to show the final thought so users can see the verdict
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, AI_SUMMARY_DISPLAY_DURATION));
       setShowAILoading(false);
       
       // Run database operations in background (non-blocking)
@@ -821,8 +829,9 @@ export default function CameraScreen() {
         <AIAnalysisLoadingModal 
           visible={showAILoading} 
           thoughts={aiThoughts} 
-          progress={aiProgress} 
-          ingredientCount={ingredientCount} 
+          ingredientCount={ingredientCount}
+          cleanCount={cleanCount}
+          toxicCount={toxicCount}
         />
 
         {/* Payment Method Modal */}

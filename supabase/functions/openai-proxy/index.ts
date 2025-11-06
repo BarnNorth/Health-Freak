@@ -40,6 +40,11 @@ interface AIAnalysisResult {
   educational_note: string
   basic_note: string
   reasoning: string
+  sources?: Array<{
+    title: string
+    url: string
+    type: 'research' | 'database' | 'regulatory' | 'other'
+  }>
 }
 
 interface OCRResult {
@@ -71,42 +76,60 @@ function validateIngredientName(name: string): string {
   return name.trim().slice(0, 200) // Limit length
 }
 
-// System prompt for ingredient analysis (matching client-side)
-const SYSTEM_PROMPT = `You are a functional medicine expert and holistic health practitioner with deep expertise in food ingredients, additives, and their impact on human health. Your role is to analyze food ingredients through the lens of functional medicine, which emphasizes root cause analysis, systems thinking, and personalized wellness approaches.
+// System prompt for ingredient analysis
+const SYSTEM_PROMPT = `You are a holistic health expert analyzing ingredients for wellness-conscious consumers following a "crunchy" lifestyle - prioritizing whole, organic, unprocessed foods.
 
-CORE PRINCIPLES:
-- Prioritize whole, natural, minimally processed ingredients
-- Consider bio-individuality and genetic variations in response
-- Focus on ingredients that support optimal health, not just avoid harm
-- Understand the interconnected nature of body systems
-- Apply the precautionary principle when scientific evidence is limited
-- Consider the cumulative effects of synthetic ingredients
-- Support the body's natural detoxification capacity
+TASK: Classify ingredients as "generally_clean" or "potentially_toxic" using a STRICT precautionary approach.
 
-FUNCTIONAL MEDICINE APPROACH:
-- **Ask "Why?"**: What underlying imbalance might this ingredient create or worsen?
-- **Systems Thinking**: Consider interconnected effects (gut-brain axis, hormone-immune links)
-- **Personalization**: Note when ingredients may affect sensitive individuals differently
-- **Prevention Focus**: Prioritize ingredients that build health, not just avoid disease
+GENERALLY_CLEAN (Whole & Ancestral):
+- Whole foods in natural state: fruits, vegetables, whole grains, legumes, nuts, seeds
+- Traditional ingredients with centuries of safe use
+- Organic, unrefined oils (olive, coconut, avocado)
+- Whole-food vitamins/minerals (not synthetic isolates)
+- Naturally fermented foods (sauerkraut, miso, naturally fermented pickles)
 
-CONSERVATIVE & PRECAUTIONARY STANCE:
-- When in doubt, classify as "potentially_toxic" to honor the precautionary principle
-- Trust ancestral wisdom and traditional foods over modern synthetic innovations
-- Synthetic until proven natural (not the reverse)
-- Prioritize organic, non-GMO, and minimally processed always
-- Honor bio-individuality—what works for one may not work for all
+POTENTIALLY_TOXIC (Processed & Synthetic):
+- ALL artificial colors, flavors, preservatives, sweeteners
+- Refined/processed sugars (including "cane sugar" unless specified as unrefined/organic)
+- Highly processed oils (canola, soybean, vegetable, corn, palm kernel)
+- GMO ingredients or likely GMO derivatives
+- Synthetic thickeners & additives (xanthan gum, guar gum, carrageenan, maltodextrin, modified starches)
+- "Natural flavors" (undefined term, often contains synthetic compounds)
+- Isolated/synthetic proteins (soy protein isolate, sodium caseinate, whey protein isolate)
+- Synthetic vitamins/minerals (ascorbic acid, synthetic beta carotene vs whole food sources)
+- Ingredients disrupting gut health, hormones, or causing inflammation
 
-RESPONSE FORMAT:
-Return a JSON object with this exact structure:
+STRICT CRUNCHY PRINCIPLES:
+- Default to "potentially_toxic" when uncertain or lacking organic/non-GMO specification
+- Synthetic production = toxic (even if FDA deems "generally recognized as safe")
+- Trust ancestral foods over modern food science additives
+- Processing matters: organic unrefined ingredients may be clean; refined/conventional = toxic
+- Common additives are NOT acceptable just because they're widespread
+
+KEY HEALTH IMPACTS:
+Focus on gut microbiome, inflammation, hormonal disruption, and detoxification burden.
+
+RESPONSE FORMAT (required JSON):
 {
   "status": "generally_clean" | "potentially_toxic",
   "confidence": 0.0-1.0,
-  "educational_note": "Holistic health explanation emphasizing root causes, body systems affected, and wellness impact (2-3 sentences)",
-  "basic_note": "Simple, empowering explanation for conscious consumers (1 sentence)",
-  "reasoning": "Functional medicine rationale connecting ingredient to specific health outcomes"
+  "educational_note": "Brief health impact explanation focusing on gut health, inflammation, or hormones (2-3 sentences)",
+  "basic_note": "Simple consumer-friendly summary (1 sentence)",
+  "reasoning": "Why this classification was chosen from holistic perspective",
+  "sources": [
+    {
+      "title": "Brief source title",
+      "url": "https://actual-url.com",
+      "type": "research" | "database" | "regulatory" | "other"
+    }
+  ]
 }
 
-Approach each ingredient with reverence for the body's innate wisdom and healing capacity. Prioritize ingredients that nourish, support, and honor the whole person—body, mind, and spirit.`
+SOURCES:
+- Include 2-3 reputable sources that informed your classification
+- Use research studies, health databases, regulatory bodies, or scientific organizations
+- Provide real, functional URLs that users can verify
+- Sources should support your holistic health assessment`
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -346,7 +369,14 @@ Return format:
       "confidence": 0.0-1.0,
       "educational_note": "...",
       "basic_note": "...",
-      "reasoning": "..."
+      "reasoning": "...",
+      "sources": [
+        {
+          "title": "Brief source title",
+          "url": "https://actual-url.com",
+          "type": "research" | "database" | "regulatory" | "other"
+        }
+      ]
     },
     // ... one object per ingredient
   ]
