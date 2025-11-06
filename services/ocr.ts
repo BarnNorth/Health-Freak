@@ -690,7 +690,8 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
   const minorSections: MinorSection[] = [];
   
   // Pattern to detect minor sections with percentage extraction
-  const minorPattern = /contains?\s+(?:(\d+(?:\.\d+)?)\s*%|less\s+than\s+(\d+(?:\.\d+)?)\s*%)\s+or\s+less\s*(?:of\s+)?(?:each\s+of\s+)?(?:the\s+following:\s*)?/gi;
+  // Uses alternation to handle both "Less than 2% of" (less before %) and "2% or less of" (less after %)
+  const minorPattern = /(?:contains?\s+)?(?:less\s+than\s+(\d+(?:\.\d+)?)\s*%|(\d+(?:\.\d+)?)\s*%\s+(?:or\s+)?less)\s*(?:of\s+)?(?:each\s+of\s+)?(?:the\s+following:\s*)?/gi;
   
   let searchText = text;
   let match;
@@ -710,6 +711,9 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
       threshold: threshold
     });
     
+    // Log when minor section is found
+    console.log(`🎯 Minor section found: threshold ${threshold}% at position ${commasBeforeMarker}`);
+    
     // Track marker for removal
     markersToRemove.push({
       index: match.index,
@@ -720,15 +724,18 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
   // Remove all markers from text (in reverse order to preserve indices)
   for (let i = markersToRemove.length - 1; i >= 0; i--) {
     const marker = markersToRemove[i];
-    const textBeforeTrimmed = searchText.substring(0, marker.index).trimEnd();
-    const hasCommaBeforeMarker = textBeforeTrimmed.endsWith(',');
-    const textAfterMarker = searchText.substring(marker.index + marker.length).trim();
+    let textBeforeMarker = searchText.substring(0, marker.index).trimEnd();
+    let textAfterMarker = searchText.substring(marker.index + marker.length).trim();
     
-    if (hasCommaBeforeMarker) {
-      searchText = textBeforeTrimmed + ' ' + textAfterMarker;
-    } else {
-      searchText = textBeforeTrimmed + ', ' + textAfterMarker;
-    }
+    // Remove trailing "and" or ", and" before marker
+    textBeforeMarker = textBeforeMarker.replace(/,?\s*and\s*$/i, '').trimEnd();
+    
+    // Remove leading "of:" or "of" from text after marker
+    textAfterMarker = textAfterMarker.replace(/^of:?\s*/i, '').trim();
+    
+    // Ensure proper comma placement
+    const hasComma = textBeforeMarker.endsWith(',');
+    searchText = textBeforeMarker + (hasComma ? ' ' : ', ') + textAfterMarker;
   }
   
   text = searchText;
@@ -759,6 +766,7 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
       if (applicableSection) {
         parsed.isMinorIngredient = true;
         parsed.minorThreshold = applicableSection.threshold;
+        console.log(`📌 Minor ingredient detected: ${parsed.name} (threshold: ${applicableSection.threshold}%)`);
       }
       parsedIngredients.push(parsed);
     }
@@ -1159,6 +1167,50 @@ export function validateIngredientList(text: string): {
     isValid: confidence > 0.4,
     confidence,
     suggestions,
+  };
+}
+
+/**
+ * Validate OCR extraction quality and completeness
+ */
+export function validateOCRExtraction(extractedText: string, parsedIngredients: ParsedIngredient[]): {
+  isValid: boolean;
+  warnings: string[];
+} {
+  const warnings: string[] = [];
+  
+  // Check if extracted text is too short
+  if (extractedText.length < 20) {
+    warnings.push('Extracted text is very short (< 20 characters) - OCR may be incomplete');
+  }
+  
+  // Check if too few ingredients found
+  if (parsedIngredients.length < 3) {
+    warnings.push(`Only ${parsedIngredients.length} ingredients found - OCR may be incomplete. Expected at least 3 ingredients.`);
+  }
+  
+  // Check if minor marker found but few ingredients after it
+  // Uses alternation to handle both "Less than 2% of" (less before %) and "2% or less of" (less after %)
+  const minorPattern = /(?:contains?\s+)?(?:less\s+than\s+(\d+(?:\.\d+)?)\s*%|(\d+(?:\.\d+)?)\s*%\s+(?:or\s+)?less)\s*(?:of\s+)?(?:each\s+of\s+)?(?:the\s+following:\s*)?/gi;
+  const hasMinorMarker = minorPattern.test(extractedText);
+  
+  if (hasMinorMarker) {
+    // Reset regex to search from beginning
+    minorPattern.lastIndex = 0;
+    const markerMatch = minorPattern.exec(extractedText);
+    if (markerMatch) {
+      const textAfterMarker = extractedText.substring(markerMatch.index + markerMatch[0].length);
+      const ingredientsAfterMarker = parseIngredientsFromText(textAfterMarker);
+      
+      if (ingredientsAfterMarker.length < 2) {
+        warnings.push('Minor ingredient marker found but < 2 ingredients detected after it - OCR may be incomplete');
+      }
+    }
+  }
+  
+  return {
+    isValid: warnings.length === 0,
+    warnings
   };
 }
 

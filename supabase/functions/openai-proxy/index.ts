@@ -1,5 +1,14 @@
+// @ts-expect-error - Deno module resolution (works at runtime)
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+// @ts-expect-error - ESM module resolution (works at runtime)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+// Deno global types declaration
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -131,7 +140,7 @@ SOURCES:
 - Provide real, functional URLs that users can verify
 - Sources should support your holistic health assessment`
 
-serve(async (req) => {
+serve(async (req: Request) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -282,6 +291,13 @@ CRITICAL RULES:
 5. Preserve sub-ingredients in parentheses exactly as shown
 6. Remove any nutrition data that got mixed in (like "4%", "12%", etc.)
 7. Extract ALL ingredients - do not skip any - look carefully for every single ingredient
+8. CRITICAL: Preserve minor ingredient markers exactly as written:
+   - "Contains 2% or less of:" → keep this phrase
+   - "Contains less than 2% of:" → keep this phrase  
+   - "2% or less of:" → keep this phrase
+   - Any similar threshold markers (1%, 1.5%, etc.)
+   - These markers indicate ingredients that are <2% of the product
+   - Example: "Water, Sugar, Contains 2% or less of: Xanthan Gum, Guar Gum" → extract exactly as shown
 
 If you cannot find ingredients, return "NO_INGREDIENTS_FOUND".`
 

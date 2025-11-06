@@ -167,12 +167,14 @@ export async function analyzeIngredients(
         // Fallback: mark all unknown ingredients as unknown status
         for (const ingredient of unknownIngredients) {
           const normalized = ingredient.toLowerCase();
+          const minorInfo = minorIngredientsMap.get(normalized);
           resultsByName.set(normalized, {
             name: capitalizeIngredientName(ingredient),
             status: 'unknown',
             educational_note: `${capitalizeIngredientName(ingredient)} - Not analyzed. Please try again.`,
             basic_note: 'Not analyzed - try scanning again',
-            isMinorIngredient: minorIngredientsMap.get(normalized) || false,
+            isMinorIngredient: minorInfo?.isMinor || false,
+            minorThreshold: minorInfo?.threshold,
           });
         }
       }
@@ -181,12 +183,14 @@ export async function analyzeIngredients(
       // Fallback: mark all unknown ingredients as unknown status
       for (const ingredient of unknownIngredients) {
         const normalized = ingredient.toLowerCase();
+        const minorInfo = minorIngredientsMap.get(normalized);
         resultsByName.set(normalized, {
           name: capitalizeIngredientName(ingredient),
           status: 'unknown',
           educational_note: `${capitalizeIngredientName(ingredient)} - Not analyzed. Please try again.`,
           basic_note: 'Not analyzed - try scanning again',
-          isMinorIngredient: minorIngredientsMap.get(normalized) || false,
+          isMinorIngredient: minorInfo?.isMinor || false,
+          minorThreshold: minorInfo?.threshold,
         });
       }
     }

@@ -1,4 +1,4 @@
-import { extractTextFromImage, parseIngredientsFromText, validateIngredientList, OCRResult, ImagePreprocessingOptions } from './ocr';
+import { extractTextFromImage, parseIngredientsFromText, validateIngredientList, validateOCRExtraction, OCRResult, ImagePreprocessingOptions } from './ocr';
 import { config } from '@/lib/config';
 import * as ImageManipulator from 'expo-image-manipulator';
 
@@ -31,10 +31,6 @@ const RETRY_STRATEGIES: RetryStrategy[] = [
     name: 'enhanced_contrast',
     description: 'Enhanced contrast and brightness',
     preprocessingOptions: {
-      enhanceContrast: true,
-      correctRotation: true,
-      reduceNoise: true,
-      adaptiveThresholding: true,
       resize: { width: 1200, height: 1200 }
     }
   },
@@ -42,9 +38,6 @@ const RETRY_STRATEGIES: RetryStrategy[] = [
     name: 'center_crop',
     description: 'Center crop focusing on ingredient list',
     preprocessingOptions: {
-      enhanceContrast: true,
-      correctRotation: true,
-      reduceNoise: true,
       resize: { width: 1000, height: 1000 }
     },
     imageModifications: async (imageUri: string) => {
@@ -72,9 +65,6 @@ const RETRY_STRATEGIES: RetryStrategy[] = [
     name: 'high_resolution',
     description: 'High resolution processing',
     preprocessingOptions: {
-      enhanceContrast: true,
-      correctRotation: true,
-      reduceNoise: true,
       resize: { width: 1600, height: 1600 }
     }
   },
@@ -82,9 +72,6 @@ const RETRY_STRATEGIES: RetryStrategy[] = [
     name: 'fallback_minimal',
     description: 'Fallback to minimal preprocessing (should rarely be needed)',
     preprocessingOptions: {
-      enhanceContrast: false,
-      correctRotation: false,
-      reduceNoise: false,
       resize: { width: 800, height: 800 }
     }
   }
@@ -253,6 +240,18 @@ export async function analyzePhoto(
       };
     }
 
+    // Parse ingredients to count them for validation
+    const parsedIngredients = parseIngredientsFromText(ocrResult.text);
+    const ocrValidation = validateOCRExtraction(ocrResult.text, parsedIngredients);
+    
+    // Log warnings if any
+    if (ocrValidation.warnings.length > 0) {
+      console.warn('⚠️ OCR Validation Warnings:', ocrValidation.warnings);
+      ocrValidation.warnings.forEach(warning => {
+        console.warn(`  - ${warning}`);
+      });
+    }
+
     // PERFORMANCE FIX: Remove redundant parsing here
     // Parsing will be done once in analyzeIngredients() in ingredients.ts
     // This eliminates duplicate parsing and improves performance by ~40%
@@ -324,10 +323,6 @@ export function getRetryStrategiesInfo(): {
       name: strategy.name,
       description: strategy.description,
       features: [
-        strategy.preprocessingOptions.enhanceContrast ? 'Enhanced contrast' : 'Standard contrast',
-        strategy.preprocessingOptions.correctRotation ? 'Rotation correction' : 'No rotation correction',
-        strategy.preprocessingOptions.reduceNoise ? 'Noise reduction' : 'No noise reduction',
-        strategy.preprocessingOptions.adaptiveThresholding ? 'Adaptive thresholding' : 'Standard thresholding',
         strategy.imageModifications ? 'Image modifications' : 'No image modifications',
         `Resize: ${strategy.preprocessingOptions.resize?.width}x${strategy.preprocessingOptions.resize?.height}`
       ]
