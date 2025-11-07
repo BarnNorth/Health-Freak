@@ -75,18 +75,11 @@ Upgrade to Health Freak Premium for $10/month and unlock:
 - **Priority support** – Get help faster when you need it
 - **Ad-free experience** – Clean interface without interruptions
 
-## 🔐 Privacy & Security
-
-- All scans are stored securely in your private account
-- We never sell your personal information
-- You can delete your scan history anytime
-- Industry-standard encryption protects your data
-
 ## 📧 Support & Feedback
 
 We'd love to hear from you!
 
-- **Questions?** Check out our FAQ or contact support
+- **Questions?** Reach out and we'll be happy to help
 - **Found a bug?** Let us know and we'll fix it
 - **Feature ideas?** We're always looking to improve
 
