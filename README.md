@@ -19,9 +19,9 @@ Health Freak is a mobile app that takes the guesswork out of reading food labels
 
 Health Freak displays simplified labels in the app interface: **Clean** (for "Generally Clean" ingredients) and **Toxic** (for "Potentially Toxic" ingredients). These represent educational opinions evaluated through a holistic, wellness-focused lens.
 
-> **Our Philosophy**
->
-> We prioritize whole, organic, unprocessed foods and remain cautious about synthetic additives, artificial ingredients, and heavily processed substances. Our AI is prompted to evaluate ingredients from this wellness perspective, which may be more conservative than mainstream regulatory standards.
+### Our Philosophy
+
+Health Freak analyzes ingredients through a "crunchy lifestyle" lens – prioritizing whole, organic, unprocessed foods while being cautious about synthetic additives, artificial ingredients, and heavily processed substances. Our AI is specifically prompted to evaluate ingredients from this wellness-focused perspective, which may be more conservative than mainstream regulatory standards.
 
 Health Freak's AI considers:
 
@@ -31,9 +31,9 @@ Health Freak's AI considers:
 - **Processing methods** and artificial additives
 - **Holistic health perspectives**, flagging ingredients that may be "generally recognized as safe" but raise wellness concerns
 
-> **Important Note**
->
-> These classifications are educational opinions—not medical advice or regulatory determinations. An ingredient marked "Potentially Toxic" may still be approved by regulatory agencies. Always consult healthcare professionals for personalized dietary guidance.
+### Important Note
+
+These classifications are educational opinions—not medical advice or regulatory determinations. An ingredient marked "Potentially Toxic" may still be approved by regulatory agencies. We simply approach food through a more cautious, natural-focused lens. Always consult healthcare professionals for personalized dietary guidance.
 
 ## 🎯 Features
 
