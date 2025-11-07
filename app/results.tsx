@@ -270,7 +270,7 @@ export default function ResultsScreen() {
                           {ingredient.isMinorIngredient && (
                             <View style={styles.minorBadge}>
                               <Text style={styles.minorBadgeText}>
-                                {'< ' + (ingredient.minorThreshold || 2) + '%'}
+                                {'2% or less'}
                               </Text>
                             </View>
                           )}

@@ -380,7 +380,7 @@ export default function CameraScreen() {
       
       setIsAnalyzing(false);
       
-      addAIThought({ message: 'Reading ingredient list...', emoji: '👀', type: 'parsing' });
+      addAIThought({ message: 'AI reviewing ingredients...', emoji: '👀', type: 'parsing' });
       
       // Analyze ingredients using the extracted text with progress callbacks
       // Free users get basic analysis (overall verdict), premium users get detailed breakdown
@@ -473,7 +473,7 @@ export default function CameraScreen() {
       setCleanCount(0);
       setToxicCount(0);
       
-      addAIThought({ message: 'Reading ingredient list...', emoji: '👀', type: 'parsing' });
+      addAIThought({ message: 'AI reviewing ingredients...', emoji: '👀', type: 'parsing' });
       
       // Analyze ingredients with progress callbacks
       // Free users get basic analysis (overall verdict), premium users get detailed breakdown

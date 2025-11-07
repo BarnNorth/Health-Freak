@@ -53,7 +53,7 @@ export default function PrivacyScreen() {
             {'\n'}• OpenAI: Ingredient photo analysis and classification. Images are transmitted to OpenAI's API for processing and retained for up to 30 days for security and abuse prevention, then permanently deleted. Per OpenAI's API data usage policies, your images are not used to train their AI models. However, OpenAI may use data to improve their safety and abuse prevention systems.
             {'\n'}• Supabase: Secure database storage, user authentication, and backend infrastructure
             {'\n'}• Stripe: Credit card payment processing for premium subscriptions (for users who choose credit card payment method)
-            {'\n'}• RevenueCat: Subscription management for Apple In-App Purchases. Collects Apple receipt data (purchase history), user identifiers (app user ID, device ID), and subscription status. RevenueCat uses this data for subscription validation, analytics, and fraud prevention. For more information, see RevenueCat's privacy policy at https://www.revenuecat.com/privacy
+            {'\n'}• RevenueCat: Manages Apple subscription receipts and attribution tracking. On iOS devices, RevenueCat collects your device's advertising identifier (IDFA) to measure which marketing campaigns lead to subscriptions. This helps us understand the effectiveness of our advertising and improve our services. You can limit ad tracking in your device settings: iOS Settings > Privacy & Security > Tracking.
             {'\n\n'}Important: We do not sell your personal information to third parties. Your data is shared only with these essential service providers necessary to deliver app functionality.
           </Text>
 
@@ -72,9 +72,8 @@ export default function PrivacyScreen() {
             You have full control over your personal data:
             {'\n'}• Access your data: View all your scan history in the app
             {'\n'}• Delete your data: Request account deletion by contacting support
-            {'\n'}• Export your data: Request a copy of your data
+            {'\n'}• Export your data: Request a copy of your data via email
             {'\n'}• Cancel subscription: Manage in app settings at any time
-            {'\n\n'}Data Export: Your export will include all scan history in JSON format, ingredient analysis results, account information, and subscription history. Exports provided within 30 days of request.
             {'\n\n'}To exercise these rights, contact us at support@healthfreak.io
           </Text>
 
@@ -106,11 +105,7 @@ export default function PrivacyScreen() {
 
           <Text style={styles.sectionTitle}>9. Changes to This Privacy Policy</Text>
           <Text style={styles.sectionText}>
-            We may update this privacy policy periodically to reflect changes in our practices or legal requirements:
-            {'\n'}• We may update this policy periodically
-            {'\n'}• Significant changes will be notified via email or in-app notification
-            {'\n'}• Continued use after changes constitutes acceptance
-            {'\n\n'}We encourage you to review this policy regularly to stay informed about how we protect your information.
+            We may update this policy periodically. Significant changes will be notified via email or in-app notification. Continued use after changes constitutes acceptance.
           </Text>
 
           <Text style={styles.sectionTitle}>10. Contact Us</Text>
@@ -120,19 +115,7 @@ export default function PrivacyScreen() {
             {'\n\n'}For privacy concerns, data requests, or questions about this policy, we will respond to your inquiry as soon as possible.
           </Text>
 
-          <Text style={styles.sectionTitle}>11. International Users and GDPR Rights</Text>
-          <Text style={styles.sectionText}>
-            If you are located in the European Economic Area (EEA), you have additional rights under GDPR:
-            {'\n'}• Right to access your personal data
-            {'\n'}• Right to rectification of incorrect data
-            {'\n'}• Right to erasure ("right to be forgotten")
-            {'\n'}• Right to data portability
-            {'\n'}• Right to object to processing
-            {'\n'}• Right to lodge a complaint with supervisory authorities
-            {'\n\n'}To exercise these rights, contact support@healthfreak.io
-          </Text>
-
-          <Text style={styles.sectionTitle}>12. California Privacy Rights</Text>
+          <Text style={styles.sectionTitle}>11. California Privacy Rights</Text>
           <Text style={styles.sectionText}>
             If you are a California resident, you have specific rights under the California Consumer Privacy Act (CCPA):
             {'\n'}• Right to Know: Request information about the personal data we have collected about you in the past 12 months
@@ -146,8 +129,8 @@ export default function PrivacyScreen() {
         {/* Bottom Notice */}
         <View style={styles.bottomNotice}>
           <Text style={styles.bottomNoticeText}>
-            Last updated: October 26, 2025
-            {'\n'}Effective Date: October 26, 2025
+            Last updated: November 6, 2025
+            {'\n'}Effective Date: November 6, 2025
             {'\n\n'}Full Privacy Policy available at:
           </Text>
           <TouchableOpacity onPress={() => Linking.openURL('https://healthfreak.io/privacy.html')}>

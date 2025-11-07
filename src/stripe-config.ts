@@ -12,7 +12,7 @@ export interface StripeProduct {
 
 export const STRIPE_PRODUCTS: Record<string, StripeProduct> = {
   premium_subscription: {
-    priceId: 'price_1S5GO7APP9PA4b0C3pBw2yvN',
+    priceId: 'price_1SQfZ4AVNGU8hvgYYq79rbmg', // Production price ID
     name: 'Premium Subscription',
     description: 'Unlock detailed ingredient explanations, health impact information, alternative suggestions, unlimited history, and export functionality',
     mode: 'subscription',

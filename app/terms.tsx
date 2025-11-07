@@ -27,43 +27,28 @@ export default function TermsScreen() {
 
         {/* Terms Content */}
         <View style={styles.contentContainer}>
-          <Text style={styles.sectionTitle}>1. Educational Purpose Only</Text>
+          <Text style={styles.sectionTitle}>1. Educational Purpose - Not Medical Advice</Text>
           <Text style={styles.sectionText}>
             This application is designed exclusively for educational purposes. The information provided 
             about ingredients is based on general research and educational opinions, not medical or 
             health advice. We make no medical claims or recommendations.
-          </Text>
-
-          <Text style={styles.sectionTitle}>2. Not Medical Advice</Text>
-          <Text style={styles.sectionText}>
-            The ingredient classifications and information provided by this app are NOT medical advice, 
+            {'\n\n'}The ingredient classifications and information provided by this app are NOT medical advice, 
             health advice, or nutritional guidance. Always consult qualified healthcare professionals, 
-            registered dietitians, or medical doctors for:
-            {'\n'}• Dietary decisions
-            {'\n'}• Health concerns
-            {'\n'}• Food allergies or sensitivities
-            {'\n'}• Medical conditions requiring specific diets
+            registered dietitians, or medical doctors for dietary decisions, health concerns, food allergies 
+            or sensitivities, and medical conditions requiring specific diets.
+            {'\n\n'}By using this app, you acknowledge and agree that you are responsible for all dietary decisions, 
+            you will not rely on this app for medical guidance, you understand individual dietary needs vary 
+            significantly, and you will consult healthcare providers for personalized advice.
+            {'\n\n'}We may modify or discontinue features of this app at any time. Continued use after changes 
+            constitutes acceptance of those changes.
           </Text>
 
-          <Text style={styles.sectionTitle}>3. User Responsibility</Text>
+          <Text style={styles.sectionTitle}>2. Classification Meanings</Text>
           <Text style={styles.sectionText}>
-            By using this app, you acknowledge and agree that:
-            {'\n'}• You are responsible for all dietary decisions
-            {'\n'}• You will not rely on this app for medical guidance
-            {'\n'}• You understand individual dietary needs vary significantly
-            {'\n'}• You will consult healthcare providers for personalized advice
+            Our ingredient classifications are educational opinions only. In the app interface, we display simplified labels 'Clean' and 'Toxic' for clarity. These correspond to our full classifications: 'Clean' means 'Generally Clean' (ingredients widely accepted as safe), and 'Toxic' means 'Potentially Toxic' (ingredients that may have concerns based on research). Neither classification represents definitive health claims, and individual responses to ingredients may vary.
           </Text>
 
-          <Text style={styles.sectionTitle}>4. Classification Meanings</Text>
-          <Text style={styles.sectionText}>
-            Our ingredient classifications are educational opinions only:
-            {'\n'}• "Generally Clean" indicates ingredients widely accepted as safe
-            {'\n'}• "Potentially Toxic" indicates possible concerns based on research
-            {'\n'}• Neither classification represents definitive health claims
-            {'\n'}• Individual responses to ingredients may vary
-          </Text>
-
-          <Text style={styles.sectionTitle}>5. Subscription Terms</Text>
+          <Text style={styles.sectionTitle}>3. Subscription Terms</Text>
           <Text style={styles.sectionText}>
             Free Tier (No payment required):
             {'\n'}• 10 total scans (lifetime limit)
@@ -80,31 +65,25 @@ export default function TermsScreen() {
             {'\n\n'}Subscriptions auto-renew monthly unless cancelled. Cancel anytime in your account settings.
           </Text>
 
-          <Text style={styles.sectionTitle}>6. Privacy and Data Protection</Text>
+          <Text style={styles.sectionTitle}>4. Privacy and Data Protection</Text>
           <Text style={styles.sectionText}>
             Our collection, use, and protection of your personal information is governed by our Privacy Policy. 
             Please review our Privacy Policy to understand how we handle your data. By using this app, you 
             also agree to our Privacy Policy.
           </Text>
 
-          <Text style={styles.sectionTitle}>7. Refund Policy</Text>
+          <Text style={styles.sectionTitle}>5. Refund Policy</Text>
           <Text style={styles.sectionText}>
             Premium subscriptions are billed monthly at $10. You may cancel your subscription at any time 
             through your account settings, and you will retain premium access until the end of your current 
             billing period.
-            {'\n\n'}For Stripe Subscriptions (Credit/Debit Card):
-            {'\n'}• Refund requests must be submitted to support@healthfreak.io within 7 days of purchase
-            {'\n'}• Approved refunds will be processed within 5-10 business days
-            {'\n'}• Refunds issued to your original payment method
-            {'\n'}• Prorated refunds are not available for partial months of service
-            {'\n\n'}For Apple In-App Purchases:
-            {'\n'}• All refund requests must be made directly through Apple
-            {'\n'}• Request refunds via reportaproblem.apple.com or through iPhone Settings → Apple ID → Subscriptions
-            {'\n'}• Refund eligibility is determined by Apple's refund policy
-            {'\n'}• We cannot process refunds for Apple IAP subscriptions directly
+            {'\n\n'}For Stripe Subscriptions (Credit/Debit Card): Refund requests must be submitted to support@healthfreak.io 
+            within 7 days of purchase. Prorated refunds are not available for partial months of service.
+            {'\n\n'}For Apple In-App Purchases: All refund requests must be made directly through Apple via reportaproblem.apple.com 
+            or through iPhone Settings → Apple ID → Subscriptions. We cannot process refunds for Apple IAP subscriptions directly.
           </Text>
 
-          <Text style={styles.sectionTitle}>8. Disclaimers and Limitations</Text>
+          <Text style={styles.sectionTitle}>6. Disclaimers and Limitations</Text>
           <Text style={styles.sectionText}>
             This app is provided "as is" without warranties. We disclaim liability for:
             {'\n'}• Accuracy of ingredient information
@@ -113,46 +92,23 @@ export default function TermsScreen() {
             {'\n'}• Technical issues or service interruptions
           </Text>
 
-          <Text style={styles.sectionTitle}>9. Service Modifications</Text>
+          <Text style={styles.sectionTitle}>7. Acceptance of Terms</Text>
           <Text style={styles.sectionText}>
-            We may modify or discontinue features of this app:
-            {'\n'}• Minor changes: No notice required
-            {'\n'}• Major changes affecting core functionality: 30 days notice via email
-            {'\n'}• Service discontinuation: 60 days notice
-            {'\n\n'}Continued use after changes constitutes acceptance of those changes.
+            By using this app, you agree to these Terms of Service. We may update these terms periodically, and continued use implies acceptance of changes.
           </Text>
 
-          <Text style={styles.sectionTitle}>10. Acceptance of Terms</Text>
+          <Text style={styles.sectionTitle}>8. Governing Law and Contact</Text>
           <Text style={styles.sectionText}>
-            Continued use of this app constitutes acceptance of these terms. We may update these 
-            terms periodically, and continued use implies acceptance of any changes.
-          </Text>
-
-          <Text style={styles.sectionTitle}>11. Dispute Resolution and Governing Law</Text>
-          <Text style={styles.sectionText}>
-            These Terms of Service are governed by and construed in accordance with the laws of the State of California, without regard to conflict of law principles. Any disputes arising from or relating to these terms or your use of this app shall be resolved through binding arbitration conducted in California in accordance with the rules of the American Arbitration Association.
-            {'\n\n'}Arbitration costs will be shared as follows:
-            {'\n'}• You pay AAA's initial filing fee (currently $200-$300)
-            {'\n'}• We pay remaining arbitration costs
-            {'\n'}• Each party pays own attorney fees unless arbiter rules otherwise
-            {'\n\n'}By using this app, you waive your right to participate in class action lawsuits or class-wide arbitration. Each party may bring claims against the other only in an individual capacity.
-            {'\n\n'}Small Claims Exception: Either party may bring a claim in small claims court in California for disputes qualifying under California small claims jurisdiction (currently claims under $12,500).
-          </Text>
-
-          <Text style={styles.sectionTitle}>12. Contact Information</Text>
-          <Text style={styles.sectionText}>
-            For questions about these terms:
-            {'\n'}• Email: support@healthfreak.io
-            {'\n'}• Subject line: "Terms of Service Inquiry"
-            {'\n\n'}We will respond to your inquiry within 5 business days.
+            These Terms are governed by California law. Disputes shall be resolved in California courts.
+            {'\n\n'}For questions about these terms, contact us at support@healthfreak.io
           </Text>
         </View>
 
         {/* Bottom Notice */}
         <View style={styles.bottomNotice}>
           <Text style={styles.bottomNoticeText}>
-            Last updated: October 26, 2025
-            {'\n'}Effective Date: October 26, 2025
+            Last updated: November 6, 2025
+            {'\n'}Effective Date: November 6, 2025
             {'\n\n'}Full Terms of Service available at:
           </Text>
           <TouchableOpacity onPress={() => Linking.openURL('https://healthfreak.io/terms.html')}>

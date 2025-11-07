@@ -5,7 +5,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
 // Allowed Stripe Price IDs - whitelist for security
 const ALLOWED_PRICE_IDS = [
-  'price_1S5GO7APP9PA4b0C3pBw2yvN', // Premium subscription
+  'price_1S5GO7APP9PA4b0C3pBw2yvN', // Premium subscription (Sandbox)
+  'price_1SQfZ4AVNGU8hvgYYq79rbmg', // Premium subscription (Production)
 ];
 
 const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')!;
@@ -38,7 +39,7 @@ function corsResponse(body: string | object | null, status = 200) {
   });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   try {
     if (req.method === 'OPTIONS') {
       return corsResponse({}, 204);
@@ -64,12 +65,6 @@ Deno.serve(async (req) => {
       return corsResponse({ error }, 400);
     }
 
-    // Validate price ID against whitelist
-    if (!ALLOWED_PRICE_IDS.includes(price_id)) {
-      console.warn(`⚠️ Invalid price ID attempted: ${price_id} by user ${user?.id}`);
-      return corsResponse({ error: 'Invalid product selected' }, 400);
-    }
-
     const authHeader = req.headers.get('Authorization')!;
     const token = authHeader.replace('Bearer ', '');
     const {
@@ -83,6 +78,12 @@ Deno.serve(async (req) => {
 
     if (!user) {
       return corsResponse({ error: 'User not found' }, 404);
+    }
+
+    // Validate price ID against whitelist
+    if (!ALLOWED_PRICE_IDS.includes(price_id)) {
+      console.warn(`⚠️ Invalid price ID attempted: ${price_id} by user ${user.id}`);
+      return corsResponse({ error: 'Invalid product selected' }, 400);
     }
 
     const { data: customer, error: getCustomerError } = await supabase
@@ -157,6 +158,53 @@ Deno.serve(async (req) => {
       console.log(`Successfully set up new customer ${customerId} with subscription record`);
     } else {
       customerId = customer.customer_id;
+
+      // Verify the customer exists in Stripe (handles test vs production mismatch)
+      try {
+        await stripe.customers.retrieve(customerId);
+      } catch (stripeError: any) {
+        // If customer doesn't exist in current Stripe environment, create a new one
+        if (stripeError?.code === 'resource_missing') {
+          console.log(`⚠️ Customer ${customerId} not found in Stripe, creating new customer for user ${user.id}`);
+
+          const newCustomer = await stripe.customers.create({
+            email: user.email,
+            metadata: {
+              userId: user.id,
+            },
+          });
+
+          console.log(`Created new Stripe customer ${newCustomer.id} to replace missing customer ${customerId}`);
+
+          // Update database with new customer ID
+          const { error: updateCustomerError } = await supabase
+            .from('stripe_customers')
+            .update({ customer_id: newCustomer.id })
+            .eq('user_id', user.id)
+            .is('deleted_at', null);
+
+          if (updateCustomerError) {
+            console.error('Failed to update customer ID in database', updateCustomerError);
+
+            // Cleanup: delete the newly created Stripe customer
+            try {
+              await stripe.customers.del(newCustomer.id);
+              console.log(`Cleaned up orphaned Stripe customer ${newCustomer.id}`);
+            } catch (deleteError) {
+              console.error('Failed to delete newly created Stripe customer after database update failure:', deleteError);
+            }
+
+            return corsResponse({ error: 'Unable to process request. Please try again.' }, 500);
+          }
+
+          // Update customerId to the new one
+          customerId = newCustomer.id;
+          console.log(`Successfully migrated customer ID from ${customer.customer_id} to ${newCustomer.id}`);
+        } else {
+          // For any other Stripe error, rethrow to be caught by outer try-catch
+          throw stripeError;
+        }
+      }
 
       if (mode === 'subscription') {
         // Verify subscription exists for existing customer

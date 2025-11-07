@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Alert, TouchableWithoutFeedback, Platform } from 'react-native';
-import { User, Crown, FileText, Shield, LogOut, CreditCard, RefreshCw, Film, Lock, Trash2 } from 'lucide-react-native';
+import { User, Crown, FileText, Shield, LogOut, CreditCard, RefreshCw, Film, Lock, Trash2, MessageSquare } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 import Purchases from 'react-native-purchases';
 import { useAuth } from '@/contexts/AuthContext';
@@ -229,9 +229,6 @@ export default function ProfileScreen() {
         {/* User Info */}
         <View style={styles.userCard}>
           <View style={styles.userInfo}>
-            <View style={styles.avatarContainer}>
-              <User size={32} color={COLORS.cleanGreen} />
-            </View>
             <View style={styles.userDetails}>
               <Text style={styles.userEmail} numberOfLines={1} ellipsizeMode="tail">{user.email}</Text>
               <View style={styles.statusContainer}>
@@ -282,23 +279,11 @@ export default function ProfileScreen() {
               style={styles.menuItem} 
               onPress={() => router.push('/manage-subscription' as any)}
             >
-              <CreditCard size={20} color={COLORS.cleanGreen} />
+              <CreditCard size={20} color={COLORS.textSecondary} />
               <Text style={styles.menuText}>Manage Subscription</Text>
               <Text style={styles.menuArrow}>›</Text>
             </TouchableOpacity>
           )}
-          
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/terms')}>
-            <FileText size={20} color={COLORS.textSecondary} />
-            <Text style={styles.menuText}>Terms of Service</Text>
-            <Text style={styles.menuArrow}>›</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/privacy')}>
-            <Shield size={20} color={COLORS.textSecondary} />
-            <Text style={styles.menuText}>Privacy Policy</Text>
-            <Text style={styles.menuArrow}>›</Text>
-          </TouchableOpacity>
 
           <TouchableOpacity style={styles.menuItem} onPress={handleReplayIntro}>
             <Film size={20} color={COLORS.textSecondary} />
@@ -312,6 +297,24 @@ export default function ProfileScreen() {
           >
             <Lock size={20} color={COLORS.textSecondary} />
             <Text style={styles.menuText}>Change Password</Text>
+            <Text style={styles.menuArrow}>›</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/terms')}>
+            <FileText size={20} color={COLORS.textSecondary} />
+            <Text style={styles.menuText}>Terms of Service</Text>
+            <Text style={styles.menuArrow}>›</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/privacy')}>
+            <Shield size={20} color={COLORS.textSecondary} />
+            <Text style={styles.menuText}>Privacy Policy</Text>
+            <Text style={styles.menuArrow}>›</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/developer-note')}>
+            <MessageSquare size={20} color={COLORS.textSecondary} />
+            <Text style={styles.menuText}>Note from Developer</Text>
             <Text style={styles.menuArrow}>›</Text>
           </TouchableOpacity>
         </View>
@@ -401,15 +404,6 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 6,
     backgroundColor: COLORS.background,
-  },
-  avatarContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: COLORS.cleanGreen,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
   },
   userDetails: {
     flex: 1,
