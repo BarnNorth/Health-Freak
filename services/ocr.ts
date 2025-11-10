@@ -9,12 +9,12 @@ import { supabase } from '../lib/supabase';
 /**
  * OCR and Ingredient Parsing Service
  * 
- * Uses GPT-4 Vision (gpt-4o-mini) for accurate text extraction from food labels,
- * followed by sophisticated parsing to identify individual ingredients with their
- * modifiers, certifications, and minor ingredient markers.
+ * Uses GPT-5 nano for image-to-text extraction from food labels, followed by sophisticated
+ * parsing to identify individual ingredients with their modifiers, certifications, and
+ * minor ingredient markers.
  * 
  * Key Features:
- * - GPT-4 Vision OCR for high accuracy
+ * - GPT-5 nano OCR for high accuracy
  * - Footnote detection (*, †, numbered, lettered)
  * - Minor ingredient detection ("contains 2% or less")
  * - Compound ingredient handling (brand products with sub-ingredients)
@@ -114,14 +114,14 @@ async function compressImageForOCR(base64Image: string): Promise<{
  */
 async function extractWithCompression(base64Image: string): Promise<OCRResult> {
   const { compressed } = await compressImageForOCR(base64Image);
-  return await extractIngredientsWithGPT4Vision(compressed);
+  return await extractIngredientsWithGPT5Nano(compressed);
 }
 
 /**
  * Extract with original image (no compression)
  */
 async function extractWithOriginal(base64Image: string): Promise<OCRResult> {
-  return await extractIngredientsWithGPT4Vision(base64Image);
+  return await extractIngredientsWithGPT5Nano(base64Image);
 }
 
 /**
@@ -140,10 +140,10 @@ export async function extractTextWithFallback(base64Image: string): Promise<OCRR
 }
 
 /**
- * Extract ingredients from food label using GPT-4 Vision
+ * Extract ingredients from food label using GPT-5 nano
  * This is simpler and more accurate than Google Vision + complex parsing
  */
-async function extractIngredientsWithGPT4Vision(base64Image: string): Promise<OCRResult> {
+async function extractIngredientsWithGPT5Nano(base64Image: string): Promise<OCRResult> {
   try {
     const startTime = Date.now();
     
@@ -275,7 +275,7 @@ export async function preprocessImage(
 }
 
 /**
- * Extract ingredients from food label image using GPT-4 Vision
+ * Extract ingredients from food label image using GPT-5 nano
  * Includes rate limiting and input validation for security
  */
 export async function extractTextFromImage(
@@ -315,7 +315,7 @@ export async function extractTextFromImage(
         };
       }
 
-      // Use GPT-4 Vision for ingredient extraction with compression fallback
+      // Use GPT-5 nano for ingredient extraction with compression fallback
       return await extractTextWithFallback(base64Image);
   } catch (error) {
       // If it's a rate limit error, re-throw it
@@ -329,7 +329,7 @@ export async function extractTextFromImage(
       hasPreprocessingOptions: !!preprocessingOptions
     });
     
-      // Handle GPT-4 Vision specific errors
+      // Handle GPT-5 nano specific errors
       if (error instanceof Error) {
         // OpenAI API key errors
         if (error.message.includes('API key') || error.message.includes('unauthorized') || error.message.includes('401')) {
@@ -389,8 +389,8 @@ export async function extractTextFromImage(
 }
 
 /**
- * Complex parsing functions removed - replaced by GPT-4 Vision
- * GPT-4 Vision handles all text extraction and cleaning automatically
+ * Complex parsing functions removed - replaced by GPT-5 nano
+ * GPT-5 nano handles all text extraction and cleaning automatically
  */
 
 export interface ParsedIngredient {
@@ -1214,5 +1214,5 @@ export function validateOCRExtraction(extractedText: string, parsedIngredients: 
   };
 }
 
-// Advanced image processing functions removed - no longer needed with GPT-4 Vision
-// GPT-4 Vision handles image analysis without requiring complex preprocessing
+// Advanced image processing functions removed - no longer needed with GPT-5 nano
+// GPT-5 nano handles image analysis without requiring complex preprocessing

@@ -8,17 +8,16 @@ import { withRateLimit, validateIngredientName } from './security';
  * AI MODEL CONFIGURATION
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
- * We use different models optimized for different tasks:
- * - GPT-4o-mini: Vision tasks (OCR, image analysis) - better accuracy for visual tasks
- * - GPT-3.5-turbo: Text analysis - 10x faster for ingredient analysis with good accuracy
+ * We now standardize on GPT-5 nano for all AI workloads (vision + text) to simplify
+ * deployment while keeping latency and cost low.
  * 
  * Note: All AI calls throughout the app should use these constants
  * ═══════════════════════════════════════════════════════════════════════════════
  */
-export const AI_VISION_MODEL = 'gpt-4o-mini'; // For OCR and vision tasks
-export const AI_TEXT_MODEL = 'gpt-3.5-turbo'; // For text analysis - optimized for speed
-export const AI_MODEL_CONTEXT_WINDOW = 128000;
-export const AI_MODEL_MAX_TOKENS = 16000;
+export const AI_VISION_MODEL = 'gpt-5-nano'; // Unified model for OCR and vision tasks
+export const AI_TEXT_MODEL = 'gpt-5-nano'; // Unified model for text analysis
+export const AI_MODEL_CONTEXT_WINDOW = 400000;
+export const AI_MODEL_MAX_TOKENS = 128000;
 
 // Get Supabase URL for Edge Function
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;

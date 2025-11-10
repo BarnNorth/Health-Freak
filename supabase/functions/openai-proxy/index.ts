@@ -26,9 +26,9 @@ const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')!
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions'
 
 // AI Model constants (matching client-side)
-const AI_VISION_MODEL = 'gpt-4o-mini'
-const AI_TEXT_MODEL = 'gpt-3.5-turbo'
-const AI_MODEL_MAX_TOKENS = 300
+const AI_VISION_MODEL = 'gpt-5-nano'
+const AI_TEXT_MODEL = 'gpt-5-nano'
+const AI_MODEL_MAX_TOKENS = 4000
 
 // Rate limiting configuration
 const RATE_LIMIT_WINDOW_MS = 60 * 1000 // 1 minute
@@ -86,59 +86,71 @@ function validateIngredientName(name: string): string {
 }
 
 // System prompt for ingredient analysis
-const SYSTEM_PROMPT = `You are a holistic health expert analyzing ingredients for wellness-conscious consumers following a "crunchy" lifestyle - prioritizing whole, organic, unprocessed foods.
+const SYSTEM_PROMPT = `You are a holistic health analyst specializing in ingredient evaluation for wellness-focused, "crunchy" consumers who prioritize whole, organic, and minimally processed foods.
 
-TASK: Classify ingredients as "generally_clean" or "potentially_toxic" using a STRICT precautionary approach.
+Classify individual ingredients as either "generally_clean" or "potentially_toxic" using a strict precautionary, ancestral foods–first approach aligned with "crunchy" lifestyle values.
 
-GENERALLY_CLEAN (Whole & Ancestral):
-- Whole foods in natural state: fruits, vegetables, whole grains, legumes, nuts, seeds
-- Traditional ingredients with centuries of safe use
+## Ingredient Classification Framework
+**GENERALLY_CLEAN (Whole & Ancestral):**
+- Whole foods in their natural form (fruits, vegetables, whole grains, legumes, nuts, seeds)
+- Traditional ingredients with a longstanding history of safe use
 - Organic, unrefined oils (olive, coconut, avocado)
-- Whole-food vitamins/minerals (not synthetic isolates)
-- Naturally fermented foods (sauerkraut, miso, naturally fermented pickles)
+- Whole-food-derived vitamins and minerals (not synthetic isolates)
+- Naturally fermented foods (sauerkraut, miso, traditionally fermented pickles)
 
-POTENTIALLY_TOXIC (Processed & Synthetic):
-- ALL artificial colors, flavors, preservatives, sweeteners
-- Refined/processed sugars (including "cane sugar" unless specified as unrefined/organic)
+**POTENTIALLY_TOXIC (Processed & Synthetic):**
+- All artificial colors, flavors, preservatives, and sweeteners
+- Refined and processed sugars (including "cane sugar," unless specifically labeled as unrefined/organic)
 - Highly processed oils (canola, soybean, vegetable, corn, palm kernel)
 - GMO ingredients or likely GMO derivatives
-- Synthetic thickeners & additives (xanthan gum, guar gum, carrageenan, maltodextrin, modified starches)
-- "Natural flavors" (undefined term, often contains synthetic compounds)
-- Isolated/synthetic proteins (soy protein isolate, sodium caseinate, whey protein isolate)
-- Synthetic vitamins/minerals (ascorbic acid, synthetic beta carotene vs whole food sources)
-- Ingredients disrupting gut health, hormones, or causing inflammation
+- Synthetic thickeners and additives (xanthan gum, guar gum, carrageenan, maltodextrin, modified starches)
+- "Natural flavors" (due to lack of definition and potential for hidden synthetic compounds)
+- Isolated or synthetic proteins (e.g., soy protein isolate, sodium caseinate, whey protein isolate)
+- Synthetic vitamins and minerals (ascorbic acid, synthetic beta-carotene—prefer whole-food sources)
+- Ingredients known or suspected to disrupt gut health, hormones, or promote inflammation
 
-STRICT CRUNCHY PRINCIPLES:
-- Default to "potentially_toxic" when uncertain or lacking organic/non-GMO specification
-- Synthetic production = toxic (even if FDA deems "generally recognized as safe")
-- Trust ancestral foods over modern food science additives
-- Processing matters: organic unrefined ingredients may be clean; refined/conventional = toxic
-- Common additives are NOT acceptable just because they're widespread
+## Strict Crunchy Principles
+- In cases of uncertainty or missing organic/non-GMO designation, default to "potentially_toxic"
+- Any synthetically produced ingredient is classified as toxic, regardless of regulatory status (e.g., GRAS by FDA)
+- Favor ingredients with ancestral/traditional roots; distrust modern food science additives
+- Level of processing is key: organic/unrefined may be clean; refined/conventional considered toxic
+- Ubiquity does not imply safety; common additives are not assumed "safe" by default
 
-KEY HEALTH IMPACTS:
-Focus on gut microbiome, inflammation, hormonal disruption, and detoxification burden.
+## Health Impact Priorities
+Assess ingredient effects on gut microbiome health, inflammatory potential, hormonal balance, and detoxification burden.
 
-RESPONSE FORMAT (required JSON):
+## Source Requirements
+- Reference 2–3 reputable, verifiable sources informing your assessment
+- Acceptable sources: recent research studies, established health databases, regulatory body assessments, or recognized scientific organizations
+- Only use full, real URLs; do not include placeholders or fabricated links
+
+## Output Instructions
+Respond ONLY with a single JSON object that exactly matches this structure:
+
+\`\`\`
 {
   "status": "generally_clean" | "potentially_toxic",
-  "confidence": 0.0-1.0,
-  "educational_note": "Brief health impact explanation focusing on gut health, inflammation, or hormones (2-3 sentences)",
-  "basic_note": "Simple consumer-friendly summary (1 sentence)",
-  "reasoning": "Why this classification was chosen from holistic perspective",
+  "confidence": <float>,
+  "educational_note": "<string>",
+  "basic_note": "<string>",
+  "reasoning": "<string>",
   "sources": [
     {
-      "title": "Brief source title",
+      "title": "<brief source title>",
       "url": "https://actual-url.com",
       "type": "research" | "database" | "regulatory" | "other"
-    }
+    },
+    ...
   ]
 }
+\`\`\`
 
-SOURCES:
-- Include 2-3 reputable sources that informed your classification
-- Use research studies, health databases, regulatory bodies, or scientific organizations
-- Provide real, functional URLs that users can verify
-- Sources should support your holistic health assessment`
+- All fields are required and must be present in every response.
+- Only "generally_clean" or "potentially_toxic" are allowed for the "status" field.
+- "Confidence" must be a float from 0.0 to 1.0, inclusive.
+- Only use legitimate URLs in "sources".
+- If any doubt exists, or necessary safety information is missing, default classification to "potentially_toxic" as per crunchy guidelines. Do not skip or error for unknown ingredients—always provide the best possible output per these rules.
+- Do not include any text before or after the JSON.`
 
 serve(async (req: Request) => {
   // Handle CORS preflight requests
@@ -223,12 +235,26 @@ async function handleIngredientAnalysis(ingredientName: string): Promise<Respons
         },
         {
           role: "user" as const,
-          content: `Analyze this food ingredient: "${sanitizedName}"`
+          content: `Analyze this food ingredient: "${sanitizedName}". Respond ONLY with a JSON object using this structure:
+{
+  "status": "generally_clean" | "potentially_toxic",
+  "confidence": number between 0 and 1,
+  "educational_note": string,
+  "basic_note": string,
+  "reasoning": string,
+  "sources": [
+    {
+      "title": string,
+      "url": string,
+      "type": "research" | "database" | "regulatory" | "other"
+    }
+  ]
+}`
         }
       ],
-      temperature: 0.1,
-      max_tokens: AI_MODEL_MAX_TOKENS,
-      response_format: { type: "json_object" as const }
+      max_completion_tokens: AI_MODEL_MAX_TOKENS,
+      reasoning_effort: 'minimal' as const,
+      verbosity: 'low' as const
     }
 
     const response = await fetch(OPENAI_API_URL, {
@@ -241,7 +267,9 @@ async function handleIngredientAnalysis(ingredientName: string): Promise<Respons
     })
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`)
+      const errorBody = await response.text()
+      console.error('OpenAI detailed error:', response.status, errorBody)
+      throw new Error(`OpenAI API error: ${response.status} - ${errorBody}`)
     }
 
     const completion = await response.json()
@@ -309,7 +337,7 @@ If you cannot find ingredients, return "NO_INGREDIENTS_FOUND".`
           content: [
             {
               type: "text" as const,
-              text: prompt
+              text: `${prompt}\n\nReturn ONLY a JSON object with this structure:\n{\n  "ingredients_text": "comma-separated ingredients list",\n  "raw_text": "original extracted text"\n}\nIf no ingredients are found, return {"error": "NO_INGREDIENTS_FOUND"}.`
             },
             {
               type: "image_url" as const,
@@ -320,8 +348,9 @@ If you cannot find ingredients, return "NO_INGREDIENTS_FOUND".`
           ]
         }
       ],
-      temperature: 0.1,
-      max_tokens: 1000
+      max_completion_tokens: 1000,
+      reasoning_effort: 'minimal' as const,
+      verbosity: 'low' as const
     }
 
     const response = await fetch(OPENAI_API_URL, {
@@ -334,16 +363,31 @@ If you cannot find ingredients, return "NO_INGREDIENTS_FOUND".`
     })
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`)
+      const errorBody = await response.text()
+      console.error('OpenAI detailed error:', response.status, errorBody)
+      throw new Error(`OpenAI API error: ${response.status} - ${errorBody}`)
     }
 
     const completion = await response.json()
-    const extractedText = completion.choices[0]?.message?.content?.trim() || ''
+    const extractedContent = completion.choices[0]?.message?.content?.trim() || ''
+    const parsedExtraction = (() => {
+      try {
+        return JSON.parse(extractedContent)
+      } catch {
+        return { ingredients_text: extractedContent, raw_text: extractedContent }
+      }
+    })()
 
-    const result: OCRResult = {
-      text: extractedText,
-      confidence: 0.8, // GPT-4 Vision is generally reliable
-    }
+    const result: OCRResult = parsedExtraction.error
+      ? {
+          text: '',
+          confidence: 0,
+          error: parsedExtraction.error
+        }
+      : {
+          text: parsedExtraction.ingredients_text || parsedExtraction.raw_text || '',
+          confidence: 0.8 // GPT-5 nano vision mode is generally reliable
+        }
 
     return new Response(
       JSON.stringify(result),
@@ -402,11 +446,11 @@ Return format:
       model: AI_TEXT_MODEL,
       messages: [
         { role: "system" as const, content: SYSTEM_PROMPT },
-        { role: "user" as const, content: batchPrompt }
+        { role: "user" as const, content: `${batchPrompt}\n\nReturn ONLY the JSON object described above.` }
       ],
-      temperature: 0.1,
-      max_tokens: AI_MODEL_MAX_TOKENS * sanitizedNames.length, // Scale tokens
-      response_format: { type: "json_object" as const }
+      max_completion_tokens: Math.min(AI_MODEL_MAX_TOKENS * sanitizedNames.length, 128000),
+      reasoning_effort: 'minimal' as const,
+      verbosity: 'low' as const
     }
 
     const response = await fetch(OPENAI_API_URL, {
@@ -419,7 +463,9 @@ Return format:
     })
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`)
+      const errorBody = await response.text()
+      console.error('OpenAI detailed error:', response.status, errorBody)
+      throw new Error(`OpenAI API error: ${response.status} - ${errorBody}`)
     }
 
     const completion = await response.json()
@@ -468,20 +514,31 @@ Return ONLY the generic food category, nothing else.`;
         messages: [
           {
             role: 'user',
-            content: prompt
+            content: `${prompt}\nRespond with a short JSON object: {"productName": "<category description>"}`
           }
         ],
-        max_tokens: 50,
-        temperature: 0.3
+        max_completion_tokens: 50,
+        reasoning_effort: 'minimal',
+        verbosity: 'low'
       })
     })
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`)
+      const errorBody = await response.text()
+      console.error('OpenAI detailed error:', response.status, errorBody)
+      throw new Error(`OpenAI API error: ${response.status} - ${errorBody}`)
     }
 
     const completion = await response.json()
-    const productName = completion.choices[0]?.message?.content?.trim() || 'A packaged food product'
+    const productContent = completion.choices[0]?.message?.content?.trim() || '{}'
+    const parsedProduct = (() => {
+      try {
+        return JSON.parse(productContent)
+      } catch {
+        return { productName: productContent }
+      }
+    })()
+    const productName = parsedProduct.productName || 'A packaged food product'
     
     return new Response(
       JSON.stringify({ productName }),

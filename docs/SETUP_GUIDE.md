@@ -52,33 +52,27 @@ Before you begin, ensure you have:
 
 ### Model Configuration
 
-The app uses **two different OpenAI models** optimized for specific tasks:
+The app now uses a **single OpenAI model** for all AI workflows:
 
-**1. GPT-4o-mini (Vision Model)**
-- **Purpose:** OCR text extraction from food label photos
-- **Cost:** ~$0.002-0.008 per image scan
-- **Speed:** ~2-5 seconds per scan
-- **Why:** Vision capabilities required for reading text from images
-
-**2. GPT-3.5-turbo (Text Model)**
-- **Purpose:** Ingredient classification and analysis
-- **Cost:** ~$0.001-0.003 per ingredient
-- **Speed:** 10x faster than GPT-4 models
-- **Why:** Cheaper and faster for text-only analysis tasks
+**Unified Model: GPT-5 nano**
+- **Purpose:** Powers both OCR (food label extraction) and ingredient analysis
+- **Cost:** ~$0.05 per 1M input tokens / $0.40 per 1M output tokens
+- **Speed:** Fast responses (often under 2 seconds per request)
+- **Why:** Simplifies deployment while maintaining low cost and latency
 
 **Optional:** You can configure the default model in `app.json`:
 ```json
 {
   "expo": {
     "extra": {
-      "openaiModel": "gpt-4o-mini",
-      "openaiMaxTokens": 300
+      "openaiModel": "gpt-5-nano",
+      "openaiMaxTokens": 128000
     }
   }
 }
 ```
 
-**Note:** The app automatically uses the appropriate model for each task regardless of this setting.
+**Note:** All AI requests now use GPT-5 nano by default.
 
 ---
 
