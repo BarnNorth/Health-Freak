@@ -86,7 +86,7 @@ EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
 2. Toggle to **Live mode** (top right)
 3. Verify subscription products exist:
    - Premium subscription product
-   - Price set correctly ($10/month or your pricing)
+   - Price set correctly ($6.99/month or your pricing)
 4. Create webhook for production:
    - Go to: Developers → Webhooks → Add endpoint
    - URL: Your Supabase function URL
@@ -121,7 +121,7 @@ EXPO_PUBLIC_REVENUECAT_API_KEY=appl_xxxxxxxxx  // Production key
 2. Navigate to: Your App → In-App Purchases
 3. Verify product status is **"Ready to Submit"** or **"Approved"**
 4. Verify Product ID matches RevenueCat configuration
-5. Confirm pricing is set to $10/month
+5. Confirm pricing is set to $6.99/month
 
 **RevenueCat Dashboard Check:**
 1. Go to: Project Settings → Products

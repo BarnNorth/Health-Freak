@@ -108,11 +108,11 @@ export async function showCancelSubscriptionPrompt(): Promise<void> {
 export async function showPremiumUpgradePrompt(): Promise<void> {
   Alert.alert(
     'Upgrade to Premium',
-    'Get unlimited scans and automatic scan history tracking.\n\n• ♾️ Unlimited ingredient scans\n• 💾 Scan history saved automatically\n• 🔍 Search and filter features\n\n$10/month',
+    'Get unlimited scans and automatic scan history tracking.\n\n• ♾️ Unlimited ingredient scans\n• 💾 Scan history saved automatically\n• 🔍 Search and filter features\n\n$6.99/month',
     [
       { text: 'Maybe Later', style: 'cancel' },
       { 
-        text: 'Upgrade to Premium - $10/month', 
+        text: 'Upgrade to Premium - $6.99/month', 
         onPress: async () => {
           try {
             const { startPremiumSubscription } = require('./stripe');
@@ -129,7 +129,7 @@ export async function showPremiumUpgradePrompt(): Promise<void> {
 export async function showScanLimitReachedModal(): Promise<void> {
   Alert.alert(
     'You\'ve Used All 10 Free Scans',
-    'You\'ve used your 10 free scans with full ingredient analysis.\n\nUpgrade to Premium for unlimited scanning and automatic scan history.\n\n• ♾️ Unlimited scans forever\n• 💾 Scan history saved automatically\n• 🔍 Search and export features\n\n$10/month',
+    'You\'ve used your 10 free scans with full ingredient analysis.\n\nUpgrade to Premium for unlimited scanning and automatic scan history.\n\n• ♾️ Unlimited scans forever\n• 💾 Scan history saved automatically\n• 🔍 Search and export features\n\n$6.99/month',
     [
       { text: 'Learn More', style: 'default', onPress: () => {
         // Navigate to profile/upgrade section
@@ -137,7 +137,7 @@ export async function showScanLimitReachedModal(): Promise<void> {
         router.push('/profile');
       }},
       { 
-        text: 'Upgrade to Premium - $10/month', 
+        text: 'Upgrade to Premium - $6.99/month', 
         onPress: async () => {
           try {
             const { startPremiumSubscription } = require('./stripe');

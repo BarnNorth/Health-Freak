@@ -205,7 +205,7 @@ export default function ManageSubscriptionScreen() {
           <View style={styles.detailRow}>
             <View style={styles.iconPlaceholder} />
             <View style={styles.detailContent}>
-              <Text style={styles.priceText}>$10/month</Text>
+              <Text style={styles.priceText}>$6.99/month</Text>
             </View>
           </View>
 

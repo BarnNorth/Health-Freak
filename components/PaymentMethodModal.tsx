@@ -231,7 +231,7 @@ export function PaymentMethodModal({ visible, onClose, onSuccess }: PaymentMetho
 
           {/* Footer */}
           <View style={styles.footer}>
-            <Text style={styles.priceText}>$10/month • Cancel anytime</Text>
+            <Text style={styles.priceText}>$6.99/month • Cancel anytime</Text>
             
             {/* Legal Links - Required for Apple App Store Compliance */}
             <View style={styles.legalLinks}>

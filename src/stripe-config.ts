@@ -1,4 +1,19 @@
+import Constants from 'expo-constants';
+
 // Stripe product configuration for ingredient analyzer app
+
+const extra = Constants.expoConfig?.extra ?? {};
+
+function resolvePriceId(rawId: string | undefined, envVar: string): string {
+  if (!rawId || rawId.startsWith('REPLACE_WITH')) {
+    throw new Error(
+      `Stripe price ID not configured. Set ${envVar} in your environment or update app.config.js to point to the new $6.99 price.`
+    );
+  }
+  return rawId;
+}
+
+const PRODUCTION_PRICE_ID = resolvePriceId(extra?.stripePriceId as string | undefined, 'STRIPE_PRICE_ID');
 
 export interface StripeProduct {
   priceId: string;
@@ -12,11 +27,12 @@ export interface StripeProduct {
 
 export const STRIPE_PRODUCTS: Record<string, StripeProduct> = {
   premium_subscription: {
-    priceId: 'price_1SQfZ4AVNGU8hvgYYq79rbmg', // Production price ID
+    priceId: PRODUCTION_PRICE_ID,
     name: 'Premium Subscription',
-    description: 'Unlock detailed ingredient explanations, health impact information, alternative suggestions, unlimited history, and export functionality',
+    description:
+      'Unlock detailed ingredient explanations, health impact information, alternative suggestions, unlimited history, and export functionality',
     mode: 'subscription',
-    price: 10.00,
+    price: 6.99,
     currency: 'usd',
     interval: 'month',
   },
@@ -33,12 +49,12 @@ export function formatPrice(product: StripeProduct): string {
     style: 'currency',
     currency: product.currency.toUpperCase(),
   });
-  
+
   const price = formatter.format(product.price);
-  
+
   if (product.mode === 'subscription' && product.interval) {
     return `${price}/${product.interval}`;
   }
-  
+
   return price;
 }

@@ -68,7 +68,7 @@ These classifications are educational opinions—not medical advice or regulator
 
 ## 💎 Premium Features
 
-Upgrade to Health Freak Premium for $10/month and unlock:
+Upgrade to Health Freak Premium for $6.99/month and unlock:
 
 - **Unlimited scans** – No more limits on ingredient analysis
 - **Full scan history** – Access all your past analyses anytime

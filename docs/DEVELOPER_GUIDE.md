@@ -19,7 +19,7 @@ Complete technical documentation for setting up and developing Health Freak.
 ## 🛠️ Tech Stack
 
 - **Frontend:** React Native + Expo
-- **AI & OCR:** OpenAI (GPT-4o-mini + GPT-3.5-turbo)
+- **AI & OCR:** OpenAI (GPT-5 nano)
 - **Database:** Supabase (PostgreSQL)
 - **Auth:** Supabase Auth
 - **Payments:** Stripe + RevenueCat (Apple IAP)
@@ -272,42 +272,38 @@ When contributing:
 
 ### AI Analysis System
 
-**Two-Model Architecture:**
-- **OCR Model:** GPT-4o-mini (vision) for text extraction from photos
-- **Analysis Model:** GPT-3.5-turbo for ingredient classification (10x faster)
-- **Pipeline:** OCR → Parse → Database Check → AI Analysis → Cache → Verdict
-- **Classification:** Conservative approach - when in doubt, mark as potentially toxic
-- **Caching:** Hybrid system reduces API costs by 80-90%
+**Unified GPT-5 nano Pipeline:**
+- **Single multimodal model:** GPT-5 nano handles OCR, parsing, and ingredient classification.
+- **Pipeline:** Capture → GPT-5 nano OCR/analysis → Database Check → Cache → Verdict
+- **Classification:** Strict precautionary stance—unknown or ambiguous ingredients default to "potentially toxic."
+- **Caching:** Hybrid system reduces repeat calls by ~80-90%.
 
 **How it works:**
-1. Extract text from photo using GPT-4o-mini (vision)
-2. Parse ingredients from extracted text
-3. Check database for known ingredients (fast)
-4. Use GPT-3.5-turbo for unknown ingredients (~1-3 seconds)
-5. Cache results for future use
-6. Apply "any toxic = product toxic" rule
+1. GPT-5 nano extracts text and normalizes the ingredient list from the photo.
+2. Parsed ingredients are compared against the Supabase cache for instant hits.
+3. Uncached ingredients are classified with GPT-5 nano in either single or batched requests.
+4. Results are cached with a 180-day TTL and combined into a product verdict ("any toxic = product toxic").
 
 **Cost optimization:**
-- Automatic caching of all analyzed ingredients
-- Use cheaper GPT-3.5-turbo for text analysis  
-- Batch processing for multiple ingredients
+- Automatic caching of every analyzed ingredient
+- Batch requests through GPT-5 nano for new ingredients
 - Smart caching avoids repeat analysis
-- Reduces cost from $0.45 to $0.045 per user
+- Typical operating cost: a few tenths of a cent per scan after cache warm-up
 
 ### OCR Implementation
 
-**GPT-4o-mini (Vision Model):**
-- **Multimodal AI** for extracting text from food label images
-- **Intelligent parsing** with context awareness
-- **High accuracy** for ingredient lists and curved packaging
-- **Built-in validation** and cleaning
+**GPT-5 nano Vision Flow:**
+- **Multimodal AI** that reads ingredient panels directly from photos.
+- **Intelligent parsing** to preserve sub-ingredients, percentages, and minor-label markers.
+- **High accuracy** on curved packaging and low-light images with minimal preprocessing.
+- **Built-in validation** and cleaning before downstream analysis.
 
 **Processing pipeline:**
 1. Capture photo with camera
 2. Preprocess: enhance, resize, optimize
-3. OCR: extract text via GPT-4o-mini (vision)
-4. Parse: AI identifies and separates ingredients
-5. Analyze: GPT-3.5-turbo classifies each ingredient
+3. OCR & analysis: GPT-5 nano extracts text and classifies ingredients in one pass
+4. Parse: AI identifies and separates ingredients, preserving context markers
+5. Cache: Ingredient decisions stored for future lookups
 6. Clean: normalize and format ingredient names
 
 **Error handling:**

@@ -72,13 +72,13 @@ Total MRR = Stripe MRR + Apple IAP MRR
 **From Stripe Dashboard:**
 1. Navigate to: **Revenue → MRR**
 2. View current MRR value
-3. Or calculate manually: `Active Stripe Subscriptions × $10`
+3. Or calculate manually: `Active Stripe Subscriptions × $6.99`
 
 **SQL Query:**
 ```sql
 SELECT 
   COUNT(*) as active_stripe_subs,
-  COUNT(*) * 10 as stripe_mrr
+  COUNT(*) * 6.99 as stripe_mrr
 FROM users
 WHERE subscription_status = 'premium'
   AND payment_method = 'stripe'
@@ -89,7 +89,7 @@ WHERE subscription_status = 'premium'
 ```
 active_stripe_subs | stripe_mrr
 -------------------+-----------
-        45         |    450
+        45         |  314.55
 ```
 
 ### Apple IAP MRR
@@ -97,13 +97,13 @@ active_stripe_subs | stripe_mrr
 **From RevenueCat Dashboard:**
 1. Navigate to: **Overview → Active Subscriptions**
 2. Note the count
-3. Calculate: `Active Apple Subscriptions × $10`
+3. Calculate: `Active Apple Subscriptions × $6.99`
 
 **SQL Query:**
 ```sql
 SELECT 
   COUNT(*) as active_apple_subs,
-  COUNT(*) * 10 as apple_mrr
+  COUNT(*) * 6.99 as apple_mrr
 FROM users
 WHERE subscription_status = 'premium'
   AND payment_method = 'apple_iap'
@@ -114,7 +114,7 @@ WHERE subscription_status = 'premium'
 ```
 active_apple_subs | apple_mrr
 ------------------+----------
-       35         |    350
+       35         |  244.65
 ```
 
 ### Combined MRR
@@ -124,7 +124,7 @@ active_apple_subs | apple_mrr
 SELECT 
   payment_method,
   COUNT(*) as active_subscriptions,
-  COUNT(*) * 10 as mrr
+  COUNT(*) * 6.99 as mrr
 FROM users
 WHERE subscription_status = 'premium'
   AND payment_method IS NOT NULL
@@ -133,17 +133,17 @@ GROUP BY payment_method;
 
 **Example Output:**
 ```
-payment_method | active_subscriptions | mrr
----------------+---------------------+-----
-stripe         |         45          | 450
-apple_iap      |         35          | 350
+payment_method | active_subscriptions |   mrr
+---------------+---------------------+---------
+stripe         |         45          | 314.55
+apple_iap      |         35          | 244.65
 ```
 
 **Total MRR Query:**
 ```sql
 SELECT 
   COUNT(*) as total_premium_users,
-  COUNT(*) * 10 as total_mrr
+  COUNT(*) * 6.99 as total_mrr
 FROM users
 WHERE subscription_status = 'premium';
 ```
@@ -151,8 +151,8 @@ WHERE subscription_status = 'premium';
 **Example Output:**
 ```
 total_premium_users | total_mrr
---------------------+----------
-         80         |    800
+--------------------+-----------
+         80         |   559.20
 ```
 
 ---
@@ -171,7 +171,7 @@ Measures average monthly revenue across entire user base (free + premium).
 
 ```sql
 WITH revenue AS (
-  SELECT COUNT(*) * 10 as mrr
+  SELECT COUNT(*) * 6.99 as mrr
   FROM users
   WHERE subscription_status = 'premium'
 ),
@@ -190,7 +190,7 @@ FROM revenue r, total_users u;
 ```
 monthly_revenue | total_users | arpu
 ----------------+-------------+------
-      800       |    1000     | 0.80
+    559.20      |    1000     | 0.56
 ```
 
 ---
@@ -318,7 +318,7 @@ SELECT
   CURRENT_DATE as date,
   payment_method,
   COUNT(*) as active_subs,
-  COUNT(*) * 10 as daily_mrr
+  COUNT(*) * 6.99 as daily_mrr
 FROM users
 WHERE subscription_status = 'premium'
 GROUP BY payment_method;
@@ -341,7 +341,7 @@ WITH sub_lengths AS (
 SELECT 
   payment_method,
   ROUND(avg_days, 0) as avg_subscription_days,
-  ROUND((avg_days / 30) * 10, 2) as estimated_ltv
+  ROUND((avg_days / 30) * 6.99, 2) as estimated_ltv
 FROM sub_lengths;
 ```
 
@@ -349,8 +349,8 @@ FROM sub_lengths;
 ```
 payment_method | avg_subscription_days | estimated_ltv
 ---------------+-----------------------+--------------
-stripe         |         120           |     40.00
-apple_iap      |         150           |     50.00
+stripe         |         120           |     27.96
+apple_iap      |         150           |     34.95
 ```
 
 ### New Subscriptions This Month
@@ -384,7 +384,7 @@ SELECT
     ELSE 'Unknown'
   END as platform,
   COUNT(*) as active_subscriptions,
-  COUNT(*) * 10 as mrr,
+  COUNT(*) * 6.99 as mrr,
   ROUND((COUNT(*)::numeric / SUM(COUNT(*)) OVER()) * 100, 2) as market_share_pct
 FROM users
 WHERE subscription_status = 'premium'
@@ -394,10 +394,10 @@ ORDER BY mrr DESC;
 
 **Example Output:**
 ```
-platform            | active_subscriptions | mrr | market_share_pct
---------------------+---------------------+-----+-----------------
-Stripe (Web/Android)|         45          | 450 |      56.25
-Apple (iOS)         |         35          | 350 |      43.75
+platform            | active_subscriptions |   mrr  | market_share_pct
+--------------------+---------------------+--------+-----------------
+Stripe (Web/Android)|         45          | 314.55 |      56.25
+Apple (iOS)         |         35          | 244.65 |      43.75
 ```
 
 ### Effective Revenue (After Fees)
@@ -410,7 +410,7 @@ WITH revenue AS (
   SELECT 
     payment_method,
     COUNT(*) as subs,
-    COUNT(*) * 10 as gross_mrr
+    COUNT(*) * 6.99 as gross_mrr
   FROM users
   WHERE subscription_status = 'premium'
   GROUP BY payment_method
@@ -574,7 +574,7 @@ For comprehensive multi-provider analytics, consider:
 4. **Payment Method Split**: Stripe % vs Apple %
 5. **Churn Rate**: (Cancellations / Active subs) × 100
 6. **ARPU**: Total MRR / Total users
-7. **LTV**: Average subscription duration × $10
+7. **LTV**: Average subscription duration × $6.99
 
 ### Growth Metrics
 
@@ -608,7 +608,7 @@ WITH totals AS (
   SELECT 
     payment_method,
     COUNT(*) as subs,
-    COUNT(*) * 10 as mrr
+    COUNT(*) * 6.99 as mrr
   FROM users
   WHERE subscription_status = 'premium'
   GROUP BY payment_method
@@ -629,11 +629,11 @@ ORDER BY mrr DESC;
 
 ### Platform Fees
 
-| Provider | Fee Structure | Example (per $10 sub) | Net Revenue |
-|----------|--------------|----------------------|-------------|
-| **Stripe** | 2.9% + $0.30 | $0.29 + $0.30 = $0.59 | **$9.41** |
-| **Apple IAP** (Year 1) | 30% | $3.00 | **$7.00** |
-| **Apple IAP** (Year 2+) | 15% | $1.50 | **$8.50** |
+| Provider | Fee Structure | Example (per $6.99 sub) | Net Revenue |
+|----------|--------------|------------------------|-------------|
+| **Stripe** | 2.9% + $0.30 | $0.20 + $0.30 = $0.50 | **$6.49** |
+| **Apple IAP** (Year 1) | 30% | $2.10 | **$4.89** |
+| **Apple IAP** (Year 2+) | 15% | $1.05 | **$5.94** |
 
 ### RevenueCat Pricing
 
@@ -653,12 +653,12 @@ ORDER BY mrr DESC;
 WITH revenue AS (
   SELECT 
     payment_method,
-    COUNT(*) * 10 as gross_mrr,
+    COUNT(*) * 6.99 as gross_mrr,
     CASE 
       WHEN payment_method = 'stripe' 
-      THEN COUNT(*) * 10 * 0.971 -- 2.9% fee approximation
+      THEN COUNT(*) * 6.99 * 0.971 -- 2.9% fee approximation
       WHEN payment_method = 'apple_iap' 
-      THEN COUNT(*) * 10 * 0.70 -- 30% fee (year 1)
+      THEN COUNT(*) * 6.99 * 0.70 -- 30% fee (year 1)
       ELSE 0
     END as net_mrr
   FROM users
@@ -724,14 +724,14 @@ avg_growth AS (
   FROM monthly_data
 ),
 current_mrr AS (
-  SELECT COUNT(*) * 10 as mrr
+  SELECT COUNT(*) * 6.99 as mrr
   FROM users
   WHERE subscription_status = 'premium'
 )
 SELECT 
   c.mrr as current_mrr,
-  g.avg_monthly_new_subs * 10 as projected_new_mrr,
-  c.mrr + (g.avg_monthly_new_subs * 10) as forecasted_next_month_mrr
+  g.avg_monthly_new_subs * 6.99 as projected_new_mrr,
+  c.mrr + (g.avg_monthly_new_subs * 6.99) as forecasted_next_month_mrr
 FROM current_mrr c, avg_growth g;
 ```
 
@@ -788,7 +788,7 @@ SELECT
   (SELECT COUNT(*) FROM users 
    WHERE payment_method = 'stripe' 
      AND subscription_status = 'premium') as stripe_active_subs,
-  (SELECT COUNT(*) * 10 FROM users 
+  (SELECT COUNT(*) * 6.99 FROM users 
    WHERE payment_method = 'stripe' 
      AND subscription_status = 'premium') as stripe_mrr,
   
@@ -796,14 +796,14 @@ SELECT
   (SELECT COUNT(*) FROM users 
    WHERE payment_method = 'apple_iap' 
      AND subscription_status = 'premium') as apple_active_subs,
-  (SELECT COUNT(*) * 10 FROM users 
+  (SELECT COUNT(*) * 6.99 FROM users 
    WHERE payment_method = 'apple_iap' 
      AND subscription_status = 'premium') as apple_mrr,
   
   -- Combined Metrics
   (SELECT COUNT(*) FROM users 
    WHERE subscription_status = 'premium') as total_active_subs,
-  (SELECT COUNT(*) * 10 FROM users 
+  (SELECT COUNT(*) * 6.99 FROM users 
    WHERE subscription_status = 'premium') as total_mrr,
   
   -- New Subscribers This Month
@@ -879,5 +879,5 @@ SELECT
 
 **Last Updated:** October 2025  
 **Database Schema Version:** 1.0  
-**Pricing:** $10/month
+**Pricing:** $6.99/month
 

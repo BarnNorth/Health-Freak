@@ -4,10 +4,16 @@ import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
 // Allowed Stripe Price IDs - whitelist for security
-const ALLOWED_PRICE_IDS = [
-  'price_1S5GO7APP9PA4b0C3pBw2yvN', // Premium subscription (Sandbox)
-  'price_1SQfZ4AVNGU8hvgYYq79rbmg', // Premium subscription (Production)
-];
+const sandboxPriceId = (Deno.env.get('STRIPE_PRICE_ID_SANDBOX') ?? '').trim();
+const productionPriceId = (Deno.env.get('STRIPE_PRICE_ID_PROD') ?? '').trim();
+
+const ALLOWED_PRICE_IDS = [sandboxPriceId, productionPriceId].filter((id) => id.length > 0);
+
+if (ALLOWED_PRICE_IDS.length === 0) {
+  console.error(
+    '❌ Stripe price IDs not configured. Set STRIPE_PRICE_ID_SANDBOX and STRIPE_PRICE_ID_PROD environment variables for the $6.99 subscription.'
+  );
+}
 
 const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')!;
 const stripe = new Stripe(stripeSecret, {
@@ -78,6 +84,11 @@ Deno.serve(async (req: Request) => {
 
     if (!user) {
       return corsResponse({ error: 'User not found' }, 404);
+    }
+
+    if (ALLOWED_PRICE_IDS.length === 0) {
+      console.error('❌ Rejecting checkout attempt due to missing Stripe price ID configuration');
+      return corsResponse({ error: 'Subscription temporarily unavailable. Please contact support.' }, 500);
     }
 
     // Validate price ID against whitelist

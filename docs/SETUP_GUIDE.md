@@ -324,7 +324,7 @@ supabase secrets set REVENUECAT_WEBHOOK_AUTH_TOKEN=your_token_here
    - Name: "Health Freak Premium"
    - Description: "Unlimited scans and detailed analysis"
    - Pricing: Recurring
-   - Price: $10 (or your price)
+   - Price: $6.99 (or your price)
    - Billing period: Monthly
 3. Click "Save product"
 4. Copy the **Price ID** (starts with `price_`)
@@ -357,6 +357,8 @@ supabase secrets set REVENUECAT_WEBHOOK_AUTH_TOKEN=your_token_here
 |------------|-------|--------------|
 | `STRIPE_SECRET_KEY` | `sk_test_...` | Stripe → API Keys |
 | `STRIPE_WEBHOOK_SECRET` | `whsec_...` | Stripe → Webhooks |
+| `STRIPE_PRICE_ID_SANDBOX` | `price_...` (test) | Stripe → Products → Price (Test mode) |
+| `STRIPE_PRICE_ID_PROD` | `price_...` (live) | Stripe → Products → Price (Live mode) |
 | `STRIPE_CANCEL_MODE` | `immediate` | Manual (TestFlight only) |
 
 **Note:** `STRIPE_CANCEL_MODE=immediate` is for testing. Delete this for production.
@@ -397,6 +399,8 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 # ============================================
 # Stripe - For web/Android payments
 EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your-stripe-key
+STRIPE_PRICE_ID=price_live_your-6-99-id
+STRIPE_TEST_PRICE_ID=price_test_your-6-99-id
 
 # RevenueCat - For iOS in-app purchases
 EXPO_PUBLIC_REVENUECAT_API_KEY=appl_your-revenuecat-api-key
@@ -627,12 +631,12 @@ After setup is complete:
 
 | Service | Free Tier | Paid Tier | Typical Cost |
 |---------|-----------|-----------|--------------|
-| OpenAI (GPT-4o-mini + GPT-3.5-turbo) | - | $0.003-0.011/scan | $10-30/month |
+| OpenAI (GPT-5 nano) | - | $0.0003-0.002/scan | $5-15/month |
 | Supabase | 500MB DB, 2GB bandwidth | $25/month | $0-25/month |
 | RevenueCat | Up to $2,500 MTR | 1% of revenue > $2,500 | $0-50/month |
 | Stripe | - | 2.9% + $0.30/transaction | Variable |
 
-**Total estimated cost:** $10-105/month depending on usage
+**Total estimated cost:** $15-115/month depending on usage
 
 **Notes:**
 - RevenueCat MTR (Monthly Tracked Revenue) = gross subscription revenue before Apple's cut

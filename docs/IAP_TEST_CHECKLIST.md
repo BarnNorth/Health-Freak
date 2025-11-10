@@ -330,7 +330,7 @@ This checklist contains specific test cases to verify before App Store submissio
 - [ ] **Actual:** _________________________________________________
 - [ ] **Display Check:**
   - [ ] Plan name shows: "Premium Monthly"
-  - [ ] Price shows: "$10/month"
+  - [ ] Price shows: "$6.99/month"
   - [ ] Payment method badge correct (Stripe or Apple)
   - [ ] Renewal date formatted correctly
   - [ ] Status badge shows correctly
@@ -484,7 +484,7 @@ This checklist contains specific test cases to verify before App Store submissio
 - [ ] **Subscription products created**
 - [ ] **Products linked to RevenueCat**
 - [ ] **Product IDs match exactly**
-- [ ] **Pricing correct ($10/month)**
+- [ ] **Pricing correct ($6.99/month)**
 - [ ] **Subscription terms clear**
 
 ### Final Verification

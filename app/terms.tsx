@@ -56,7 +56,7 @@ export default function TermsScreen() {
             {'\n'}• Complete toxicity assessment
             {'\n'}• Scan history saved and accessible
             {'\n'}• All premium features during your 10 scans
-            {'\n\n'}Premium Subscription ($10/month):
+            {'\n\n'}Premium Subscription ($6.99/month):
             {'\n'}• Unlimited analyses
             {'\n'}• Complete analysis history
             {'\n'}• Priority support
@@ -74,7 +74,7 @@ export default function TermsScreen() {
 
           <Text style={styles.sectionTitle}>5. Refund Policy</Text>
           <Text style={styles.sectionText}>
-            Premium subscriptions are billed monthly at $10. You may cancel your subscription at any time 
+            Premium subscriptions are billed monthly at $6.99. You may cancel your subscription at any time 
             through your account settings, and you will retain premium access until the end of your current 
             billing period.
             {'\n\n'}For Stripe Subscriptions (Credit/Debit Card): Refund requests must be submitted to support@healthfreak.io 

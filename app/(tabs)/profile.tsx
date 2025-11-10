@@ -267,7 +267,7 @@ export default function ProfileScreen() {
             </View>
             
             <TouchableOpacity style={styles.upgradeButton} onPress={handleUpgradeClick}>
-              <Text style={styles.upgradeButtonText}>💵 Upgrade to Premium 💵{'\n'}$10/month</Text>
+              <Text style={styles.upgradeButtonText}>💵 Upgrade to Premium 💵{'\n'}$6.99/month</Text>
             </TouchableOpacity>
           </View>
         )}

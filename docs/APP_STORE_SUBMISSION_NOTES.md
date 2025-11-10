@@ -9,7 +9,7 @@ Health Freak offers users a choice between two payment methods for premium subsc
 1. **Apple In-App Purchase** (Primary Method)
 2. **Web-Based Payment via Stripe** (Alternative Method)
 
-Both methods provide access to identical features and pricing ($10/month).
+Both methods provide access to identical features and pricing ($6.99/month).
 
 ---
 
@@ -136,7 +136,7 @@ We confirm the following:
 ✅ **Equal Treatment**: Both payment methods receive equal prominence in UI  
 ✅ **IAP Availability**: All digital content is available via Apple IAP  
 ✅ **No Steering**: No language discouraging Apple IAP use  
-✅ **Identical Pricing**: $10/month for both payment methods  
+✅ **Identical Pricing**: $6.99/month for both payment methods  
 ✅ **Apple Commission**: Standard 30%/15% commission paid on IAP transactions  
 ✅ **Clear Communication**: Users informed of external redirect before Stripe payment  
 ✅ **Proper Management**: IAP subscriptions manageable via iOS Settings  
@@ -208,7 +208,7 @@ All services comply with privacy regulations (GDPR, CCPA).
 - Saved scan history (persistent across sessions)
 - Educational notes about ingredients
 
-#### Premium Subscription ($10/month)
+#### Premium Subscription ($6.99/month)
 
 - **Unlimited scans**: No monthly limit
 - All free tier features included
