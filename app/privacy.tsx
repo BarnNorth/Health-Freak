@@ -53,7 +53,7 @@ export default function PrivacyScreen() {
             {'\n'}• OpenAI: Ingredient photo analysis and classification. Images are transmitted to OpenAI's API for processing and retained for up to 30 days for security and abuse prevention, then permanently deleted. Per OpenAI's API data usage policies, your images are not used to train their AI models. However, OpenAI may use data to improve their safety and abuse prevention systems.
             {'\n'}• Supabase: Secure database storage, user authentication, and backend infrastructure
             {'\n'}• Stripe: Credit card payment processing for premium subscriptions (for users who choose credit card payment method)
-            {'\n'}• RevenueCat: Manages Apple subscription receipts and attribution tracking. On iOS devices, RevenueCat collects your device's advertising identifier (IDFA) to measure which marketing campaigns lead to subscriptions. This helps us understand the effectiveness of our advertising and improve our services. You can limit ad tracking in your device settings: iOS Settings > Privacy & Security > Tracking.
+            {'\n'}• RevenueCat: Manages Apple In-App Purchase receipts and subscription validation. RevenueCat collects basic device information (device type, operating system) for app functionality, analytics, and fraud prevention. We do not track users or collect advertising identifiers.
             {'\n\n'}Important: We do not sell your personal information to third parties. Your data is shared only with these essential service providers necessary to deliver app functionality.
           </Text>
 

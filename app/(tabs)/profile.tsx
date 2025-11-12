@@ -263,7 +263,7 @@ export default function ProfileScreen() {
               <Text style={styles.benefitTitle}>Premium Benefits:</Text>
               <Text style={styles.benefit}>• ♾️ Unlimited scans forever</Text>
               <Text style={styles.benefit}>• 💾 Scan history saved</Text>
-              <Text style={styles.benefit}>• 🔍 Search and filter your history</Text>
+              <Text style={styles.benefit}>• 🧠 Detailed ingredient insights</Text>
             </View>
             
             <TouchableOpacity style={styles.upgradeButton} onPress={handleUpgradeClick}>

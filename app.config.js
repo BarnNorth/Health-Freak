@@ -20,7 +20,6 @@ export default {
       ],
       infoPlist: {
         "NSCameraUsageDescription": "This app needs camera access to scan ingredient labels on food products.",
-        "NSUserTrackingUsageDescription": "This app uses your advertising identifier to measure the effectiveness of our marketing campaigns and attribute subscriptions to the correct sources. This helps us improve our service and deliver better content.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
