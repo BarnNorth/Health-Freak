@@ -18,7 +18,7 @@ export function useIAPPurchase(): UseIAPPurchaseReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
-  const { refreshUserProfile } = useAuth();
+  const { setUserPremiumStatus } = useAuth();
 
   const reset = useCallback(() => {
     setIsLoading(false);
@@ -46,8 +46,9 @@ export function useIAPPurchase(): UseIAPPurchaseReturn {
         
         setIsSuccess(true);
         
-        // Refresh user profile to get updated subscription status
-        await refreshUserProfile();
+        // Optimistically update UI immediately - trust RevenueCat
+        // The webhook will update the database in the background for persistence
+        setUserPremiumStatus();
         
         // Clear success state after 3 seconds
         setTimeout(() => {
@@ -85,7 +86,7 @@ export function useIAPPurchase(): UseIAPPurchaseReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [refreshUserProfile]);
+  }, [setUserPremiumStatus]);
 
   return {
     isLoading,

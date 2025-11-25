@@ -10,6 +10,7 @@ interface User {
   total_scans_used: number;
   stripe_customer_id?: string;
   stripe_subscription_id?: string;
+  payment_method?: 'apple_iap';
   created_at: string;
   updated_at: string;
   onboarding_completed?: boolean;
@@ -24,6 +25,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   resendConfirmation: (email: string) => Promise<boolean>;
   refreshUserProfile: () => Promise<void>;
+  setUserPremiumStatus: () => void;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
 }
@@ -222,6 +224,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  /**
+   * Optimistically update user to premium status immediately after IAP purchase
+   * This provides instant UI feedback while the webhook updates the database in the background
+   */
+  const setUserPremiumStatus = () => {
+    if (user) {
+      if (__DEV__) {
+        console.log('[AUTH] Optimistically updating user to premium status');
+      }
+      setUser({
+        ...user,
+        subscription_status: 'premium',
+        payment_method: 'apple_iap',
+      });
+    }
+  };
+
   const signIn = async (email: string, password: string) => {
     setLoading(true);
     try {
@@ -373,6 +392,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       resendConfirmation,
       refreshUserProfile,
+      setUserPremiumStatus,
       resetPassword,
       updatePassword,
     }}>
