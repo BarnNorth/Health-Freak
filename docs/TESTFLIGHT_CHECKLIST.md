@@ -37,7 +37,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-key
 ### 3. Webhook Security ✅
 **Status:** Enforced
 
-Webhook signature verification is active - only genuine Stripe webhooks accepted.
+Webhook authorization verification is active - only genuine RevenueCat webhooks accepted.
 
 ### 4. Production-Ready Logging ✅
 **Status:** Cleaned up
@@ -48,35 +48,22 @@ Excessive debug logs removed, only essential logs remain with `[AUTH]` prefix.
 
 ## ⚙️ TestFlight-Specific Configuration
 
-### 1. Stripe Test Mode
-**Required:** Use Stripe **test keys** for TestFlight
+**Note:** Stripe integration has been removed. The app now uses Apple In-App Purchase exclusively via RevenueCat.
 
-**Set these in your .env:**
+### 1. RevenueCat Sandbox Mode
+**Required:** Use RevenueCat **sandbox API key** for TestFlight
+
+**Set this in your .env:**
 ```bash
-EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_test_key_here
+EXPO_PUBLIC_REVENUECAT_API_KEY=appl_your_sandbox_key_here
 ```
 
-**Set these in Supabase Edge Function Secrets:**
-- `STRIPE_SECRET_KEY` = `sk_test_your_test_secret_key`
-- `STRIPE_WEBHOOK_SECRET` = `whsec_your_test_webhook_secret`
+**Verify in RevenueCat Dashboard:**
+- Use sandbox API key (starts with `appl_`)
+- Test with Apple sandbox accounts
+- Webhook configured for test events
 
-### 2. Immediate Subscription Cancellation (Test Mode)
-**Required:** For fast testing iterations
-
-**In Supabase Dashboard:**
-
-1. Go to: https://supabase.com/dashboard/project/YOUR_PROJECT_ID/settings/functions
-2. Navigate to **"Secrets"** tab
-3. Add new secret:
-   - **Name:** `STRIPE_CANCEL_MODE`
-   - **Value:** `immediate`
-
-**What this does:**
-- ✅ Subscriptions cancel immediately (not at period end)
-- ✅ Allows quick testing of cancel → re-subscribe flow
-- ✅ Users see message: *"This is test mode behavior"*
-
-### 3. Mock Data Fallback (Optional)
+### 2. Mock Data Fallback (Optional)
 **Optional:** Enable if you want to test without real API calls
 
 **In app.json:**
@@ -114,12 +101,11 @@ Before submitting to TestFlight:
 
 ### Subscription Flow (Critical for TestFlight)
 - [ ] Upgrade to premium from free tier
-- [ ] Verify Stripe checkout opens
-- [ ] Complete test payment (use test card: 4242 4242 4242 4242)
+- [ ] Complete Apple IAP purchase with sandbox account
 - [ ] Verify premium status updates immediately
 - [ ] Test unlimited scans with premium
-- [ ] **Cancel subscription**
-- [ ] Verify immediate cancellation (test mode)
+- [ ] **Cancel subscription** (via iPhone Settings)
+- [ ] Verify cancellation status updates
 - [ ] Verify can re-subscribe immediately
 - [ ] Test subscription status updates in real-time
 
@@ -138,17 +124,17 @@ Before submitting to TestFlight:
 
 ---
 
-## 🔍 Stripe Test Cards
+## 🔍 Apple Sandbox Testing
 
-Use these for testing subscriptions in TestFlight:
+Use Apple sandbox test accounts for testing subscriptions in TestFlight:
 
-| Card Number | Scenario | CVC | Date |
-|-------------|----------|-----|------|
-| 4242 4242 4242 4242 | Success | Any 3 digits | Any future date |
-| 4000 0000 0000 0002 | Declined | Any 3 digits | Any future date |
-| 4000 0027 6000 3184 | Requires 3D Secure | Any 3 digits | Any future date |
+**Setup:**
+1. Create sandbox test accounts in App Store Connect
+2. Sign out of your Apple ID in Settings → App Store
+3. When prompted during purchase, sign in with sandbox account
+4. Purchases are free in sandbox mode
 
-**More test cards:** https://stripe.com/docs/testing#cards
+**More info:** https://developer.apple.com/apple-pay/sandbox-testing/
 
 ---
 
@@ -174,19 +160,18 @@ eas build --platform android --profile preview
 Version X.X.X - TestFlight Build
 
 NEW FEATURES:
-- Premium subscriptions with Stripe
+- Premium subscriptions with Apple In-App Purchase
 - Unlimited ingredient scanning for premium users
 - Real-time subscription status updates
 
 TESTING FOCUS:
-- Test subscription flow (use test card 4242 4242 4242 4242)
-- Subscription cancellation is IMMEDIATE in test mode
+- Test subscription flow (use Apple sandbox account)
+- Verify subscription cancellation via iPhone Settings
 - Verify ingredient analysis accuracy
 - Test with various product labels
 
 KNOWN TEST MODE BEHAVIORS:
-- Subscription cancels immediately (production will cancel at period end)
-- Using Stripe test mode (no real charges)
+- Using Apple sandbox accounts (no real charges)
 - Local development URLs (will be production URLs in release)
 ```
 
@@ -200,11 +185,11 @@ KNOWN TEST MODE BEHAVIORS:
 ### Issue: "Can't take photos"
 **Solution:** Check camera permissions in device settings
 
-### Issue: "Stripe checkout doesn't open"
-**Solution:** Verify STRIPE_PUBLISHABLE_KEY is set in .env and is test key (pk_test_...)
+### Issue: "Apple IAP purchase doesn't complete"
+**Solution:** Verify you're signed out of your Apple ID and using a sandbox test account
 
-### Issue: "Cancellation says 'end of period' but should be immediate"
-**Solution:** Verify `STRIPE_CANCEL_MODE=immediate` is set in Supabase Edge Function secrets
+### Issue: "Subscription status doesn't update"
+**Solution:** Check RevenueCat webhook logs in Supabase - may need to trigger manual sync
 
 ---
 
@@ -212,20 +197,20 @@ KNOWN TEST MODE BEHAVIORS:
 
 | Feature | TestFlight | Production |
 |---------|-----------|------------|
-| Stripe Keys | `pk_test_...` | `pk_live_...` |
-| Cancellation | Immediate | End of period |
+| RevenueCat Keys | Sandbox key (`appl_...`) | Production key (`appl_...`) |
+| Apple Accounts | Sandbox test accounts | Real Apple IDs |
 | API Keys | Test keys | Production keys |
 | URLs | `exp://localhost:8081` | `https://yourapp.com` |
-| Webhook Secret | Test webhook secret | Live webhook secret |
-| User Messages | Shows "test mode" note | Production messages |
+| Webhook Secret | Test webhook secret | Production webhook secret |
+| User Messages | Sandbox mode | Production messages |
 
 ---
 
 ## ✅ Ready for TestFlight When:
 
 - [x] All environment variables configured
-- [x] Stripe test keys added
-- [x] `STRIPE_CANCEL_MODE=immediate` set in Supabase
+- [x] RevenueCat sandbox API key added
+- [x] Apple sandbox test accounts created
 - [ ] App built with EAS/Xcode
 - [ ] Uploaded to App Store Connect
 - [ ] Internal testing completed
@@ -238,8 +223,7 @@ KNOWN TEST MODE BEHAVIORS:
 Once TestFlight testing is complete and you're ready for production, see: [PRODUCTION_CHANGES.md](./PRODUCTION_CHANGES.md)
 
 **Key production changes:**
-- Remove/unset `STRIPE_CANCEL_MODE` (or set to `end-of-period`)
-- Switch to live Stripe keys
+- Switch to production RevenueCat API key
 - Update `EXPO_PUBLIC_APP_URL` to production domain
 - Deploy to App Store
 

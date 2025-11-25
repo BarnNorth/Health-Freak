@@ -4,12 +4,13 @@ import { supabase } from '@/lib/supabase';
  * Deletes a user account and all associated data
  * 
  * This function:
- * - Cancels any active Stripe subscriptions
- * - Deletes Stripe customer records
  * - Deletes all user data from database tables
+ * - Cleans up legacy Stripe database records (if any)
  * - Deletes the auth user account
  * 
- * Note: Apple IAP subscriptions are handled automatically by RevenueCat
+ * Note: Apple IAP subscriptions are handled automatically by RevenueCat.
+ * Legacy Stripe subscriptions are cleaned up from database records only
+ * (no Stripe API calls are made).
  * 
  * @param userId - The ID of the user account to delete
  * @throws {Error} If deletion fails or user is not authenticated

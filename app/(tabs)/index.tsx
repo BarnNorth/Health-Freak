@@ -23,7 +23,7 @@ import { analyzePhoto as analyzePhotoWithOCR, getOCRStatus } from '@/services/ph
 import { testOpenAIAPIKey } from '@/services/aiAnalysis';
 import { showScanLimitReachedModal, showPremiumUpgradePrompt } from '@/services/subscriptionModals';
 import { isPremiumActive } from '@/services/subscription';
-import { PaymentMethodModal } from '@/components/PaymentMethodModal';
+import { useIAPPurchase } from '@/hooks/useIAPPurchase';
 import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
 import { AIAnalysisLoadingModal, AIThought } from '@/components/AIAnalysisLoadingModal';
@@ -52,9 +52,9 @@ export default function CameraScreen() {
   const [scansRemaining, setScansRemaining] = useState<number | null>(null);
   const [canScan, setCanScan] = useState(true);
   const [isPremiumUser, setIsPremiumUser] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [isTabFocused, setIsTabFocused] = useState(true);
   const { user, initializing, refreshUserProfile } = useAuth();
+  const { purchaseSubscription, isLoading: iapLoading } = useIAPPurchase();
   
   // AI Loading Modal state
   const [showAILoading, setShowAILoading] = useState(false);
@@ -258,8 +258,17 @@ export default function CameraScreen() {
   };
 
   // Handle subscription upgrade
-  const handleSubscribe = () => {
-    setShowPaymentModal(true);
+  const handleSubscribe = async () => {
+    if (Platform.OS !== 'ios') {
+      Alert.alert(
+        'iOS Only',
+        'Apple In-App Purchases are only available on iOS devices.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    await purchaseSubscription();
+    await refreshUserProfile();
   };
 
   function openTextInput() {
@@ -834,16 +843,6 @@ export default function CameraScreen() {
           toxicCount={toxicCount}
         />
 
-        {/* Payment Method Modal */}
-        <PaymentMethodModal
-          visible={showPaymentModal}
-          onClose={() => setShowPaymentModal(false)}
-          onSuccess={() => {
-            setShowPaymentModal(false);
-            // Refresh subscription status after successful purchase
-            refreshUserProfile();
-          }}
-        />
     </SafeAreaView>
   );
 }

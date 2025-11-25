@@ -65,20 +65,12 @@ if (__DEV__) {
 // Google Cloud Vision has been completely removed - using GPT-5 nano instead
 
 /**
- * Redirect URL configuration for auth callbacks and payment redirects
+ * Redirect URL configuration for auth callbacks
  * Uses universal links (https://healthfreak.io) only
  */
 export const redirectConfig = {
   authCallback: function() {
     return 'https://healthfreak.io/auth/callback';
-  },
-  
-  subscriptionSuccess: function() {
-    return 'https://healthfreak.io/subscription-success';
-  },
-  
-  subscriptionCancel: function() {
-    return 'https://healthfreak.io/subscription-cancel';
   },
 };
 
@@ -86,7 +78,5 @@ export const redirectConfig = {
 if (__DEV__) {
   console.log('🔗 Redirect Configuration (Universal Links Only):', {
     authCallback: redirectConfig.authCallback(),
-    subscriptionSuccess: redirectConfig.subscriptionSuccess(),
-    subscriptionCancel: redirectConfig.subscriptionCancel(),
   });
 }

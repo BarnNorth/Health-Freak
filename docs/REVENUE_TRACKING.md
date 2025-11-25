@@ -2,32 +2,14 @@
 
 ## Overview
 
-Health Freak uses two payment providers to maximize user convenience and revenue opportunities. This guide explains how to track revenue from both systems and calculate combined metrics.
+Health Freak uses Apple In-App Purchase (IAP) for all subscriptions, processed through RevenueCat. This guide explains how to track revenue and calculate key metrics.
 
-**Payment Providers:**
-- **Stripe**: Web-based payments (iOS, Android, Web)
-- **RevenueCat/Apple IAP**: Native iOS in-app purchases
+**Payment Provider:**
+- **RevenueCat/Apple IAP**: Native iOS in-app purchases exclusively (15% fee via App Store Small Business Program)
 
 ---
 
 ## Data Sources
-
-### Stripe Dashboard
-
-**URL:** https://dashboard.stripe.com/
-
-**Key Views:**
-- **Revenue → MRR**: Monthly Recurring Revenue chart
-- **Revenue → Subscriptions**: Active subscription count
-- **Customers → Subscriptions**: Individual customer details
-- **Analytics → Revenue Recognition**: Accounting-ready reports
-
-**What it Shows:**
-- MRR from Stripe subscriptions only
-- Active Stripe subscription count
-- Churn rate (Stripe customers)
-- Customer lifetime value (Stripe)
-- Failed payment recovery
 
 ### RevenueCat Dashboard
 
@@ -52,7 +34,6 @@ Health Freak uses two payment providers to maximize user convenience and revenue
 
 **Advantage:**
 - **Source of truth** for total user counts
-- Can query across both payment providers
 - Custom metric calculations
 - Historical data retention
 - No dashboard limitations
@@ -64,32 +45,7 @@ Health Freak uses two payment providers to maximize user convenience and revenue
 ### Formula
 
 ```
-Total MRR = Stripe MRR + Apple IAP MRR
-```
-
-### Stripe MRR
-
-**From Stripe Dashboard:**
-1. Navigate to: **Revenue → MRR**
-2. View current MRR value
-3. Or calculate manually: `Active Stripe Subscriptions × $6.99`
-
-**SQL Query:**
-```sql
-SELECT 
-  COUNT(*) as active_stripe_subs,
-  COUNT(*) * 6.99 as stripe_mrr
-FROM users
-WHERE subscription_status = 'premium'
-  AND payment_method = 'stripe'
-  AND stripe_subscription_id IS NOT NULL;
-```
-
-**Example Output:**
-```
-active_stripe_subs | stripe_mrr
--------------------+-----------
-        45         |  314.55
+Total MRR = Apple IAP MRR
 ```
 
 ### Apple IAP MRR
@@ -97,13 +53,13 @@ active_stripe_subs | stripe_mrr
 **From RevenueCat Dashboard:**
 1. Navigate to: **Overview → Active Subscriptions**
 2. Note the count
-3. Calculate: `Active Apple Subscriptions × $6.99`
+3. Calculate: `Active Apple Subscriptions × $4.99`
 
 **SQL Query:**
 ```sql
 SELECT 
   COUNT(*) as active_apple_subs,
-  COUNT(*) * 6.99 as apple_mrr
+  COUNT(*) * 4.99 as apple_mrr
 FROM users
 WHERE subscription_status = 'premium'
   AND payment_method = 'apple_iap'
@@ -114,36 +70,15 @@ WHERE subscription_status = 'premium'
 ```
 active_apple_subs | apple_mrr
 ------------------+----------
-       35         |  244.65
+       35         |  174.65
 ```
 
-### Combined MRR
+### Total MRR Query
 
-**SQL Query with Breakdown:**
-```sql
-SELECT 
-  payment_method,
-  COUNT(*) as active_subscriptions,
-  COUNT(*) * 6.99 as mrr
-FROM users
-WHERE subscription_status = 'premium'
-  AND payment_method IS NOT NULL
-GROUP BY payment_method;
-```
-
-**Example Output:**
-```
-payment_method | active_subscriptions |   mrr
----------------+---------------------+---------
-stripe         |         45          | 314.55
-apple_iap      |         35          | 244.65
-```
-
-**Total MRR Query:**
 ```sql
 SELECT 
   COUNT(*) as total_premium_users,
-  COUNT(*) * 6.99 as total_mrr
+  COUNT(*) * 4.99 as total_mrr
 FROM users
 WHERE subscription_status = 'premium';
 ```
@@ -152,7 +87,7 @@ WHERE subscription_status = 'premium';
 ```
 total_premium_users | total_mrr
 --------------------+-----------
-         80         |   559.20
+         35         |   174.65
 ```
 
 ---
@@ -171,7 +106,7 @@ Measures average monthly revenue across entire user base (free + premium).
 
 ```sql
 WITH revenue AS (
-  SELECT COUNT(*) * 6.99 as mrr
+  SELECT COUNT(*) * 4.99 as mrr
   FROM users
   WHERE subscription_status = 'premium'
 ),
@@ -243,8 +178,7 @@ ORDER BY subscribers DESC;
 ```
 payment_method | subscribers | percentage
 ---------------+-------------+-----------
-stripe         |     45      |   56.25
-apple_iap      |     35      |   43.75
+apple_iap      |     35      |   100.00
 ```
 
 ---
@@ -298,9 +232,7 @@ LIMIT 12;
 ```
 signup_month | payment_method | total_signups | still_active | retention_rate_pct
 -------------+----------------+---------------+--------------+-------------------
-2025-10-01   | stripe         |      20       |      18      |      90.00
 2025-10-01   | apple_iap      |      15       |      14      |      93.33
-2025-09-01   | stripe         |      25       |      20      |      80.00
 2025-09-01   | apple_iap      |      10       |       8      |      80.00
 ```
 
@@ -318,7 +250,7 @@ SELECT
   CURRENT_DATE as date,
   payment_method,
   COUNT(*) as active_subs,
-  COUNT(*) * 6.99 as daily_mrr
+  COUNT(*) * 4.99 as daily_mrr
 FROM users
 WHERE subscription_status = 'premium'
 GROUP BY payment_method;
@@ -341,7 +273,7 @@ WITH sub_lengths AS (
 SELECT 
   payment_method,
   ROUND(avg_days, 0) as avg_subscription_days,
-  ROUND((avg_days / 30) * 6.99, 2) as estimated_ltv
+  ROUND((avg_days / 30) * 4.99, 2) as estimated_ltv
 FROM sub_lengths;
 ```
 
@@ -349,8 +281,7 @@ FROM sub_lengths;
 ```
 payment_method | avg_subscription_days | estimated_ltv
 ---------------+-----------------------+--------------
-stripe         |         120           |     27.96
-apple_iap      |         150           |     34.95
+apple_iap      |         150           |     24.95
 ```
 
 ### New Subscriptions This Month
@@ -369,81 +300,56 @@ GROUP BY payment_method;
 
 ---
 
-## Platform Comparison
+## Platform Revenue
 
-### Revenue by Platform
+### Apple IAP Revenue
 
-Compare revenue contribution from each payment provider.
+All subscriptions are processed through Apple In-App Purchase.
 
 **SQL Query:**
 ```sql
 SELECT 
-  CASE 
-    WHEN payment_method = 'stripe' THEN 'Stripe (Web/Android)'
-    WHEN payment_method = 'apple_iap' THEN 'Apple (iOS)'
-    ELSE 'Unknown'
-  END as platform,
   COUNT(*) as active_subscriptions,
-  COUNT(*) * 6.99 as mrr,
-  ROUND((COUNT(*)::numeric / SUM(COUNT(*)) OVER()) * 100, 2) as market_share_pct
+  COUNT(*) * 4.99 as gross_mrr,
+  ROUND(COUNT(*) * 4.99 * 0.85, 2) as net_mrr,
+  ROUND(COUNT(*) * 4.99 * 0.15, 2) as platform_fees
 FROM users
 WHERE subscription_status = 'premium'
-GROUP BY payment_method
-ORDER BY mrr DESC;
+  AND payment_method = 'apple_iap';
 ```
 
 **Example Output:**
 ```
-platform            | active_subscriptions |   mrr  | market_share_pct
---------------------+---------------------+--------+-----------------
-Stripe (Web/Android)|         45          | 314.55 |      56.25
-Apple (iOS)         |         35          | 244.65 |      43.75
+active_subscriptions | gross_mrr | net_mrr | platform_fees
+---------------------+-----------+---------+-------------
+        35           |  174.65   | 148.45  |    26.20
 ```
 
 ### Effective Revenue (After Fees)
 
-Account for platform commissions.
+Account for Apple's 15% commission (Small Business Program).
 
 **SQL Query:**
 ```sql
 WITH revenue AS (
   SELECT 
-    payment_method,
-    COUNT(*) as subs,
-    COUNT(*) * 6.99 as gross_mrr
+    COUNT(*) * 4.99 as gross_mrr
   FROM users
   WHERE subscription_status = 'premium'
-  GROUP BY payment_method
+    AND payment_method = 'apple_iap'
 )
 SELECT 
-  payment_method,
-  gross_mrr,
-  CASE 
-    WHEN payment_method = 'stripe' 
-    THEN ROUND(gross_mrr * 0.971, 2) -- 2.9% Stripe fee
-    WHEN payment_method = 'apple_iap' 
-    THEN ROUND(gross_mrr * 0.70, 2) -- 30% Apple fee
-    ELSE gross_mrr
-  END as net_mrr,
-  CASE 
-    WHEN payment_method = 'stripe' THEN '2.9%'
-    WHEN payment_method = 'apple_iap' THEN '30%'
-    ELSE '0%'
-  END as platform_fee
+  ROUND(gross_mrr, 2) as gross_mrr,
+  ROUND(gross_mrr * 0.85, 2) as net_mrr,
+  ROUND(gross_mrr * 0.15, 2) as platform_fees
 FROM revenue;
 ```
 
 **Example Output:**
 ```
-payment_method | gross_mrr | net_mrr | platform_fee
----------------+-----------+---------+-------------
-stripe         |    450    |  437.00 |    2.9%
-apple_iap      |    350    |  245.00 |    30%
-```
-
-**Total Net MRR:**
-```
-$437.00 + $245.00 = $682.00/month
+gross_mrr | net_mrr | platform_fees
+----------+---------+-------------
+ 174.65   | 148.45  |    26.20
 ```
 
 ---
@@ -461,7 +367,6 @@ SELECT
   payment_method,
   created_at,
   updated_at,
-  stripe_customer_id,
   apple_original_transaction_id,
   total_scans_used
 FROM users
@@ -490,17 +395,17 @@ const supabase = createClient(
 const { data, error } = await supabase
   .from('users')
   .select('subscription_status, payment_method')
-  .eq('subscription_status', 'premium');
+  .eq('subscription_status', 'premium')
+  .eq('payment_method', 'apple_iap');
 
 if (data) {
-  const stripeSubs = data.filter(u => u.payment_method === 'stripe').length;
-  const appleSubs = data.filter(u => u.payment_method === 'apple_iap').length;
-  const totalMRR = (stripeSubs + appleSubs) * 10;
+  const appleSubs = data.length;
+  const totalMRR = appleSubs * 4.99;
+  const netMRR = totalMRR * 0.85; // After 15% Apple fee
   
   console.log({
-    stripe: { count: stripeSubs, mrr: stripeSubs * 10 },
-    apple: { count: appleSubs, mrr: appleSubs * 10 },
-    total: { count: stripeSubs + appleSubs, mrr: totalMRR }
+    apple: { count: appleSubs, gross_mrr: totalMRR, net_mrr: netMRR },
+    total: { count: appleSubs, gross_mrr: totalMRR, net_mrr: netMRR }
   });
 }
 ```
@@ -508,23 +413,6 @@ if (data) {
 ---
 
 ## Third-Party Analytics
-
-### Stripe Analytics
-
-**Built-in Features:**
-- MRR trends over time
-- Customer churn rate
-- Customer lifetime value (LTV)
-- Revenue forecasting
-- Payment failure analytics
-
-**Access:** https://dashboard.stripe.com/revenue/mrr
-
-**Useful Reports:**
-- Monthly revenue breakdown
-- Subscription growth rate
-- Failed payment recovery rate
-- Refund analytics
 
 ### RevenueCat Charts
 
@@ -545,7 +433,7 @@ if (data) {
 
 ### Custom Dashboard Recommendations
 
-For comprehensive multi-provider analytics, consider:
+For comprehensive analytics, consider:
 
 **Option 1: Supabase Functions + Frontend**
 - Create scheduled Edge Functions to aggregate data
@@ -568,13 +456,12 @@ For comprehensive multi-provider analytics, consider:
 
 ### Weekly/Monthly Metrics
 
-1. **Total MRR**: Stripe MRR + Apple IAP MRR
+1. **Total MRR**: Apple IAP MRR
 2. **Active Subscriptions**: Total premium users
 3. **Conversion Rate**: (Premium users / Total users) × 100
-4. **Payment Method Split**: Stripe % vs Apple %
-5. **Churn Rate**: (Cancellations / Active subs) × 100
-6. **ARPU**: Total MRR / Total users
-7. **LTV**: Average subscription duration × $6.99
+4. **Churn Rate**: (Cancellations / Active subs) × 100
+5. **ARPU**: Total MRR / Total users
+6. **LTV**: Average subscription duration × $4.99
 
 ### Growth Metrics
 
@@ -608,7 +495,7 @@ WITH totals AS (
   SELECT 
     payment_method,
     COUNT(*) as subs,
-    COUNT(*) * 6.99 as mrr
+    COUNT(*) * 4.99 as mrr
   FROM users
   WHERE subscription_status = 'premium'
   GROUP BY payment_method
@@ -629,11 +516,9 @@ ORDER BY mrr DESC;
 
 ### Platform Fees
 
-| Provider | Fee Structure | Example (per $6.99 sub) | Net Revenue |
+| Provider | Fee Structure | Example (per $4.99 sub) | Net Revenue |
 |----------|--------------|------------------------|-------------|
-| **Stripe** | 2.9% + $0.30 | $0.20 + $0.30 = $0.50 | **$6.49** |
-| **Apple IAP** (Year 1) | 30% | $2.10 | **$4.89** |
-| **Apple IAP** (Year 2+) | 15% | $1.05 | **$5.94** |
+| **Apple IAP** (Small Business Program) | 15% | $0.75 | **$4.24** |
 
 ### RevenueCat Pricing
 
@@ -653,12 +538,10 @@ ORDER BY mrr DESC;
 WITH revenue AS (
   SELECT 
     payment_method,
-    COUNT(*) * 6.99 as gross_mrr,
+    COUNT(*) * 4.99 as gross_mrr,
     CASE 
-      WHEN payment_method = 'stripe' 
-      THEN COUNT(*) * 6.99 * 0.971 -- 2.9% fee approximation
       WHEN payment_method = 'apple_iap' 
-      THEN COUNT(*) * 6.99 * 0.70 -- 30% fee (year 1)
+      THEN COUNT(*) * 4.99 * 0.85 -- 15% fee (Small Business Program)
       ELSE 0
     END as net_mrr
   FROM users
@@ -724,14 +607,14 @@ avg_growth AS (
   FROM monthly_data
 ),
 current_mrr AS (
-  SELECT COUNT(*) * 6.99 as mrr
+  SELECT COUNT(*) * 4.99 as mrr
   FROM users
   WHERE subscription_status = 'premium'
 )
 SELECT 
   c.mrr as current_mrr,
-  g.avg_monthly_new_subs * 6.99 as projected_new_mrr,
-  c.mrr + (g.avg_monthly_new_subs * 6.99) as forecasted_next_month_mrr
+  g.avg_monthly_new_subs * 4.99 as projected_new_mrr,
+  c.mrr + (g.avg_monthly_new_subs * 4.99) as forecasted_next_month_mrr
 FROM current_mrr c, avg_growth g;
 ```
 
@@ -784,26 +667,21 @@ Set up alerts for these scenarios:
 SELECT 
   DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') as report_month,
   
-  -- Stripe Metrics
-  (SELECT COUNT(*) FROM users 
-   WHERE payment_method = 'stripe' 
-     AND subscription_status = 'premium') as stripe_active_subs,
-  (SELECT COUNT(*) * 6.99 FROM users 
-   WHERE payment_method = 'stripe' 
-     AND subscription_status = 'premium') as stripe_mrr,
-  
   -- Apple IAP Metrics
   (SELECT COUNT(*) FROM users 
    WHERE payment_method = 'apple_iap' 
      AND subscription_status = 'premium') as apple_active_subs,
-  (SELECT COUNT(*) * 6.99 FROM users 
+  (SELECT COUNT(*) * 4.99 FROM users 
    WHERE payment_method = 'apple_iap' 
      AND subscription_status = 'premium') as apple_mrr,
+  (SELECT COUNT(*) * 4.99 * 0.85 FROM users 
+   WHERE payment_method = 'apple_iap' 
+     AND subscription_status = 'premium') as apple_net_mrr,
   
-  -- Combined Metrics
+  -- Total Metrics
   (SELECT COUNT(*) FROM users 
    WHERE subscription_status = 'premium') as total_active_subs,
-  (SELECT COUNT(*) * 6.99 FROM users 
+  (SELECT COUNT(*) * 4.99 FROM users 
    WHERE subscription_status = 'premium') as total_mrr,
   
   -- New Subscribers This Month
@@ -815,7 +693,7 @@ SELECT
   -- Churn This Month
   (SELECT COUNT(*) FROM users 
    WHERE subscription_status = 'free' 
-     AND payment_method IS NOT NULL
+     AND payment_method = 'apple_iap'
      AND updated_at >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
      AND updated_at < DATE_TRUNC('month', CURRENT_DATE)) as churned_subs_last_month;
 ```
@@ -825,13 +703,12 @@ SELECT
 ## Best Practices
 
 1. **Track Daily**: Run key queries daily to spot trends early
-2. **Compare Providers**: Analyze performance differences between Stripe and Apple
-3. **Monitor Cohorts**: Track retention by signup month and payment method
-4. **Calculate Net Revenue**: Always factor in platform fees for accurate profitability
-5. **Set Baselines**: Establish target metrics for MRR, conversion, churn, LTV
-6. **Review Monthly**: Comprehensive review of all metrics at month end
-7. **Automate Reporting**: Use scheduled queries or scripts to generate reports
-8. **Correlate Events**: Compare revenue changes with app updates, marketing campaigns
+2. **Monitor Cohorts**: Track retention by signup month
+3. **Calculate Net Revenue**: Always factor in Apple's 15% commission for accurate profitability
+4. **Set Baselines**: Establish target metrics for MRR, conversion, churn, LTV
+5. **Review Monthly**: Comprehensive review of all metrics at month end
+6. **Automate Reporting**: Use scheduled queries or scripts to generate reports
+7. **Correlate Events**: Compare revenue changes with app updates, marketing campaigns
 
 ---
 
@@ -842,14 +719,14 @@ SELECT
 **Key Numbers (Daily View):**
 - Total MRR
 - Active Subscriptions (total)
-- Stripe vs Apple split (%)
+- Net MRR (after 15% Apple fee)
 - Yesterday's new subscribers
 - 7-day rolling average conversion rate
 
 ### Detailed Analytics Dashboard
 
 **In-Depth Metrics:**
-- MRR by provider (line chart, 90 days)
+- MRR trends (line chart, 90 days)
 - Conversion funnel (free → premium)
 - Churn cohorts (by signup month)
 - Revenue forecast (next 3 months)
@@ -859,18 +736,16 @@ SELECT
 
 ## Notes
 
-- **Apple Commission**: 30% first year, 15% after year 1 per subscriber
-- **Stripe Fees**: 2.9% + $0.30 per transaction
+- **Apple Commission**: 15% via Small Business Program (all subscriptions)
 - **RevenueCat Tier**: Free up to $10k MRR, then 1% fee
 - **Data Retention**: Consider archiving old user data per privacy policy
 - **Compliance**: GDPR/CCPA may require data export/deletion capabilities
-- **Accuracy**: RevenueCat and Stripe dashboards are authoritative; database is for unified view
+- **Accuracy**: RevenueCat dashboard is authoritative; database provides unified view
 
 ---
 
 ## Support Resources
 
-- **Stripe Revenue Reports**: https://support.stripe.com/topics/billing-and-revenue
 - **RevenueCat Analytics**: https://www.revenuecat.com/docs/charts
 - **Supabase SQL Reference**: https://supabase.com/docs/guides/database/overview
 - **PostgreSQL Documentation**: https://www.postgresql.org/docs/
@@ -879,5 +754,5 @@ SELECT
 
 **Last Updated:** October 2025  
 **Database Schema Version:** 1.0  
-**Pricing:** $6.99/month
+**Pricing:** $4.99/month
 

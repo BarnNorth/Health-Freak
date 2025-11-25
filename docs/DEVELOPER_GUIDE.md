@@ -22,7 +22,7 @@ Complete technical documentation for setting up and developing Health Freak.
 - **AI & OCR:** OpenAI (GPT-5 nano)
 - **Database:** Supabase (PostgreSQL)
 - **Auth:** Supabase Auth
-- **Payments:** Stripe + RevenueCat (Apple IAP)
+- **Payments:** RevenueCat (Apple IAP)
 - **Language:** TypeScript
 
 ## 📋 Prerequisites
@@ -33,7 +33,6 @@ Complete technical documentation for setting up and developing Health Freak.
 - Active API accounts:
   - [OpenAI](https://platform.openai.com/)
   - [Supabase](https://supabase.com/)
-  - [Stripe](https://stripe.com/) (for web payments)
   - [RevenueCat](https://www.revenuecat.com/) (for Apple IAP)
 
 ## 🚀 Quick Start
@@ -86,8 +85,8 @@ Complete technical documentation for setting up and developing Health Freak.
    EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
    EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
    
-   # Subscriptions (optional)
-   EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your-stripe-key
+   # Subscriptions (Apple IAP via RevenueCat)
+   EXPO_PUBLIC_REVENUECAT_API_KEY=appl_your-revenuecat-api-key
    ```
 
 3. **Verify `.env` is in `.gitignore`** (already configured)
@@ -96,7 +95,7 @@ Complete technical documentation for setting up and developing Health Freak.
 
 - **OpenAI API Key:** https://platform.openai.com/api-keys
 - **Supabase Credentials:** https://app.supabase.com/project/_/settings/api
-- **Stripe Keys:** https://dashboard.stripe.com/apikeys
+- **RevenueCat Keys:** https://app.revenuecat.com/projects/[your-project]/settings/api-keys
 
 ### Security Best Practices
 
@@ -342,7 +341,7 @@ When contributing:
 - No fallback to insecure sources
 
 **Webhook Security:**
-- Stripe signature verification enforced
+- RevenueCat webhook verification enforced
 - No bypass mechanisms
 - Invalid signatures rejected
 
@@ -357,7 +356,7 @@ When contributing:
 - `users` - User profiles and subscription status
 - `scans` - Premium-only scan history (RLS enforced)
 - `ingredients_cache` - AI results cache (180-day expiry)
-- `stripe_subscriptions` - Subscription tracking
+- Subscription tracking via `users` table (Apple IAP only)
 
 **Tier Enforcement:**
 - Free: 10 scans with full analysis, history saved (database enforced)
@@ -367,9 +366,9 @@ When contributing:
 
 ### Subscription System Architecture
 
-**Dual Payment Provider System:**
+**Apple In-App Purchase System:**
 
-Health Freak supports two payment providers with a unified abstraction layer:
+Health Freak uses Apple In-App Purchase exclusively via RevenueCat:
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -384,25 +383,22 @@ Health Freak supports two payment providers with a unified abstraction layer:
 │                                                   │
 │  • isPremiumActive()                             │
 │  • getSubscriptionInfo()                         │
-│  • startSubscriptionPurchase()                   │
-│  • cancelSubscription()                          │
+│  • purchasePremiumSubscription()                 │
 │  • 5-minute caching layer                        │
-└──────────────┬───────────────┬───────────────────┘
-               │               │
-               ▼               ▼
-    ┌──────────────┐  ┌──────────────┐
-    │   Stripe     │  │  RevenueCat  │
-    │   Service    │  │   Service    │
-    │              │  │  (Apple IAP) │
-    └──────┬───────┘  └──────┬───────┘
-           │                 │
-           ▼                 ▼
-    ┌──────────────┐  ┌──────────────┐
-    │   Stripe     │  │  App Store   │
-    │   API        │  │   StoreKit   │
-    └──────┬───────┘  └──────┬───────┘
-           │                 │
-           └────────┬────────┘
+└────────────────────┬─────────────────────────────┘
+                     │
+                     ▼
+          ┌──────────────────┐
+          │   RevenueCat     │
+          │   Service        │
+          │   (Apple IAP)    │
+          └────────┬─────────┘
+                   │
+                   ▼
+          ┌──────────────────┐
+          │   App Store       │
+          │   StoreKit        │
+          └──────────────────┘
                     ▼
          ┌─────────────────────┐
          │   Supabase Database  │
@@ -410,7 +406,7 @@ Health Freak supports two payment providers with a unified abstraction layer:
          │                      │
          │  • subscription_status │
          │  • payment_method     │
-         │  • stripe_* fields    │
+         │  • apple_* fields     │
          │  • apple_* fields     │
          └─────────────────────┘
 ```
@@ -423,25 +419,19 @@ Health Freak supports two payment providers with a unified abstraction layer:
    - Caches subscription status for 5 minutes (reduces API calls)
    - Defaults to `false` on errors (fail-safe)
 
-2. **Provider Services**
-   - `services/stripe.ts` - Stripe-specific operations
+2. **Provider Service**
    - `services/revenueCat.ts` - Apple IAP operations via RevenueCat SDK
-   - Each handles its own authentication, API calls, and error handling
+   - Handles authentication, API calls, and error handling
 
 3. **Database Schema** (`users` table)
    - `subscription_status`: 'free' | 'premium'
-   - `payment_method`: 'stripe' | 'apple_iap' | null
-   - `stripe_customer_id`, `stripe_subscription_id` (Stripe users)
+   - `payment_method`: 'apple_iap' | null
    - `apple_original_transaction_id`, `revenuecat_customer_id` (Apple users)
+   - Legacy Stripe fields remain for historical data but are not updated
 
 **Webhook Synchronization:**
 
-Both providers send webhook events to keep database in sync:
-
-**Stripe Webhooks** (`supabase/functions/stripe-webhook/`)
-- `customer.subscription.created` → Set premium status
-- `customer.subscription.updated` → Update subscription details
-- `customer.subscription.deleted` → Remove premium status
+RevenueCat sends webhook events to keep database in sync:
 
 **RevenueCat Webhooks** (`supabase/functions/revenuecat-webhook/`)
 - `INITIAL_PURCHASE` → Set premium status, store transaction ID
@@ -452,15 +442,15 @@ Both providers send webhook events to keep database in sync:
 **Usage in Application:**
 
 ```typescript
-// Check if user has premium access (works for both providers)
+// Check if user has premium access
 const isPremium = await isPremiumActive(userId);
 
 // Get detailed subscription info
 const subInfo = await getSubscriptionInfo(userId);
 // Returns: { isActive, paymentMethod, renewalDate, cancelsAtPeriodEnd }
 
-// Start new subscription
-const result = await startSubscriptionPurchase(userId, 'apple_iap');
+// Start new subscription (Apple IAP only)
+const result = await startSubscriptionPurchase();
 
 // Cancel subscription (provider-specific handling)
 const cancelResult = await cancelSubscription(userId);
@@ -477,21 +467,19 @@ const cancelResult = await cancelSubscription(userId);
 On app launch (`app/_layout.tsx`):
 1. Check if user is authenticated
 2. For Apple IAP users: Call RevenueCat `restorePurchases()`
-3. For Stripe users: Verify status from database
-4. Update local state with results
+3. Update local state with results
 
 This ensures users keep access after reinstalling the app, switching devices, or updating the app.
 
-**Payment Method Selection:**
+**Purchase Flow:**
 
-`components/PaymentMethodModal.tsx` presents both options:
-- Shown when user taps "Upgrade to Premium"
-- Equal prominence for both methods
-- Platform-aware (iOS shows Apple IAP, Android shows Stripe only)
-- Handles loading states and errors for each provider
+Users tap "Upgrade to Premium" and purchase directly via Apple IAP:
+- Direct purchase call using `useIAPPurchase` hook
+- No payment method selection needed
+- Platform-aware (iOS only - shows appropriate message on other platforms)
+- Handles loading states and errors
 
 **Subscription Management:**
-- **Stripe users:** Can cancel directly in app via Stripe API
 - **Apple users:** Directed to iPhone Settings (per Apple requirements)
 - Deep linking attempted to Settings → Subscriptions
 - Fallback instructions if deep link fails

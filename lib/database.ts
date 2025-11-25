@@ -3,23 +3,18 @@ import { supabase, User, IngredientCache, AnalysisHistory } from './supabase';
 /**
  * Determine which payment method a user is using
  * @param user - User object from database
- * @returns 'apple' | 'stripe' | 'none'
+ * @returns 'apple' | 'none'
  */
-export function getPaymentMethod(user: User): 'apple' | 'stripe' | 'none' {
+export function getPaymentMethod(user: User): 'apple' | 'none' {
   if (user.subscription_status !== 'premium') return 'none';
   
-  // Check explicit payment_method field first (set by webhooks)
-  if (user.payment_method) {
-    return user.payment_method === 'stripe' ? 'stripe' : 'apple';
+  // Check explicit payment_method field (set by webhooks)
+  if (user.payment_method === 'apple_iap') {
+    return 'apple';
   }
   
-  // Legacy detection: Check for Stripe IDs (handles old users)
-  if (user.stripe_subscription_id || user.stripe_customer_id) {
-    return 'stripe';
-  }
-  
-  // If premium but no identifiable payment method, return 'none' instead of assuming
-  // This prevents incorrectly routing users to Apple cancellation flow
+  // Legacy Stripe users will have payment_method='stripe' but we don't support Stripe anymore
+  // Return 'none' to prevent routing to Apple cancellation flow for legacy users
   return 'none';
 }
 

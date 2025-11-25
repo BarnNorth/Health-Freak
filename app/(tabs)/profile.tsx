@@ -1,12 +1,12 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Alert, TouchableWithoutFeedback, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, Alert, TouchableWithoutFeedback, Platform, ActivityIndicator } from 'react-native';
 import { User, Crown, FileText, Shield, LogOut, CreditCard, RefreshCw, Film, Lock, Trash2, MessageSquare } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 import Purchases from 'react-native-purchases';
 import { useAuth } from '@/contexts/AuthContext';
 import { showCancelSubscriptionPrompt } from '@/services/subscriptionModals';
 import { getPaymentMethod } from '@/lib/database';
-import { PaymentMethodModal } from '@/components/PaymentMethodModal';
+import { useIAPPurchase } from '@/hooks/useIAPPurchase';
 import { getSubscriptionInfo, isPremiumActive, SubscriptionInfo } from '@/services/subscription';
 import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
@@ -17,10 +17,10 @@ import { deleteUserAccount } from '@/services/deleteAccount';
 export default function ProfileScreen() {
   const { user, signOut, initializing, refreshUserProfile } = useAuth();
   const hasRefreshedRef = useRef(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [subscriptionInfo, setSubscriptionInfo] = useState<SubscriptionInfo | null>(null);
   const [isPremium, setIsPremium] = useState(false);
   const debugPressTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { purchaseSubscription, isLoading: iapLoading, error: iapError } = useIAPPurchase();
 
   // Refresh profile once when tab is focused (prevent infinite loops)
   useFocusEffect(
@@ -121,12 +121,18 @@ export default function ProfileScreen() {
     );
   }
 
-  const handleUpgradeClick = () => {
-    setShowPaymentModal(true);
-  };
-
-  const handlePaymentSuccess = async () => {
+  const handleUpgradeClick = async () => {
+    if (Platform.OS !== 'ios') {
+      Alert.alert(
+        'iOS Only',
+        'Apple In-App Purchases are only available on iOS devices.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    await purchaseSubscription();
     await refreshUserProfile();
+    await loadSubscriptionInfo();
   };
 
   // Debug gesture handlers (development only)
@@ -266,9 +272,20 @@ export default function ProfileScreen() {
               <Text style={styles.benefit}>• 🧠 Detailed ingredient insights</Text>
             </View>
             
-            <TouchableOpacity style={styles.upgradeButton} onPress={handleUpgradeClick}>
-              <Text style={styles.upgradeButtonText}>💵 Upgrade to Premium 💵{'\n'}$6.99/month</Text>
+            <TouchableOpacity 
+              style={[styles.upgradeButton, iapLoading && styles.buttonDisabled]} 
+              onPress={handleUpgradeClick}
+              disabled={iapLoading}
+            >
+              {iapLoading ? (
+                <ActivityIndicator color={COLORS.white} />
+              ) : (
+                <Text style={styles.upgradeButtonText}>💵 Upgrade to Premium 💵{'\n'}$4.99/month</Text>
+              )}
             </TouchableOpacity>
+            {iapError && (
+              <Text style={styles.errorText}>{iapError}</Text>
+            )}
           </View>
         )}
 
@@ -346,13 +363,6 @@ export default function ProfileScreen() {
           </View>
         </TouchableWithoutFeedback>
       </ScrollView>
-
-      {/* Payment Method Modal */}
-      <PaymentMethodModal
-        visible={showPaymentModal}
-        onClose={() => setShowPaymentModal(false)}
-        onSuccess={handlePaymentSuccess}
-      />
     </SafeAreaView>
   );
 }
@@ -602,6 +612,17 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontWeight: '400',
     marginBottom: 6,
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodyMedium,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  errorText: {
+    fontSize: FONT_SIZES.bodyMedium,
+    color: COLORS.toxicRed,
+    textAlign: 'center',
+    marginTop: 8,
     fontFamily: FONTS.terminalGrotesque,
     lineHeight: LINE_HEIGHTS.bodyMedium,
   },

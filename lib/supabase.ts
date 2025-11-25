@@ -76,7 +76,7 @@ export interface User {
   total_scans_used: number;
   stripe_customer_id?: string;
   stripe_subscription_id?: string;
-  payment_method?: 'stripe' | 'apple_iap';
+  payment_method?: 'apple_iap'; // Note: Database schema still accepts 'stripe' for historical data, but TypeScript only allows 'apple_iap'
   apple_original_transaction_id?: string;
   revenuecat_customer_id?: string;
   subscription_renewal_date?: string | null;

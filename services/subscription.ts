@@ -1,19 +1,16 @@
 /**
  * Unified Subscription Service
  * 
- * Provides a single interface for managing subscriptions across both Stripe and RevenueCat (Apple IAP).
- * This abstracts the complexity of dual payment systems behind a clean API.
+ * Provides a single interface for managing subscriptions via RevenueCat (Apple IAP).
  */
 
 import { getUserProfile } from '@/lib/database';
-import { startPremiumSubscription } from '@/services/stripe';
 import { 
   purchasePremiumSubscription, 
   isPremiumActiveViaIAP, 
   getSubscriptionStatus,
   clearStatusCache as clearRevenueCatCache
 } from '@/services/revenueCat';
-import { cancelSubscription as cancelStripeSubscription } from '@/services/subscriptionModals';
 import { logDetailedError, getUserFriendlyErrorMessage } from '@/services/errorHandling';
 
 // ============================================
@@ -21,11 +18,11 @@ import { logDetailedError, getUserFriendlyErrorMessage } from '@/services/errorH
 // ============================================
 
 /**
- * Unified subscription information regardless of payment method
+ * Unified subscription information for Apple IAP
  */
 export interface SubscriptionInfo {
   isActive: boolean;
-  paymentMethod: 'stripe' | 'apple_iap' | null;
+  paymentMethod: 'apple_iap' | null;
   renewalDate: number | null; // timestamp
   cancelsAtPeriodEnd: boolean;
 }
@@ -127,19 +124,8 @@ export async function isPremiumActive(userId: string, forceRefresh: boolean = fa
 
     let isPremium = false;
 
-    // Check subscription status based on payment method
-    if (user.payment_method === 'stripe') {
-      // For Stripe: Check database subscription status
-      isPremium = user.subscription_status === 'premium' && !!user.stripe_subscription_id;
-      
-      if (__DEV__) {
-        console.log('💳 [Subscription] Stripe subscription check:', {
-          subscription_status: user.subscription_status,
-          has_stripe_id: !!user.stripe_subscription_id,
-          is_premium: isPremium
-        });
-      }
-    } else if (user.payment_method === 'apple_iap') {
+    // Check subscription status - only Apple IAP is supported
+    if (user.payment_method === 'apple_iap') {
       // For Apple IAP: Check RevenueCat status
       isPremium = await isPremiumActiveViaIAP(forceRefresh);
       
@@ -147,11 +133,12 @@ export async function isPremiumActive(userId: string, forceRefresh: boolean = fa
         console.log('🍎 [Subscription] Apple IAP subscription check:', isPremium);
       }
     } else {
-      // No payment method set - check if they have premium status anyway
+      // No payment method set or legacy Stripe - check if they have premium status anyway
+      // (for historical Stripe users who may still have premium status)
       isPremium = user.subscription_status === 'premium';
       
       if (__DEV__) {
-        console.log('❓ [Subscription] No payment method, checking subscription_status:', isPremium);
+        console.log('❓ [Subscription] No active payment method, checking subscription_status:', isPremium);
       }
     }
 
@@ -217,21 +204,7 @@ export async function getSubscriptionInfo(userId: string): Promise<SubscriptionI
 
     let subscriptionInfo: SubscriptionInfo;
 
-    if (user.payment_method === 'stripe') {
-      // For Stripe: Get info from database
-      subscriptionInfo = {
-        isActive: true,
-        paymentMethod: 'stripe',
-        renewalDate: user.subscription_renewal_date 
-          ? new Date(user.subscription_renewal_date).getTime()
-          : null,
-        cancelsAtPeriodEnd: user.cancels_at_period_end || false
-      };
-      
-      if (__DEV__) {
-        console.log('💳 [Subscription] Stripe subscription info:', subscriptionInfo);
-      }
-    } else if (user.payment_method === 'apple_iap') {
+    if (user.payment_method === 'apple_iap') {
       // For Apple IAP: Get info from RevenueCat
       const revenueCatStatus = await getSubscriptionStatus();
       
@@ -246,7 +219,7 @@ export async function getSubscriptionInfo(userId: string): Promise<SubscriptionI
         console.log('🍎 [Subscription] Apple IAP subscription info:', subscriptionInfo);
       }
     } else {
-      // Fallback for users with premium status but no payment method
+      // Fallback for users with premium status but no payment method (legacy Stripe users)
       subscriptionInfo = {
         isActive: true,
         paymentMethod: null,
@@ -255,7 +228,7 @@ export async function getSubscriptionInfo(userId: string): Promise<SubscriptionI
       };
       
       if (__DEV__) {
-        console.log('❓ [Subscription] Unknown payment method subscription info:', subscriptionInfo);
+        console.log('❓ [Subscription] Legacy subscription info (no active payment method):', subscriptionInfo);
       }
     }
 
@@ -268,55 +241,37 @@ export async function getSubscriptionInfo(userId: string): Promise<SubscriptionI
 }
 
 /**
- * Start a subscription purchase for the specified payment method
+ * Start a subscription purchase via Apple IAP
  * 
- * @param paymentMethod - Either 'stripe' or 'apple_iap'
  * @returns Promise<PurchaseResult> - Success status and optional error message
  */
-export async function startSubscriptionPurchase(paymentMethod: 'stripe' | 'apple_iap'): Promise<PurchaseResult> {
+export async function startSubscriptionPurchase(): Promise<PurchaseResult> {
   try {
     if (__DEV__) {
-      console.log('🚀 [Subscription] Starting purchase with method:', paymentMethod);
+      console.log('🚀 [Subscription] Starting Apple IAP purchase...');
     }
 
-    if (paymentMethod === 'stripe') {
-      // Route to Stripe
-      await startPremiumSubscription();
+    // Route to RevenueCat
+    const result = await purchasePremiumSubscription();
+    
+    if (result.success) {
+      // Clear all caches after successful purchase
+      clearSubscriptionCache();
       
       if (__DEV__) {
-        console.log('✅ [Subscription] Stripe purchase initiated successfully');
+        console.log('✅ [Subscription] Apple IAP purchase completed successfully');
       }
       
       return { success: true };
-    } else if (paymentMethod === 'apple_iap') {
-      // Route to RevenueCat
-      const result = await purchasePremiumSubscription();
-      
-      if (result.success) {
-        // Clear all caches after successful purchase
-        clearSubscriptionCache();
-        
-        if (__DEV__) {
-          console.log('✅ [Subscription] Apple IAP purchase completed successfully');
-        }
-        
-        return { success: true };
-      } else {
-        if (__DEV__) {
-          console.log('❌ [Subscription] Apple IAP purchase failed:', result.error);
-        }
-        
-        return { 
-          success: false, 
-          error: result.error || 'Purchase failed' 
-        };
-      }
     } else {
-      const error = `Invalid payment method: ${paymentMethod}`;
       if (__DEV__) {
-        console.log('❌ [Subscription]', error);
+        console.log('❌ [Subscription] Apple IAP purchase failed:', result.error);
       }
-      return { success: false, error };
+      
+      return { 
+        success: false, 
+        error: result.error || 'Purchase failed' 
+      };
     }
 
   } catch (error) {
@@ -357,34 +312,7 @@ export async function cancelSubscription(userId: string, instant: boolean = fals
       return { success: false, error };
     }
 
-    if (user.payment_method === 'stripe') {
-      // Route to Stripe cancellation
-      try {
-        await cancelStripeSubscription(instant);
-        
-        // Clear cache after successful cancellation
-        clearSubscriptionCache();
-        
-        if (__DEV__) {
-          console.log(
-            instant
-              ? '⚡ [Subscription] Stripe subscription cancelled INSTANTLY (DEV mode)'
-              : '✅ [Subscription] Stripe subscription cancelled successfully'
-          );
-        }
-        
-        return { success: true };
-      } catch (error) {
-        const errorMessage = getUserFriendlyErrorMessage(error);
-        logDetailedError('Failed to cancel Stripe subscription', error);
-        
-        if (__DEV__) {
-          console.log('❌ [Subscription] Stripe cancellation failed:', errorMessage);
-        }
-        
-        return { success: false, error: errorMessage };
-      }
-    } else if (user.payment_method === 'apple_iap') {
+    if (user.payment_method === 'apple_iap') {
       // For Apple IAP: Provide instructions to cancel in iOS Settings
       const instructions = 'To cancel your Apple subscription, go to iPhone Settings → [Your Name] → Subscriptions → Health Freak → Cancel Subscription';
       

@@ -46,10 +46,9 @@ eas env:create --name OPENAI_API_KEY --value "sk-your-key-here" --environment pr
 These should already be configured in your EAS project:
 
 #### Server-Side Secrets
-- `STRIPE_SECRET_KEY` (Secret)
-- `STRIPE_WEBHOOK_SECRET` (Secret)
 - `SUPABASE_SERVICE_ROLE_KEY` (Secret)
 - `REVENUECAT_WEBHOOK_AUTH_TOKEN` (Secret)
+- `OPENAI_API_KEY` (Secret) - Stored in Supabase Edge Function secrets
 
 #### Client-Side Public Variables
 - `EXPO_PUBLIC_SUPABASE_URL` (Plain)

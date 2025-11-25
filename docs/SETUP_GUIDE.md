@@ -8,7 +8,6 @@ Complete setup instructions for all API services and development environment.
 - [OpenAI Setup](#openai-setup)
 - [Supabase Setup](#supabase-setup)
 - [RevenueCat Setup](#revenuecat-setup)
-- [Stripe Setup](#stripe-setup)
 - [Environment Variables](#environment-variables)
 - [Verification](#verification)
 - [Troubleshooting](#troubleshooting)
@@ -26,7 +25,6 @@ Before you begin, ensure you have:
   - [OpenAI](https://platform.openai.com/)
   - [Supabase](https://supabase.com/)
   - [RevenueCat](https://www.revenuecat.com/)
-  - [Stripe](https://stripe.com/)
 
 ---
 
@@ -120,9 +118,8 @@ npm install -g supabase
 supabase link --project-ref your-project-ref
 
 # Deploy functions
-supabase functions deploy stripe-webhook --no-verify-jwt
-supabase functions deploy stripe-checkout --no-verify-jwt
-supabase functions deploy stripe-cancel-subscription --no-verify-jwt
+supabase functions deploy revenuecat-webhook --no-verify-jwt
+supabase functions deploy delete-user --no-verify-jwt
 ```
 
 ### Step 5: Run Database Migrations
@@ -299,72 +296,6 @@ supabase secrets set REVENUECAT_WEBHOOK_AUTH_TOKEN=your_token_here
 
 ---
 
-## Stripe Setup
-
-**Purpose:** Subscription payments and billing
-
-### Step 1: Create Stripe Account
-
-1. Go to [Stripe](https://stripe.com/)
-2. Sign up or sign in
-3. Complete account setup
-4. Enable "Test mode" (toggle in top right)
-
-### Step 2: Get API Keys
-
-1. Go to Developers → API Keys
-2. Copy these **test** keys:
-   - **Publishable key** (starts with `pk_test_`)
-   - **Secret key** (starts with `sk_test_`)
-
-### Step 3: Create Subscription Product
-
-1. Go to Products → Add product
-2. Configure:
-   - Name: "Health Freak Premium"
-   - Description: "Unlimited scans and detailed analysis"
-   - Pricing: Recurring
-   - Price: $6.99 (or your price)
-   - Billing period: Monthly
-3. Click "Save product"
-4. Copy the **Price ID** (starts with `price_`)
-
-### Step 4: Configure Webhook
-
-1. Go to Developers → Webhooks
-2. Click "Add endpoint"
-3. Configure:
-   - Endpoint URL: Your Supabase function URL
-     ```
-     https://[your-project].supabase.co/functions/v1/stripe-webhook
-     ```
-   - Events to send:
-     - `checkout.session.completed`
-     - `customer.subscription.created`
-     - `customer.subscription.updated`
-     - `customer.subscription.deleted`
-     - `invoice.payment_succeeded`
-     - `invoice.payment_failed`
-4. Click "Add endpoint"
-5. Copy the **Signing secret** (starts with `whsec_`)
-
-### Step 5: Configure Supabase Secrets
-
-1. Go to Supabase Dashboard → Functions → Secrets
-2. Add these secrets:
-
-| Secret Name | Value | Where to Get |
-|------------|-------|--------------|
-| `STRIPE_SECRET_KEY` | `sk_test_...` | Stripe → API Keys |
-| `STRIPE_WEBHOOK_SECRET` | `whsec_...` | Stripe → Webhooks |
-| `STRIPE_PRICE_ID_SANDBOX` | `price_...` (test) | Stripe → Products → Price (Test mode) |
-| `STRIPE_PRICE_ID_PROD` | `price_...` (live) | Stripe → Products → Price (Live mode) |
-| `STRIPE_CANCEL_MODE` | `immediate` | Manual (TestFlight only) |
-
-**Note:** `STRIPE_CANCEL_MODE=immediate` is for testing. Delete this for production.
-
----
-
 ## Environment Variables
 
 ### Step 1: Create .env File
@@ -395,13 +326,8 @@ EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 
 # ============================================
-# Payments
+# Payments (Apple IAP via RevenueCat)
 # ============================================
-# Stripe - For web/Android payments
-EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your-stripe-key
-STRIPE_PRICE_ID=price_live_your-6-99-id
-STRIPE_TEST_PRICE_ID=price_test_your-6-99-id
-
 # RevenueCat - For iOS in-app purchases
 EXPO_PUBLIC_REVENUECAT_API_KEY=appl_your-revenuecat-api-key
 
@@ -467,16 +393,6 @@ npm start
 # 2. Check logs for "RevenueCat Configuration complete"
 # 3. Tap "Upgrade to Premium" → Choose "App Store"
 # 4. Complete purchase with Sandbox account
-```
-
-### Test Stripe
-
-```bash
-# In app: Click "Upgrade to Premium"
-# Choose "Credit Card" option
-# Use test card: 4242 4242 4242 4242
-# Check Stripe Dashboard → Payments
-# Verify test payment appears
 ```
 
 ---
@@ -561,23 +477,6 @@ npm start
 - Ensure webhook is configured correctly
 - Test in Sandbox environment first
 
-### Stripe Issues
-
-**"Stripe checkout doesn't open"**
-- Verify `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` in `.env`
-- Ensure key starts with `pk_test_` (for testing)
-- Check Stripe is in test mode
-
-**"Webhook not receiving events"**
-- Verify webhook URL is correct
-- Check `STRIPE_WEBHOOK_SECRET` in Supabase
-- Test webhook in Stripe Dashboard → Webhooks → Test
-
-**"Subscription not updating"**
-- Check Supabase edge function logs
-- Verify webhook events are configured correctly
-- Ensure database triggers are working
-
 ### General Issues
 
 **"Environment variables not loading"**
@@ -634,7 +533,6 @@ After setup is complete:
 | OpenAI (GPT-5 nano) | - | $0.0003-0.002/scan | $5-15/month |
 | Supabase | 500MB DB, 2GB bandwidth | $25/month | $0-25/month |
 | RevenueCat | Up to $2,500 MTR | 1% of revenue > $2,500 | $0-50/month |
-| Stripe | - | 2.9% + $0.30/transaction | Variable |
 
 **Total estimated cost:** $15-115/month depending on usage
 
@@ -651,7 +549,6 @@ After setup is complete:
 - **OpenAI:** https://platform.openai.com/docs
 - **Supabase:** https://supabase.com/docs
 - **RevenueCat:** https://docs.revenuecat.com/
-- **Stripe:** https://stripe.com/docs
 
 ---
 

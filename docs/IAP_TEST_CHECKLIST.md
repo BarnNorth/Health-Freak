@@ -30,44 +30,11 @@ This checklist contains specific test cases to verify before App Store submissio
 
 ---
 
-### Test Case 1.2: New User - Stripe Purchase
-
-- [ ] **Setup:** Fresh account, never purchased before
-- [ ] **Action:** Tap "Upgrade to Premium" → Select "Web Payment (Stripe)" → Complete Stripe checkout
-- [ ] **Expected:** Redirected to Stripe, payment processed, redirected back, premium access granted
-- [ ] **Actual:** _________________________________________________
-- [ ] **Database Verification:**
-  ```sql
-  -- subscription_status = 'premium'
-  -- payment_method = 'stripe'
-  -- stripe_customer_id is populated
-  -- stripe_subscription_id is populated
-  ```
-- [ ] **Status:** PASS / FAIL
-
-**Notes:** _______________________________________________________________
-
 ---
 
 ## 2. Subscription Management
 
-### Test Case 2.1: Stripe User Cancellation
-
-- [ ] **Setup:** Active Stripe subscription
-- [ ] **Action:** Profile → Manage Subscription → Cancel Subscription → Confirm
-- [ ] **Expected:** Confirmation dialog, cancellation processed, success message, user keeps access until period end
-- [ ] **Actual:** _________________________________________________
-- [ ] **UI Verification:**
-  - [ ] "Cancelling" status shows in Manage Subscription screen
-  - [ ] Renewal date still displays
-  - [ ] User still has premium features
-- [ ] **Status:** PASS / FAIL
-
-**Notes:** _______________________________________________________________
-
----
-
-### Test Case 2.2: Apple IAP User Management
+### Test Case 2.1: Apple IAP User Management
 
 - [ ] **Setup:** Active Apple IAP subscription
 - [ ] **Action:** Profile → Manage Subscription → Tap "Manage in iPhone Settings"
@@ -107,31 +74,15 @@ This checklist contains specific test cases to verify before App Store submissio
 
 ---
 
-### Test Case 3.2: Stripe - Reinstall App
-
-- [ ] **Setup:** User with active Stripe subscription
-- [ ] **Action:** Delete app → Reinstall → Sign in with same account
-- [ ] **Expected:** Premium access immediately available (from database), no additional steps
-- [ ] **Actual:** _________________________________________________
-- [ ] **Database Check:**
-  - [ ] User still has `subscription_status = 'premium'`
-  - [ ] User still has `payment_method = 'stripe'`
-  - [ ] All Stripe IDs intact
-- [ ] **Status:** PASS / FAIL
-
-**Notes:** _______________________________________________________________
-
----
-
-### Test Case 3.3: Device Switch
+### Test Case 3.2: Device Switch
 
 - [ ] **Setup:** User purchased on Device A
 - [ ] **Action:** Install app on Device B → Sign in with same account
 - [ ] **Expected:** Subscription works on new device, premium access granted
 - [ ] **Actual:** _________________________________________________
-- [ ] **Test Both:**
-  - [ ] Stripe subscription device switch
+- [ ] **Test:**
   - [ ] Apple IAP subscription device switch
+  - [ ] Subscription restored automatically
 - [ ] **Status:** PASS / FAIL
 
 **Notes:** _______________________________________________________________
@@ -210,25 +161,6 @@ This checklist contains specific test cases to verify before App Store submissio
 **Notes:** _______________________________________________________________
 
 ---
-
-### Test Case 4.5: Stripe Webhook Verification
-
-- [ ] **Setup:** New Stripe purchase
-- [ ] **Action:** Complete Stripe checkout
-- [ ] **Expected:** Stripe webhook fires, database updated
-- [ ] **Actual:** _________________________________________________
-- [ ] **Supabase Logs:**
-  ```bash
-  supabase functions logs stripe-webhook --limit 10
-  ```
-- [ ] **Database Check:**
-  - [ ] subscription_status = 'premium'
-  - [ ] payment_method = 'stripe'
-  - [ ] stripe_customer_id populated
-  - [ ] stripe_subscription_id populated
-- [ ] **Status:** PASS / FAIL
-
-**Notes:** _______________________________________________________________
 
 ---
 
@@ -312,10 +244,9 @@ This checklist contains specific test cases to verify before App Store submissio
 - [ ] **Actual:** _________________________________________________
 - [ ] **UI Check:**
   - [ ] Apple IAP option displays (iOS only)
-  - [ ] Stripe option displays
-  - [ ] Modal styling matches app design
-  - [ ] Can close modal
+  - [ ] Direct purchase button works
   - [ ] Loading states work during purchase
+  - [ ] Error handling works correctly
 - [ ] **Status:** PASS / FAIL
 
 **Notes:** _______________________________________________________________
@@ -324,17 +255,17 @@ This checklist contains specific test cases to verify before App Store submissio
 
 ### Test Case 6.2: Manage Subscription Screen
 
-- [ ] **Setup:** Premium user (test both Stripe and Apple)
+- [ ] **Setup:** Premium user with Apple IAP subscription
 - [ ] **Action:** Navigate to Manage Subscription screen
 - [ ] **Expected:** All subscription details display correctly
 - [ ] **Actual:** _________________________________________________
 - [ ] **Display Check:**
   - [ ] Plan name shows: "Premium Monthly"
-  - [ ] Price shows: "$6.99/month"
-  - [ ] Payment method badge correct (Stripe or Apple)
+  - [ ] Price shows: "$4.99/month"
+  - [ ] Payment method badge shows: "🍎 Apple In-App Purchase"
   - [ ] Renewal date formatted correctly
   - [ ] Status badge shows correctly
-  - [ ] Appropriate action button displays
+  - [ ] Cancellation instructions display
 - [ ] **Status:** PASS / FAIL
 
 **Notes:** _______________________________________________________________
@@ -349,7 +280,7 @@ This checklist contains specific test cases to verify before App Store submissio
 - [ ] **Actual:** _________________________________________________
 - [ ] **Display Check:**
   - [ ] Shows "👑 Premium Member"
-  - [ ] Shows payment method (💳 Stripe or 🍎 Apple)
+  - [ ] Shows payment method: "🍎 Apple In-App Purchase"
   - [ ] Shows renewal date
   - [ ] "Manage Subscription" button visible
   - [ ] Button navigates to correct screen
@@ -373,11 +304,11 @@ This checklist contains specific test cases to verify before App Store submissio
 
 ---
 
-### Test Case 7.2: Android/Web Fallback
+### Test Case 7.2: iOS Only Features
 
-- [ ] **Apple IAP option not shown on Android**
-- [ ] **Only Stripe option available**
-- [ ] **No iOS-specific code runs**
+- [ ] **Apple IAP only available on iOS**
+- [ ] **Non-iOS platforms show appropriate message**
+- [ ] **No iOS-specific code runs on other platforms**
 - [ ] **RevenueCat gracefully degrades**
 - [ ] **Status:** PASS / FAIL
 
@@ -459,7 +390,6 @@ This checklist contains specific test cases to verify before App Store submissio
 ### Environment Configuration
 
 - [ ] **Production RevenueCat API key configured**
-- [ ] **Production Stripe keys configured**
 - [ ] **Webhook endpoints configured correctly**
 - [ ] **Authorization secrets set in Supabase**
 - [ ] **No test/sandbox keys in production build**
@@ -484,7 +414,7 @@ This checklist contains specific test cases to verify before App Store submissio
 - [ ] **Subscription products created**
 - [ ] **Products linked to RevenueCat**
 - [ ] **Product IDs match exactly**
-- [ ] **Pricing correct ($6.99/month)**
+- [ ] **Pricing correct ($4.99/month)**
 - [ ] **Subscription terms clear**
 
 ### Final Verification

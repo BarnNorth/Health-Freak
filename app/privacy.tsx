@@ -33,7 +33,7 @@ export default function PrivacyScreen() {
             {'\n'}• Camera permission for real-time scanning of ingredient labels on food products
             {'\n'}• User account information (email address for authentication via Supabase)
             {'\n'}• Scan history and ingredient analysis results
-            {'\n'}• Subscription status and payment information (processed via Stripe or Apple)
+            {'\n'}• Subscription status and payment information (processed via Apple In-App Purchase)
             {'\n'}• Device information and app usage data for improving functionality
           </Text>
 
@@ -42,7 +42,7 @@ export default function PrivacyScreen() {
             Your information is used exclusively to provide and enhance our services:
             {'\n'}• Analyze ingredient photos in real-time using OpenAI API (photos retained for up to 30 days, then permanently deleted)
             {'\n'}• Store your scan history and analysis results in Supabase database
-            {'\n'}• Process subscription payments securely through Stripe or Apple
+            {'\n'}• Process subscription payments securely through Apple In-App Purchase
             {'\n'}• Authenticate your account and maintain your session
             {'\n'}• Improve app functionality and user experience
           </Text>
@@ -52,7 +52,6 @@ export default function PrivacyScreen() {
             We use trusted third-party services to operate our app:
             {'\n'}• OpenAI: Ingredient photo analysis and classification. Images are transmitted to OpenAI's API for processing and retained for up to 30 days for security and abuse prevention, then permanently deleted. Per OpenAI's API data usage policies, your images are not used to train their AI models. However, OpenAI may use data to improve their safety and abuse prevention systems.
             {'\n'}• Supabase: Secure database storage, user authentication, and backend infrastructure
-            {'\n'}• Stripe: Credit card payment processing for premium subscriptions (for users who choose credit card payment method)
             {'\n'}• RevenueCat: Manages Apple In-App Purchase receipts and subscription validation. RevenueCat collects basic device information (device type, operating system) for app functionality, analytics, and fraud prevention. We do not track users or collect advertising identifiers.
             {'\n\n'}Important: We do not sell your personal information to third parties. Your data is shared only with these essential service providers necessary to deliver app functionality.
           </Text>
@@ -129,8 +128,8 @@ export default function PrivacyScreen() {
         {/* Bottom Notice */}
         <View style={styles.bottomNotice}>
           <Text style={styles.bottomNoticeText}>
-            Last updated: November 6, 2025
-            {'\n'}Effective Date: November 6, 2025
+            Last updated: November 24, 2025
+            {'\n'}Effective Date: November 24, 2025
             {'\n\n'}Full Privacy Policy available at:
           </Text>
           <TouchableOpacity onPress={() => Linking.openURL('https://healthfreak.io/privacy.html')}>

@@ -1,19 +1,9 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 // @ts-ignore - Deno npm: imports are valid but not recognized by TypeScript linter
-import Stripe from 'npm:stripe@17.7.0';
-// @ts-ignore - Deno npm: imports are valid but not recognized by TypeScript linter
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 
 // Deno and Edge Runtime types
 declare const Deno: any;
-
-const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')!;
-const stripe = new Stripe(stripeSecret, {
-  appInfo: {
-    name: 'Bolt Integration',
-    version: '1.0.0',
-  },
-});
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
@@ -87,104 +77,61 @@ Deno.serve(async (req: Request) => {
 
     console.log('💳 [Delete User] Payment method:', userData.payment_method);
 
-    // Step 2: Handle Stripe subscription cancellation if applicable
-    if (userData.payment_method === 'stripe' && userData.stripe_customer_id) {
-      console.log('💳 [Delete User] Processing Stripe cancellation...');
-
+    // Step 2: Clean up payment-related database records
+    // Note: Stripe API calls removed - Stripe is no longer supported
+    // Legacy Stripe users' database records will be cleaned up but no API calls made
+    if (userData.payment_method === 'stripe') {
+      console.log('💳 [Delete User] Legacy Stripe user detected - cleaning up database records only');
+      
+      // Clean up Stripe-related database records (no API calls)
       try {
-        // Get customer ID from stripe_customers table
-        const { data: customerData, error: customerError } = await supabase
-          .from('stripe_customers')
-          .select('customer_id')
-          .eq('user_id', userId)
-          .single();
+        // Delete from stripe_subscriptions table
+        console.log('🗑️ [Delete User] Deleting from stripe_subscriptions table...');
+        const { error: subDelError } = await supabase
+          .from('stripe_subscriptions')
+          .delete()
+          .eq('user_id', userId);
 
-        if (customerData && !customerError) {
-          const stripeCustomerId = customerData.customer_id;
-          console.log('💳 [Delete User] Found Stripe customer:', stripeCustomerId);
-
-          // List all subscriptions for this customer
-          const subscriptions = await stripe.subscriptions.list({
-            customer: stripeCustomerId,
-            limit: 100,
-          });
-
-          console.log(`💳 [Delete User] Found ${subscriptions.data.length} subscription(s) to cancel`);
-
-          // Cancel all active subscriptions
-          for (const subscription of subscriptions.data) {
-            if (subscription.status !== 'canceled') {
-              try {
-                console.log(`💳 [Delete User] Cancelling subscription: ${subscription.id}`);
-                await stripe.subscriptions.cancel(subscription.id);
-                console.log(`✅ [Delete User] Cancelled subscription: ${subscription.id}`);
-              } catch (subError: any) {
-                console.error(`❌ [Delete User] Error cancelling subscription ${subscription.id}:`, subError.message);
-                // Continue with deletion even if subscription cancellation fails
-              }
-            }
-          }
-
-          // Delete Stripe customer
-          try {
-            console.log('💳 [Delete User] Deleting Stripe customer:', stripeCustomerId);
-            await stripe.customers.del(stripeCustomerId);
-            console.log('✅ [Delete User] Deleted Stripe customer');
-          } catch (customerDelError: any) {
-            console.error('❌ [Delete User] Error deleting Stripe customer:', customerDelError.message);
-            // Continue with deletion even if customer deletion fails
-          }
-
-          // Delete from stripe_subscriptions table
-          console.log('🗑️ [Delete User] Deleting from stripe_subscriptions table...');
-          const { error: subDelError } = await supabase
-            .from('stripe_subscriptions')
-            .delete()
-            .eq('customer_id', stripeCustomerId);
-
-          if (subDelError) {
-            console.error('❌ [Delete User] Error deleting stripe_subscriptions:', subDelError);
-          } else {
-            console.log('✅ [Delete User] Deleted stripe_subscriptions');
-          }
-
-          // Delete from stripe_orders table
-          console.log('🗑️ [Delete User] Deleting from stripe_orders table...');
-          const { error: ordersDelError } = await supabase
-            .from('stripe_orders')
-            .delete()
-            .eq('customer_id', stripeCustomerId);
-
-          if (ordersDelError) {
-            console.error('❌ [Delete User] Error deleting stripe_orders:', ordersDelError);
-          } else {
-            console.log('✅ [Delete User] Deleted stripe_orders');
-          }
-
-          // Delete from stripe_customers table
-          console.log('🗑️ [Delete User] Deleting from stripe_customers table...');
-          const { error: customerDelDbError } = await supabase
-            .from('stripe_customers')
-            .delete()
-            .eq('user_id', userId);
-
-          if (customerDelDbError) {
-            console.error('❌ [Delete User] Error deleting stripe_customers:', customerDelDbError);
-          } else {
-            console.log('✅ [Delete User] Deleted stripe_customers');
-          }
+        if (subDelError) {
+          console.error('❌ [Delete User] Error deleting stripe_subscriptions:', subDelError);
         } else {
-          console.log('⚠️ [Delete User] No stripe_customers record found, skipping Stripe cleanup');
+          console.log('✅ [Delete User] Deleted stripe_subscriptions');
         }
-      } catch (stripeError: any) {
-        console.error('❌ [Delete User] Stripe cleanup error:', stripeError.message);
-        // Continue with user deletion even if Stripe cleanup fails
+
+        // Delete from stripe_orders table
+        console.log('🗑️ [Delete User] Deleting from stripe_orders table...');
+        const { error: ordersDelError } = await supabase
+          .from('stripe_orders')
+          .delete()
+          .eq('user_id', userId);
+
+        if (ordersDelError) {
+          console.error('❌ [Delete User] Error deleting stripe_orders:', ordersDelError);
+        } else {
+          console.log('✅ [Delete User] Deleted stripe_orders');
+        }
+
+        // Delete from stripe_customers table
+        console.log('🗑️ [Delete User] Deleting from stripe_customers table...');
+        const { error: customerDelDbError } = await supabase
+          .from('stripe_customers')
+          .delete()
+          .eq('user_id', userId);
+
+        if (customerDelDbError) {
+          console.error('❌ [Delete User] Error deleting stripe_customers:', customerDelDbError);
+        } else {
+          console.log('✅ [Delete User] Deleted stripe_customers');
+        }
+      } catch (cleanupError: any) {
+        console.error('❌ [Delete User] Database cleanup error:', cleanupError.message);
+        // Continue with user deletion even if cleanup fails
       }
     } else if (userData.payment_method === 'apple_iap') {
       console.log('🍎 [Delete User] Apple IAP detected - RevenueCat will handle cancellation automatically');
       // No action needed - RevenueCat handles Apple IAP cancellations automatically
     } else {
-      console.log('ℹ️ [Delete User] No active payment method to cancel');
+      console.log('ℹ️ [Delete User] No active payment method to clean up');
     }
 
     // Step 3: Delete user data from child tables

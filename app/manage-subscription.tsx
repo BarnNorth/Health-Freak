@@ -174,7 +174,6 @@ export default function ManageSubscriptionScreen() {
     );
   }
 
-  const isStripe = subscriptionInfo.paymentMethod === 'stripe';
   const renewalDateStr = subscriptionInfo.renewalDate 
     ? new Date(subscriptionInfo.renewalDate).toLocaleDateString(undefined, {
         year: 'numeric',
@@ -205,7 +204,7 @@ export default function ManageSubscriptionScreen() {
           <View style={styles.detailRow}>
             <View style={styles.iconPlaceholder} />
             <View style={styles.detailContent}>
-              <Text style={styles.priceText}>$6.99/month</Text>
+              <Text style={styles.priceText}>$4.99/month</Text>
             </View>
           </View>
 
@@ -216,7 +215,7 @@ export default function ManageSubscriptionScreen() {
               <View style={styles.detailContent}>
                 <Text style={styles.detailLabel}>Payment Method</Text>
                 <Text style={styles.detailValue}>
-                  {isStripe ? '💳 Stripe' : '🍎 Apple In-App Purchase'}
+                  🍎 Apple In-App Purchase
                 </Text>
               </View>
             </View>
@@ -258,69 +257,16 @@ export default function ManageSubscriptionScreen() {
           </View>
         </View>
 
-        {/* Action Buttons */}
-        <View style={styles.actionsContainer}>
-          {isStripe ? (
-            // Stripe: Show cancel button(s)
-            !subscriptionInfo.cancelsAtPeriodEnd && (
-              <>
-                {/* Normal cancellation */}
-                <TouchableOpacity 
-                  style={[styles.actionButton, styles.cancelButton]} 
-                  onPress={() => handleCancelSubscription(false)}
-                  disabled={cancelling}
-                >
-                  {cancelling ? (
-                    <ActivityIndicator size="small" color={COLORS.toxicRed} />
-                  ) : (
-                    <>
-                      <AlertCircle size={20} color={COLORS.toxicRed} />
-                      <Text style={styles.cancelButtonText}>Cancel Subscription</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-                
-                {/* DEV ONLY: Instant cancellation */}
-                {__DEV__ && (
-                  <TouchableOpacity 
-                    style={[styles.actionButton, styles.devCancelButton]} 
-                    onPress={() => handleCancelSubscription(true)}
-                    disabled={cancelling}
-                  >
-                    {cancelling ? (
-                      <ActivityIndicator size="small" color={COLORS.accentYellow} />
-                    ) : (
-                      <>
-                        <AlertCircle size={20} color={COLORS.accentYellow} />
-                        <Text style={styles.devCancelButtonText}>⚡ DEV: Cancel Instantly</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                )}
-
-              </>
-            )
-          ) : null}
-        </View>
-
         {/* Educational Disclaimer */}
         <View style={styles.disclaimer}>
-          {isStripe ? (
-            <Text style={styles.disclaimerText}>
-              Cancelling your subscription will stop future billing. You can continue using premium features until the end of your current billing period.
-            </Text>
-          ) : (
-            <>
-              <Text style={styles.disclaimerTitle}>How to Cancel</Text>
-              <Text style={styles.disclaimerInstructionsText}>
-                1. Open the Settings app{'\n'}
-                2. Tap your name at the top{'\n'}
-                3. Tap Subscriptions{'\n'}
-                4. Tap Health Freak{'\n'}
-                5. Tap Cancel Subscription
-              </Text>
-            </>
-          )}
+          <Text style={styles.disclaimerTitle}>How to Cancel</Text>
+          <Text style={styles.disclaimerInstructionsText}>
+            1. Open the Settings app{'\n'}
+            2. Tap your name at the top{'\n'}
+            3. Tap Subscriptions{'\n'}
+            4. Tap Health Freak{'\n'}
+            5. Tap Cancel Subscription
+          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>

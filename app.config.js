@@ -13,7 +13,7 @@ export default {
     scheme: "healthfreak",
     ios: {
       bundleIdentifier: 'com.healthfreak.app',
-      buildNumber: "15",
+      buildNumber: "16",
       supportsTablet: false,
       associatedDomains: [
         "applinks:healthfreak.io"
@@ -61,8 +61,6 @@ export default {
       ocrMaxImageSize: 1200,
       ocrPreprocessingEnabled: true,
       router: {},
-      stripePriceId: process.env.STRIPE_PRICE_ID ?? 'REPLACE_WITH_STRIPE_PRICE_ID',
-      stripeTestPriceId: process.env.STRIPE_TEST_PRICE_ID ?? 'REPLACE_WITH_STRIPE_TEST_PRICE_ID',
       eas: {
         projectId: "eb1c7f5f-1d6a-408d-9eba-9acf7dbfd788"
       }

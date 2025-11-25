@@ -18,7 +18,9 @@ These critical items are complete and require no action:
 - [x] **Production Logging** - Clean, professional logging with 26% reduction
 - [x] **Configurable Cancellation** - Environment-based behavior ready
 - [x] **Fresh Git Repo** - No API key history, clean slate
-- [x] **TestFlight Ready** - STRIPE_CANCEL_MODE=immediate set ✅
+- [x] **TestFlight Ready** ✅
+
+**Note:** Stripe integration has been removed. The app now uses Apple In-App Purchase exclusively via RevenueCat.
 
 ---
 
@@ -26,77 +28,9 @@ These critical items are complete and require no action:
 
 Work through these items before launching to production:
 
-### Phase 1: Stripe Configuration
+### Phase 1: RevenueCat & Apple IAP Configuration (Stripe Removed)
 
-#### [ ] 1.1 Switch to Live Stripe Keys
-
-**App Environment (.env file):**
-```bash
-# Change from test key:
-EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
-
-# To live key:
-EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
-```
-
-**Where to get live keys:**
-- Go to: https://dashboard.stripe.com/apikeys
-- Copy the **Publishable key** (starts with `pk_live_`)
-
----
-
-#### [ ] 1.2 Update Supabase Stripe Secrets
-
-**Supabase Dashboard:**
-1. Go to: https://supabase.com/dashboard/project/YOUR_PROJECT_ID/settings/functions
-2. Navigate to **"Secrets"** tab
-3. Update these secrets:
-
-| Secret Name | Value | Where to Get |
-|------------|--------|--------------|
-| `STRIPE_SECRET_KEY` | `sk_live_your_key` | Stripe Dashboard → API Keys → Secret key |
-| `STRIPE_WEBHOOK_SECRET` | `whsec_your_secret` | Stripe Dashboard → Webhooks → Signing secret |
-
----
-
-#### [ ] 1.3 Change Subscription Cancellation Mode
-
-**Remove test mode behavior:**
-
-**Option A - Delete the variable (Recommended):**
-1. Go to: https://supabase.com/dashboard/project/YOUR_PROJECT_ID/settings/functions
-2. Go to **"Secrets"** tab
-3. Find `STRIPE_CANCEL_MODE`
-4. Click delete/remove
-
-**Option B - Set to production value:**
-- Change `STRIPE_CANCEL_MODE` from `immediate` to `end-of-period`
-
-**Result:**
-- ✅ Users retain access until billing period ends
-- ✅ Industry-standard behavior
-- ✅ User messages automatically update
-
----
-
-#### [ ] 1.4 Configure Stripe Live Mode
-
-**Stripe Dashboard:**
-1. Go to: https://dashboard.stripe.com
-2. Toggle to **Live mode** (top right)
-3. Verify subscription products exist:
-   - Premium subscription product
-   - Price set correctly ($6.99/month or your pricing)
-4. Create webhook for production:
-   - Go to: Developers → Webhooks → Add endpoint
-   - URL: Your Supabase function URL
-   - Events: `checkout.session.completed`, `customer.subscription.*`
-
----
-
-### Phase 1.5: RevenueCat & Apple IAP Configuration
-
-#### [ ] 1.5.1 Switch to Live RevenueCat API Key
+#### [ ] 1.1 Switch to Live RevenueCat API Key
 
 **App Environment (.env file):**
 ```bash
@@ -114,14 +48,14 @@ EXPO_PUBLIC_REVENUECAT_API_KEY=appl_xxxxxxxxx  // Production key
 
 ---
 
-#### [ ] 1.5.2 Verify Apple IAP Product Status
+#### [ ] 1.2 Verify Apple IAP Product Status
 
 **App Store Connect:**
 1. Go to: https://appstoreconnect.apple.com/
 2. Navigate to: Your App → In-App Purchases
 3. Verify product status is **"Ready to Submit"** or **"Approved"**
 4. Verify Product ID matches RevenueCat configuration
-5. Confirm pricing is set to $6.99/month
+5. Confirm pricing is set to $4.99/month
 
 **RevenueCat Dashboard Check:**
 1. Go to: Project Settings → Products
@@ -233,14 +167,12 @@ EXPO_PUBLIC_APP_URL=https://yourapp.com
 EXPO_PUBLIC_SUPABASE_URL=your-supabase-url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 
-# Stripe - Live publishable key (updated in 1.1)
-EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
 ```
 
 **Verify:**
 - [ ] All keys are production (not test)
 - [ ] OpenAI key starts with `sk-proj-` or `sk-`
-- [ ] Stripe key starts with `pk_live_`
+- [ ] RevenueCat key starts with `appl_`
 - [ ] Keys are working (not revoked)
 
 ---
@@ -286,15 +218,13 @@ npx supabase functions list
 ```
 
 **Should show:**
-- [x] `stripe-webhook` - Active
-- [x] `stripe-checkout` - Active
-- [x] `stripe-cancel-subscription` - Active
+- [x] `revenuecat-webhook` - Active
+- [x] `delete-user` - Active
 
 **If needed, redeploy:**
 ```bash
-npx supabase functions deploy stripe-webhook --no-verify-jwt
-npx supabase functions deploy stripe-checkout --no-verify-jwt
-npx supabase functions deploy stripe-cancel-subscription --no-verify-jwt
+npx supabase functions deploy revenuecat-webhook --no-verify-jwt
+npx supabase functions deploy delete-user --no-verify-jwt
 ```
 
 ---
@@ -397,16 +327,7 @@ expo build:android
 
 #### [ ] 6.1 Test with Real Payment
 
-**Critical: Test subscription flow with both payment methods**
-
-**Stripe Test:**
-1. [ ] Create new account
-2. [ ] Subscribe to premium with real card via Stripe
-3. [ ] Verify real charge in Stripe Dashboard
-4. [ ] Verify premium features unlock
-5. [ ] Verify `payment_method = 'stripe'` in database
-6. [ ] Refund the test charge immediately
-7. [ ] Verify subscription status updates
+**Critical: Test subscription flow with Apple IAP**
 
 **Apple IAP Test:**
 1. [ ] Create new account (or use different test account)
@@ -415,22 +336,13 @@ expo build:android
 4. [ ] Verify premium features unlock
 5. [ ] Verify `payment_method = 'apple_iap'` in database
 6. [ ] Check RevenueCat dashboard shows subscription
+7. [ ] Verify subscription appears in iPhone Settings → Subscriptions
 
 ---
 
 #### [ ] 6.2 Test Cancellation Behavior
 
-**Verify end-of-period cancellation for both methods:**
-
-**Stripe Cancellation:**
-1. [ ] Subscribe with real card (small amount)
-2. [ ] Go to Profile → Manage Subscription
-3. [ ] Cancel subscription
-4. [ ] Verify message says "retain access until [date]"
-5. [ ] Verify subscription shows `cancel_at_period_end: true` in Stripe
-6. [ ] Verify access NOT lost immediately
-7. [ ] Wait for period end (or manually expire in Stripe)
-8. [ ] Verify access removed after period ends
+**Verify end-of-period cancellation:**
 
 **Apple IAP Cancellation:**
 1. [ ] Subscribe via Apple IAP (sandbox account)
@@ -476,10 +388,10 @@ expo build:android
 - [ ] Database logs enabled
 - [ ] Set up alerts for errors
 
-**Stripe:**
-- [ ] Email notifications enabled
+**RevenueCat:**
 - [ ] Webhook monitoring active
 - [ ] Failed payment alerts set
+- [ ] Subscription status sync verified
 
 **Analytics (Optional):**
 - [ ] Crash reporting configured
@@ -510,10 +422,9 @@ expo build:android
 **After submission, before going live:**
 
 - [ ] All environment variables correct
-- [ ] Stripe in live mode
+- [ ] RevenueCat API key is production key
 - [ ] Webhook endpoints configured
 - [ ] API keys are production keys
-- [ ] `STRIPE_CANCEL_MODE` deleted or set to `end-of-period`
 - [ ] URLs point to production
 - [ ] Database ready
 - [ ] Monitoring active
@@ -525,7 +436,7 @@ expo build:android
 **When app goes live:**
 
 - [ ] Monitor Edge Function logs
-- [ ] Monitor Stripe Dashboard
+- [ ] Monitor RevenueCat Dashboard
 - [ ] Monitor app store reviews
 - [ ] Test core flows immediately
 - [ ] Have support email ready
@@ -539,9 +450,8 @@ expo build:android
 
 | Item | TestFlight ✅ | Production (To Do) |
 |------|--------------|-------------------|
-| Stripe Keys | `pk_test_...` | `pk_live_...` |
-| Cancellation Mode | `immediate` | Unset (or `end-of-period`) |
-| App URL | `exp://localhost:8081` | `https://yourapp.com` |
+| RevenueCat API Key | Test key | Production key |
+| App URL | `exp://localhost:8081` | `https://healthfreak.io` |
 | API Keys | Test/Dev | Production |
 | Webhook Secret | Test | Live |
 | Mock Data | May be on | Off |
@@ -558,10 +468,10 @@ expo build:android
 - **Functions:** https://supabase.com/dashboard/project/YOUR_PROJECT_ID/functions
 - **Secrets:** https://supabase.com/dashboard/project/YOUR_PROJECT_ID/settings/functions
 
-### Stripe Dashboard
-- **Live Mode:** https://dashboard.stripe.com
-- **API Keys:** https://dashboard.stripe.com/apikeys
-- **Webhooks:** https://dashboard.stripe.com/webhooks
+### RevenueCat Dashboard
+- **Dashboard:** https://app.revenuecat.com/
+- **API Keys:** https://app.revenuecat.com/projects/[your-project]/settings/api-keys
+- **Webhooks:** https://app.revenuecat.com/projects/[your-project]/settings/webhooks
 
 ### GitHub
 - **Repo:** https://github.com/BarnNorth/Health-Freak
@@ -570,12 +480,12 @@ expo build:android
 
 ## 🎯 Final Steps Summary
 
-**Before you launch, complete these 4 main things:**
+**Before you launch, complete these 3 main things:**
 
-1. **[ ] Stripe → Live Mode**
-   - Switch all keys to live
-   - Delete/update `STRIPE_CANCEL_MODE`
-   - Configure webhook
+1. **[ ] RevenueCat → Production Mode**
+   - Switch to production API key
+   - Verify webhook is configured
+   - Test subscription flow
 
 2. **[ ] Environment Variables**
    - Update `EXPO_PUBLIC_APP_URL`
@@ -602,7 +512,7 @@ expo build:android
 - ✅ Code production-ready
 
 **Remaining:** 10%
-- 🎯 Switch to live Stripe keys
+- 🎯 Switch to production RevenueCat key
 - 🎯 Update environment variables
 - 🎯 Build and submit
 - 🎯 Launch! 🚀
@@ -613,7 +523,7 @@ expo build:android
 
 - **TestFlight Checklist:** [TESTFLIGHT_CHECKLIST.md](./TESTFLIGHT_CHECKLIST.md)
 - **Security Docs:** [SECURITY.md](./SECURITY.md)
-- **Stripe Support:** https://support.stripe.com
+- **RevenueCat Docs:** https://docs.revenuecat.com/
 - **Supabase Docs:** https://supabase.com/docs
 
 **Good luck with your launch! 🎉**

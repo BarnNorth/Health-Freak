@@ -56,13 +56,12 @@ export default function TermsScreen() {
             {'\n'}• Complete toxicity assessment
             {'\n'}• Scan history saved and accessible
             {'\n'}• All premium features during your 10 scans
-            {'\n\n'}Premium Subscription ($6.99/month):
+            {'\n\n'}Premium Subscription ($4.99/month):
             {'\n'}• Unlimited analyses
             {'\n'}• Complete analysis history
-            {'\n'}• Priority support
             {'\n'}• Ad-free experience
-            {'\n\n'}Payment Methods: You may choose to pay via Apple In-App Purchase (managed through your Apple ID) or Credit/Debit Card via Stripe (managed in-app). Switching between payment methods requires canceling your current subscription and creating a new one with your preferred method. This may result in a brief lapse in service.
-            {'\n\n'}Subscriptions auto-renew monthly unless cancelled. Cancel anytime in your account settings.
+            {'\n\n'}Payment Method: Premium subscriptions are processed via Apple In-App Purchase (managed through your Apple ID).
+            {'\n\n'}Subscriptions auto-renew monthly unless cancelled. Cancel anytime through iPhone Settings → [Your Name] → Subscriptions → Health Freak → Cancel Subscription. 
           </Text>
 
           <Text style={styles.sectionTitle}>4. Privacy and Data Protection</Text>
@@ -74,12 +73,10 @@ export default function TermsScreen() {
 
           <Text style={styles.sectionTitle}>5. Refund Policy</Text>
           <Text style={styles.sectionText}>
-            Premium subscriptions are billed monthly at $6.99. You may cancel your subscription at any time 
-            through your account settings, and you will retain premium access until the end of your current 
-            billing period.
-            {'\n\n'}For Stripe Subscriptions (Credit/Debit Card): Refund requests must be submitted to support@healthfreak.io 
-            within 7 days of purchase. Prorated refunds are not available for partial months of service.
-            {'\n\n'}For Apple In-App Purchases: All refund requests must be made directly through Apple via reportaproblem.apple.com 
+            Premium subscriptions are billed monthly at $4.99. You may cancel your subscription at any time 
+            through iPhone Settings → [Your Name] → Subscriptions → Health Freak → Cancel Subscription. 
+            You will retain premium access until the end of your current billing period.
+            {'\n\n'}All refund requests must be made directly through Apple via reportaproblem.apple.com 
             or through iPhone Settings → Apple ID → Subscriptions. We cannot process refunds for Apple IAP subscriptions directly.
           </Text>
 
@@ -107,8 +104,8 @@ export default function TermsScreen() {
         {/* Bottom Notice */}
         <View style={styles.bottomNotice}>
           <Text style={styles.bottomNoticeText}>
-            Last updated: November 6, 2025
-            {'\n'}Effective Date: November 6, 2025
+            Last updated: November 24, 2025
+            {'\n'}Effective Date: November 24, 2025
             {'\n\n'}Full Terms of Service available at:
           </Text>
           <TouchableOpacity onPress={() => Linking.openURL('https://healthfreak.io/terms.html')}>
