@@ -213,9 +213,19 @@ export async function getIngredientsBatch(ingredientNames: string[]): Promise<Ma
   try {
     console.log('[DATABASE] Fetching batch ingredients:', ingredientNames.length);
     
+    const normalizedKeys = ingredientNames.map(name => 
+      name
+        .toLowerCase()
+        .replace(/:/g, ' ') // Replace colons with spaces
+        .replace(/\s*[.!?;:]+\s*$/, '') // Remove trailing punctuation
+        .replace(/\s+/g, ' ') // Collapse multiple spaces into single space
+        .trim()
+    );
+    console.log('[CACHE DEBUG] Batch lookup keys (normalized):', normalizedKeys);
+    
     const { data, error } = await supabase
       .rpc('get_fresh_ingredients_batch', { 
-        ingredient_names: ingredientNames.map(name => name.toLowerCase().trim()) 
+        ingredient_names: normalizedKeys
       });
 
     if (error) {
@@ -226,9 +236,13 @@ export async function getIngredientsBatch(ingredientNames: string[]): Promise<Ma
     // Convert array to map for easy lookup
     const resultMap = new Map<string, IngredientCache>();
     if (data) {
+      const resultKeys: string[] = [];
       data.forEach((ingredient: IngredientCache) => {
-        resultMap.set(ingredient.ingredient_name.toLowerCase(), ingredient);
+        const normalizedKey = ingredient.ingredient_name.toLowerCase();
+        resultMap.set(normalizedKey, ingredient);
+        resultKeys.push(ingredient.ingredient_name);
       });
+      console.log('[CACHE DEBUG] Batch results keys:', resultKeys);
     }
 
     console.log('[DATABASE] Batch fetch completed:', {
@@ -253,6 +267,14 @@ export async function cacheIngredientInfo(
     const now = new Date();
     const expiresAt = new Date(now.getTime() + expiryDays * 24 * 60 * 60 * 1000);
     
+    const finalInsertKey = ingredientName
+      .toLowerCase()
+      .replace(/:/g, ' ') // Replace colons with spaces
+      .replace(/\s*[.!?;:]+\s*$/, '') // Remove trailing punctuation
+      .replace(/\s+/g, ' ') // Collapse multiple spaces into single space
+      .trim();
+    console.log('[CACHE DEBUG] Final insert key: "' + finalInsertKey + '"');
+    
     console.log('[DATABASE] Caching ingredient with expiration:', {
       ingredient: ingredientName,
       expiryDays,
@@ -262,7 +284,7 @@ export async function cacheIngredientInfo(
     const { data, error } = await supabase
       .from('ingredients_cache')
       .upsert({
-        ingredient_name: ingredientName.toLowerCase().trim(),
+        ingredient_name: finalInsertKey,
         status,
         educational_note: educationalNote,
         basic_note: getBasicNoteForCache(status),
@@ -281,6 +303,7 @@ export async function cacheIngredientInfo(
     }
 
     console.log('[DATABASE] Successfully cached ingredient:', data?.ingredient_name);
+    console.log('[CACHE DEBUG] Successfully inserted key: "' + (data?.ingredient_name || '') + '"');
     return data;
   } catch (error) {
     // Log the error but don't throw - caching is not critical for app functionality

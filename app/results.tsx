@@ -20,6 +20,8 @@ interface AnalysisResult {
     confidence?: number;
     isMinorIngredient?: boolean;
     minorThreshold?: number;
+    isSubIngredient?: boolean;
+    parentIngredient?: string;
     sources?: Array<{
       title: string;
       url: string;
@@ -274,6 +276,13 @@ export default function ResultsScreen() {
                               </Text>
                             </View>
                           )}
+                          {ingredient.isSubIngredient && (
+                            <View style={styles.minorBadge}>
+                              <Text style={styles.minorBadgeText}>
+                                Sub
+                              </Text>
+                            </View>
+                          )}
                           {isExpanded ? (
                             <ChevronUp size={20} color={COLORS.white} />
                           ) : (
@@ -285,6 +294,12 @@ export default function ResultsScreen() {
                       {/* Collapsible content */}
                       {isExpanded && (
                         <>
+                          {ingredient.isSubIngredient && ingredient.parentIngredient && (
+                            <View style={styles.parentIngredientContainer}>
+                              <Text style={styles.parentIngredientLabel}>Found in: </Text>
+                              <Text style={styles.parentIngredientName}>{ingredient.parentIngredient}</Text>
+                            </View>
+                          )}
                           <Text style={styles.ingredientNote}>{ingredient.educational_note}</Text>
                           
                           {/* Feedback section */}
@@ -617,6 +632,28 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontFamily: FONTS.terminalGrotesque,
     marginTop: 10,
+  },
+  parentIngredientContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  parentIngredientLabel: {
+    fontSize: FONT_SIZES.bodySmall,
+    color: COLORS.white,
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodySmall,
+    opacity: 0.7,
+  },
+  parentIngredientName: {
+    fontSize: FONT_SIZES.bodySmall,
+    color: COLORS.white,
+    fontFamily: FONTS.terminalGrotesque,
+    lineHeight: LINE_HEIGHTS.bodySmall,
+    fontWeight: '700',
   },
   feedbackSection: {
     marginTop: 12,

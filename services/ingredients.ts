@@ -1,6 +1,6 @@
 import { getIngredientInfo, getIngredientsBatch, cacheIngredientInfo } from '@/lib/database';
 import { analyzeIngredientWithAI, analyzeIngredientsBatch, getAIAnalysisStatus, identifyProductFromIngredients } from './aiAnalysis';
-import { parseIngredientsFromText } from './ocr';
+import { parseIngredientsFromText, ParsedIngredient } from './ocr';
 
 /**
  * Capitalize first letter of each word for consistent ingredient naming
@@ -19,6 +19,8 @@ interface IngredientInfo {
   basic_note?: string; // Short version for free users
   isMinorIngredient?: boolean; // true if ingredient is < X% of total product
   minorThreshold?: number; // Actual percentage threshold (e.g., 1.5, 2)
+  isSubIngredient?: boolean; // true if this ingredient is a sub-ingredient within parentheses
+  parentIngredient?: string; // name of the parent ingredient if this is a sub-ingredient
   sources?: Array<{
     title: string;
     url: string;
@@ -50,14 +52,23 @@ export async function analyzeIngredients(
   
   // Create a map to track which ingredients are minor and their thresholds
   const minorIngredientsMap = new Map<string, { isMinor: boolean; threshold?: number }>();
+  // Create a map from normalized name to parsed ingredient for sub-ingredient lookup
+  const parsedIngredientsMap = new Map<string, ParsedIngredient>();
   parsedIngredients.forEach(parsed => {
-    const normalizedName = parsed.name.toLowerCase().replace(/\s*[.!?;:]+\s*$/, '').trim();
+    const normalizedName = parsed.name
+      .toLowerCase()
+      .replace(/:/g, ' ') // Replace colons with spaces
+      .replace(/\s*[.!?;:]+\s*$/, '') // Remove trailing punctuation
+      .replace(/\s+/g, ' ') // Collapse multiple spaces into single space
+      .trim();
     if (parsed.isMinorIngredient) {
       minorIngredientsMap.set(normalizedName, { 
         isMinor: true, 
         threshold: parsed.minorThreshold 
       });
     }
+    // Store parsed ingredient for sub-ingredient lookup
+    parsedIngredientsMap.set(normalizedName, parsed);
   });
   
   // Start product identification in parallel (don't await yet!)
@@ -66,10 +77,16 @@ export async function analyzeIngredients(
   const ingredients = parsedIngredients
     .map(ingredient => ingredient.name
       .toLowerCase()
+      .replace(/:/g, ' ') // Replace colons with spaces
       .replace(/\s*[.!?;:]+\s*$/, '') // Remove trailing punctuation
+      .replace(/\s+/g, ' ') // Collapse multiple spaces into single space
       .trim()
     );
 
+  // Debug logging: Log each normalized lookup key
+  ingredients.forEach(ingredient => {
+    console.log(`[CACHE DEBUG] Lookup key: "${ingredient}"`);
+  });
 
   if (ingredients.length === 0) {
     return {
@@ -100,7 +117,9 @@ export async function analyzeIngredients(
     const dbResult = cachedIngredientsMap.get(normalizedIngredient);
     
     if (dbResult) {
+      console.log(`[CACHE DEBUG] Cache HIT: "${normalizedIngredient}"`);
       const minorInfo = minorIngredientsMap.get(normalizedIngredient);
+      const parsedIngredient = parsedIngredientsMap.get(normalizedIngredient);
       resultsByName.set(normalizedIngredient, {
         name: capitalizeIngredientName(dbResult.ingredient_name),
         status: dbResult.status,
@@ -108,8 +127,11 @@ export async function analyzeIngredients(
         basic_note: getBasicNote(dbResult.status, dbResult.ingredient_name),
         isMinorIngredient: minorInfo?.isMinor || false,
         minorThreshold: minorInfo?.threshold,
+        isSubIngredient: parsedIngredient?.isSubIngredient || false,
+        parentIngredient: parsedIngredient?.parentIngredient,
       });
     } else {
+      console.log(`[CACHE DEBUG] Cache MISS: "${normalizedIngredient}"`);
       unknownIngredients.push(ingredient);
     }
   }
@@ -134,6 +156,7 @@ export async function analyzeIngredients(
           const ingredientName = item.name;
           const normalizedName = ingredientName.toLowerCase();
           const minorInfo = minorIngredientsMap.get(normalizedName);
+          const parsedIngredient = parsedIngredientsMap.get(normalizedName);
           
           resultsByName.set(normalizedName, {
             name: capitalizeIngredientName(ingredientName),
@@ -142,10 +165,13 @@ export async function analyzeIngredients(
             basic_note: aiAnalysis.basic_note,
             isMinorIngredient: minorInfo?.isMinor || false,
             minorThreshold: minorInfo?.threshold,
+            isSubIngredient: parsedIngredient?.isSubIngredient || false,
+            parentIngredient: parsedIngredient?.parentIngredient,
             sources: aiAnalysis.sources, // Add sources from AI analysis
           });
 
           // Queue caching operation for background processing (non-blocking)
+          console.log(`[CACHE DEBUG] Writing cache key: "${ingredientName}"`);
           cachePromises.push(
             cacheIngredientInfo(
               ingredientName,
@@ -168,6 +194,7 @@ export async function analyzeIngredients(
         for (const ingredient of unknownIngredients) {
           const normalized = ingredient.toLowerCase();
           const minorInfo = minorIngredientsMap.get(normalized);
+          const parsedIngredient = parsedIngredientsMap.get(normalized);
           resultsByName.set(normalized, {
             name: capitalizeIngredientName(ingredient),
             status: 'unknown',
@@ -175,6 +202,8 @@ export async function analyzeIngredients(
             basic_note: 'Not analyzed - try scanning again',
             isMinorIngredient: minorInfo?.isMinor || false,
             minorThreshold: minorInfo?.threshold,
+            isSubIngredient: parsedIngredient?.isSubIngredient || false,
+            parentIngredient: parsedIngredient?.parentIngredient,
           });
         }
       }
@@ -184,6 +213,7 @@ export async function analyzeIngredients(
       for (const ingredient of unknownIngredients) {
         const normalized = ingredient.toLowerCase();
         const minorInfo = minorIngredientsMap.get(normalized);
+        const parsedIngredient = parsedIngredientsMap.get(normalized);
         resultsByName.set(normalized, {
           name: capitalizeIngredientName(ingredient),
           status: 'unknown',
@@ -191,6 +221,8 @@ export async function analyzeIngredients(
           basic_note: 'Not analyzed - try scanning again',
           isMinorIngredient: minorInfo?.isMinor || false,
           minorThreshold: minorInfo?.threshold,
+          isSubIngredient: parsedIngredient?.isSubIngredient || false,
+          parentIngredient: parsedIngredient?.parentIngredient,
         });
       }
     }

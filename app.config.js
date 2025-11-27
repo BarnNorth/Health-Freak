@@ -1,8 +1,32 @@
 import 'dotenv/config';
 
+// Get APP_VARIANT from environment, default to 'production'
+const APP_VARIANT = process.env.APP_VARIANT || 'production';
+
+// Configuration based on variant
+const variantConfig = {
+  development: {
+    name: "Health Freak (Dev)",
+    bundleIdentifier: 'com.tommymulder.healthfreak',
+    scheme: "healthfreak-dev"
+  },
+  preview: {
+    name: "Health Freak (Preview)",
+    bundleIdentifier: 'com.healthfreak.app.preview',
+    scheme: "healthfreak-preview"
+  },
+  production: {
+    name: "Health Freak",
+    bundleIdentifier: 'com.healthfreak.app',
+    scheme: "healthfreak"
+  }
+};
+
+const config = variantConfig[APP_VARIANT] || variantConfig.production;
+
 export default {
   expo: {
-    name: "Health Freak",
+    name: config.name,
     slug: "health-freak",
     version: "1.0.0",
     sdkVersion: "54.0.0",
@@ -10,9 +34,9 @@ export default {
     icon: "./assets/AppIcons v2/appstore.png",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
-    scheme: "healthfreak",
+    scheme: config.scheme,
     ios: {
-      bundleIdentifier: 'com.healthfreak.app',
+      bundleIdentifier: config.bundleIdentifier,
       buildNumber: "16",
       supportsTablet: false,
       associatedDomains: [
@@ -24,7 +48,7 @@ export default {
       }
     },
     android: {
-      package: 'com.healthfreak.app',
+      package: config.bundleIdentifier,
       versionCode: 1,
       permissions: [
         "CAMERA"
