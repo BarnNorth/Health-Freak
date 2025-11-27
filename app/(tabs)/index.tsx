@@ -43,10 +43,15 @@ export default function CameraScreen() {
   const [extractedText, setExtractedText] = useState<string>('');
   
   // New camera control states
-  const [zoom, setZoom] = useState(0);
+  // Minimum zoom of 0.15 (15%) to avoid ultra-wide fisheye distortion
+  const MIN_ZOOM = 0.15;
+  const MAX_ZOOM = 1.0;
+  const [zoom, setZoom] = useState(MIN_ZOOM);
   const [flashMode, setFlashMode] = useState<'off' | 'on' | 'auto'>('off');
   const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
   const [showZoomControls, setShowZoomControls] = useState(false);
+  const [cameraViewDimensions, setCameraViewDimensions] = useState({ width: 0, height: 0 });
+  const [autofocus, setAutofocus] = useState<'on' | 'off'>('on');
   const baseZoom = useRef(0);
   const lastScale = useRef(1);
   const [scansRemaining, setScansRemaining] = useState<number | null>(null);
@@ -215,7 +220,7 @@ export default function CameraScreen() {
   // Zoom gesture handler
   const onPinchGestureEvent = (event: any) => {
     const scale = event.nativeEvent.scale;
-    const newZoom = Math.max(0, Math.min(1, baseZoom.current + (scale - lastScale.current) * 0.5));
+    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, baseZoom.current + (scale - lastScale.current) * 0.5));
     setZoom(newZoom);
   };
 
@@ -230,19 +235,48 @@ export default function CameraScreen() {
 
   // Tap to focus handler
   const onTapGestureEvent = (event: any) => {
+    // Only process tap when gesture completes
+    if (event.nativeEvent.state !== State.END) {
+      return;
+    }
+
     const { locationX, locationY } = event.nativeEvent;
+
+    // Update visual focus indicator
     setFocusPoint({ x: locationX, y: locationY });
     
     // Clear focus point after 2 seconds
     setTimeout(() => {
       setFocusPoint(null);
     }, 2000);
+
+    // Trigger camera refocus by toggling autofocus prop
+    // This is the recommended workaround for expo-camera since it doesn't
+    // support setting focus at specific coordinates
+    // Toggle off then back on to force refocus
+    setAutofocus('off');
+    // Use requestAnimationFrame to ensure state update happens before next render
+    requestAnimationFrame(() => {
+      setAutofocus('on');
+    });
+  };
+
+  // Handle camera view layout to get actual dimensions
+  const onCameraLayout = (event: any) => {
+    const { width, height } = event.nativeEvent.layout;
+    setCameraViewDimensions({ width, height });
   };
 
   // Zoom control functions
   const adjustZoom = (delta: number) => {
-    const newZoom = Math.max(0, Math.min(1, zoom + delta));
+    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom + delta));
     setZoom(newZoom);
+  };
+
+  // Calculate zoom percentage for display (maps MIN_ZOOM to 0%, MAX_ZOOM to 100%)
+  const getZoomPercentage = () => {
+    const percentage = ((zoom - MIN_ZOOM) / (MAX_ZOOM - MIN_ZOOM)) * 100;
+    return Math.round(percentage);
   };
 
   // Flash toggle
@@ -601,14 +635,18 @@ export default function CameraScreen() {
             onGestureEvent={onPinchGestureEvent}
             onHandlerStateChange={onPinchHandlerStateChange}
           >
-            <TapGestureHandler onHandlerStateChange={onTapGestureEvent}>
-              <View style={styles.cameraWrapper}>
+            <TapGestureHandler 
+              onHandlerStateChange={onTapGestureEvent}
+              shouldCancelWhenOutside={false}
+            >
+              <View style={styles.cameraWrapper} onLayout={onCameraLayout}>
                 <CameraView 
                   ref={cameraRef} 
                   style={styles.camera} 
                   facing={facing}
                   zoom={zoom}
                   flash={flashMode}
+                  autofocus={autofocus}
                 />
                 
                 {/* Focus indicator */}
@@ -627,10 +665,17 @@ export default function CameraScreen() {
                 {/* Zoom and Flash Controls Overlay */}
                 <View style={styles.cameraOverlay}>
                   <View style={styles.zoomControls}>
+                    {/* Zoom Percentage Indicator */}
+                    <View style={styles.zoomPercentageContainer}>
+                      <Text style={styles.zoomPercentageText}>
+                        {getZoomPercentage()}%
+                      </Text>
+                    </View>
+                    
                     <TouchableOpacity 
                       style={styles.zoomButton} 
                       onPress={() => adjustZoom(-0.2)}
-                      disabled={zoom <= 0}
+                      disabled={zoom <= MIN_ZOOM}
                     >
                       <ZoomOut size={20} color={COLORS.white} />
                     </TouchableOpacity>
@@ -638,7 +683,7 @@ export default function CameraScreen() {
                     <TouchableOpacity 
                       style={styles.zoomButton} 
                       onPress={() => adjustZoom(0.2)}
-                      disabled={zoom >= 1}
+                      disabled={zoom >= MAX_ZOOM}
                     >
                       <ZoomIn size={20} color={COLORS.white} />
                     </TouchableOpacity>
@@ -682,12 +727,12 @@ export default function CameraScreen() {
       {/* Zoom Slider (when expanded) */}
       {showZoomControls && (
         <View style={styles.zoomSliderContainer}>
-          <Text style={styles.zoomLabel}>Zoom: {Math.round((zoom + 1) * 100)}%</Text>
+          <Text style={styles.zoomLabel}>Zoom: {getZoomPercentage()}%</Text>
           <View style={styles.zoomSliderTrack}>
             <View 
               style={[
                 styles.zoomSliderThumb,
-                { left: `${zoom * 100}%` }
+                { left: `${getZoomPercentage()}%` }
               ]} 
             />
           </View>
@@ -958,6 +1003,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  zoomPercentageContainer: {
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.white,
+    minWidth: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zoomPercentageText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZES.bodySmall,
+    fontWeight: '600',
+    fontFamily: FONTS.terminalGrotesque,
+    textAlign: 'center',
   },
   zoomButton: {
     backgroundColor: 'rgba(0, 0, 0, 0.6)',

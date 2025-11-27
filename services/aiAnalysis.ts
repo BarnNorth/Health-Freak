@@ -8,14 +8,14 @@ import { withRateLimit, validateIngredientName } from './security';
  * AI MODEL CONFIGURATION
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
- * We now standardize on GPT-5 nano for all AI workloads (vision + text) to simplify
+ * We now standardize on GPT-5 mini for all AI workloads (vision + text) to simplify
  * deployment while keeping latency and cost low.
  * 
  * Note: All AI calls throughout the app should use these constants
  * ═══════════════════════════════════════════════════════════════════════════════
  */
-export const AI_VISION_MODEL = 'gpt-5-nano'; // Unified model for OCR and vision tasks
-export const AI_TEXT_MODEL = 'gpt-5-nano'; // Unified model for text analysis
+export const AI_VISION_MODEL = 'gpt-5-mini'; // Unified model for OCR and vision tasks
+export const AI_TEXT_MODEL = 'gpt-5-mini'; // Unified model for text analysis
 export const AI_MODEL_CONTEXT_WINDOW = 400000;
 export const AI_MODEL_MAX_TOKENS = 128000;
 

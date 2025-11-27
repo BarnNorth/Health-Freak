@@ -19,7 +19,7 @@ Complete technical documentation for setting up and developing Health Freak.
 ## 🛠️ Tech Stack
 
 - **Frontend:** React Native + Expo
-- **AI & OCR:** OpenAI (GPT-5 nano)
+- **AI & OCR:** OpenAI (GPT-5 mini)
 - **Database:** Supabase (PostgreSQL)
 - **Auth:** Supabase Auth
 - **Payments:** RevenueCat (Apple IAP)
@@ -271,27 +271,27 @@ When contributing:
 
 ### AI Analysis System
 
-**Unified GPT-5 nano Pipeline:**
-- **Single multimodal model:** GPT-5 nano handles OCR, parsing, and ingredient classification.
-- **Pipeline:** Capture → GPT-5 nano OCR/analysis → Database Check → Cache → Verdict
+**Unified GPT-5 mini Pipeline:**
+- **Single multimodal model:** GPT-5 mini handles OCR, parsing, and ingredient classification.
+- **Pipeline:** Capture → GPT-5 mini OCR/analysis → Database Check → Cache → Verdict
 - **Classification:** Strict precautionary stance—unknown or ambiguous ingredients default to "potentially toxic."
 - **Caching:** Hybrid system reduces repeat calls by ~80-90%.
 
 **How it works:**
-1. GPT-5 nano extracts text and normalizes the ingredient list from the photo.
+1. GPT-5 mini extracts text and normalizes the ingredient list from the photo.
 2. Parsed ingredients are compared against the Supabase cache for instant hits.
-3. Uncached ingredients are classified with GPT-5 nano in either single or batched requests.
+3. Uncached ingredients are classified with GPT-5 mini in either single or batched requests.
 4. Results are cached with a 180-day TTL and combined into a product verdict ("any toxic = product toxic").
 
 **Cost optimization:**
 - Automatic caching of every analyzed ingredient
-- Batch requests through GPT-5 nano for new ingredients
+- Batch requests through GPT-5 mini for new ingredients
 - Smart caching avoids repeat analysis
 - Typical operating cost: a few tenths of a cent per scan after cache warm-up
 
 ### OCR Implementation
 
-**GPT-5 nano Vision Flow:**
+**GPT-5 mini Vision Flow:**
 - **Multimodal AI** that reads ingredient panels directly from photos.
 - **Intelligent parsing** to preserve sub-ingredients, percentages, and minor-label markers.
 - **High accuracy** on curved packaging and low-light images with minimal preprocessing.
@@ -300,7 +300,7 @@ When contributing:
 **Processing pipeline:**
 1. Capture photo with camera
 2. Preprocess: enhance, resize, optimize
-3. OCR & analysis: GPT-5 nano extracts text and classifies ingredients in one pass
+3. OCR & analysis: GPT-5 mini extracts text and classifies ingredients in one pass
 4. Parse: AI identifies and separates ingredients, preserving context markers
 5. Cache: Ingredient decisions stored for future lookups
 6. Clean: normalize and format ingredient names

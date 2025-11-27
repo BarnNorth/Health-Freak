@@ -9,12 +9,12 @@ import { supabase } from '../lib/supabase';
 /**
  * OCR and Ingredient Parsing Service
  * 
- * Uses GPT-5 nano for image-to-text extraction from food labels, followed by sophisticated
+ * Uses GPT-5 mini for image-to-text extraction from food labels, followed by sophisticated
  * parsing to identify individual ingredients with their modifiers, certifications, and
  * minor ingredient markers.
  * 
  * Key Features:
- * - GPT-5 nano OCR for high accuracy
+ * - GPT-5 mini OCR for high accuracy
  * - Footnote detection (*, †, numbered, lettered)
  * - Minor ingredient detection ("contains 2% or less")
  * - Compound ingredient handling (brand products with sub-ingredients)
@@ -140,7 +140,7 @@ export async function extractTextWithFallback(base64Image: string): Promise<OCRR
 }
 
 /**
- * Extract ingredients from food label using GPT-5 nano
+ * Extract ingredients from food label using GPT-5 mini
  * This is simpler and more accurate than Google Vision + complex parsing
  */
 async function extractIngredientsWithGPT5Nano(base64Image: string): Promise<OCRResult> {
@@ -275,7 +275,7 @@ export async function preprocessImage(
 }
 
 /**
- * Extract ingredients from food label image using GPT-5 nano
+ * Extract ingredients from food label image using GPT-5 mini
  * Includes rate limiting and input validation for security
  */
 export async function extractTextFromImage(
@@ -315,7 +315,7 @@ export async function extractTextFromImage(
         };
       }
 
-      // Use GPT-5 nano for ingredient extraction with compression fallback
+      // Use GPT-5 mini for ingredient extraction with compression fallback
       return await extractTextWithFallback(base64Image);
   } catch (error) {
       // If it's a rate limit error, re-throw it
@@ -329,7 +329,7 @@ export async function extractTextFromImage(
       hasPreprocessingOptions: !!preprocessingOptions
     });
     
-      // Handle GPT-5 nano specific errors
+      // Handle GPT-5 mini specific errors
       if (error instanceof Error) {
         // OpenAI API key errors
         if (error.message.includes('API key') || error.message.includes('unauthorized') || error.message.includes('401')) {
@@ -389,8 +389,8 @@ export async function extractTextFromImage(
 }
 
 /**
- * Complex parsing functions removed - replaced by GPT-5 nano
- * GPT-5 nano handles all text extraction and cleaning automatically
+ * Complex parsing functions removed - replaced by GPT-5 mini
+ * GPT-5 mini handles all text extraction and cleaning automatically
  */
 
 export interface ParsedIngredient {
@@ -1214,5 +1214,5 @@ export function validateOCRExtraction(extractedText: string, parsedIngredients: 
   };
 }
 
-// Advanced image processing functions removed - no longer needed with GPT-5 nano
-// GPT-5 nano handles image analysis without requiring complex preprocessing
+// Advanced image processing functions removed - no longer needed with GPT-5 mini
+// GPT-5 mini handles image analysis without requiring complex preprocessing

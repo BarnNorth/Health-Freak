@@ -32,7 +32,7 @@ export const config: AppConfig = {
     // No client-side API key needed
     apiKey: undefined, // Removed client-side API key for security
     enabled: Constants.expoConfig?.extra?.openaiEnabled !== false,
-    model: Constants.expoConfig?.extra?.openaiModel || 'gpt-5-nano',
+    model: Constants.expoConfig?.extra?.openaiModel || 'gpt-5-mini',
     maxTokens: Constants.expoConfig?.extra?.openaiMaxTokens || 128000,
   },
   ocr: {
@@ -62,7 +62,7 @@ if (__DEV__) {
 
 // OpenAI API calls now use secure Supabase Edge Function
 
-// Google Cloud Vision has been completely removed - using GPT-5 nano instead
+// Google Cloud Vision has been completely removed - using GPT-5 mini instead
 
 /**
  * Redirect URL configuration for auth callbacks

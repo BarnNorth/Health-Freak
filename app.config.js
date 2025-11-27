@@ -54,7 +54,7 @@ export default {
       googleCloudProjectId: "v3-purescannerai",
       googleCloudCredentialsPath: {},
       openaiEnabled: true,
-      openaiModel: "gpt-5-nano",
+      openaiModel: "gpt-5-mini",
       openaiMaxTokens: 128000,
       ocrEnabled: true,
       ocrFallbackToMock: false,

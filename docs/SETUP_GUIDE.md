@@ -52,7 +52,7 @@ Before you begin, ensure you have:
 
 The app now uses a **single OpenAI model** for all AI workflows:
 
-**Unified Model: GPT-5 nano**
+**Unified Model: GPT-5 mini**
 - **Purpose:** Powers both OCR (food label extraction) and ingredient analysis
 - **Cost:** ~$0.05 per 1M input tokens / $0.40 per 1M output tokens
 - **Speed:** Fast responses (often under 2 seconds per request)
@@ -63,14 +63,14 @@ The app now uses a **single OpenAI model** for all AI workflows:
 {
   "expo": {
     "extra": {
-      "openaiModel": "gpt-5-nano",
+      "openaiModel": "gpt-5-mini",
       "openaiMaxTokens": 128000
     }
   }
 }
 ```
 
-**Note:** All AI requests now use GPT-5 nano by default.
+**Note:** All AI requests now use GPT-5 mini by default.
 
 ---
 
@@ -530,7 +530,7 @@ After setup is complete:
 
 | Service | Free Tier | Paid Tier | Typical Cost |
 |---------|-----------|-----------|--------------|
-| OpenAI (GPT-5 nano) | - | $0.0003-0.002/scan | $5-15/month |
+| OpenAI (GPT-5 mini) | - | $0.0003-0.002/scan | $5-15/month |
 | Supabase | 500MB DB, 2GB bandwidth | $25/month | $0-25/month |
 | RevenueCat | Up to $2,500 MTR | 1% of revenue > $2,500 | $0-50/month |
 
