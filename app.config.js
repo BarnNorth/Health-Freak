@@ -8,17 +8,20 @@ const variantConfig = {
   development: {
     name: "Health Freak (Dev)",
     bundleIdentifier: 'com.tommymulder.healthfreak',
-    scheme: "healthfreak-dev"
+    scheme: "healthfreak-dev",
+    revenueCatKey: process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_DEV
   },
   preview: {
     name: "Health Freak (Preview)",
     bundleIdentifier: 'com.healthfreak.app.preview',
-    scheme: "healthfreak-preview"
+    scheme: "healthfreak-preview",
+    revenueCatKey: process.env.EXPO_PUBLIC_REVENUECAT_API_KEY
   },
   production: {
     name: "Health Freak",
     bundleIdentifier: 'com.healthfreak.app',
-    scheme: "healthfreak"
+    scheme: "healthfreak",
+    revenueCatKey: process.env.EXPO_PUBLIC_REVENUECAT_API_KEY
   }
 };
 
@@ -85,6 +88,7 @@ export default {
       ocrMaxImageSize: 1200,
       ocrPreprocessingEnabled: true,
       router: {},
+      revenueCatKey: config.revenueCatKey,
       eas: {
         projectId: "eb1c7f5f-1d6a-408d-9eba-9acf7dbfd788"
       }

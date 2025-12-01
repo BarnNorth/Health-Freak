@@ -313,23 +313,51 @@ async function handleIngredientAnalysis(ingredientName: string): Promise<Respons
 
 async function handleTextExtraction(base64Image: string): Promise<Response> {
   try {
-    const prompt = `You are analyzing a food product label. Extract ONLY the ingredients list.
+    const prompt = `You are analyzing a food product label. Extract ONLY the ingredients list with EXACT structural accuracy.
 
-CRITICAL RULES:
-1. Extract ONLY the actual ingredients (after "INGREDIENTS:" label)
-2. IGNORE the Nutrition Facts table completely (all % DV values, calories, etc.)
-3. IGNORE allergen warnings (CONTAINS, MAY CONTAIN sections)
-4. Return ingredients as a clean, comma-separated list
-5. Preserve sub-ingredients in parentheses exactly as shown
-6. Remove any nutrition data that got mixed in (like "4%", "12%", etc.)
-7. Extract ALL ingredients - do not skip any - look carefully for every single ingredient
-8. CRITICAL: Preserve minor ingredient markers exactly as written:
-   - "Contains 2% or less of:" → keep this phrase
-   - "Contains less than 2% of:" → keep this phrase  
-   - "2% or less of:" → keep this phrase
-   - Any similar threshold markers (1%, 1.5%, etc.)
-   - These markers indicate ingredients that are <2% of the product
-   - Example: "Water, Sugar, Contains 2% or less of: Xanthan Gum, Guar Gum" → extract exactly as shown
+CRITICAL STRUCTURE RULES:
+
+1. PRESERVE EXACT NESTING of parentheses () and brackets []
+
+   - Parentheses contain sub-ingredients: "Sauce (Water, Salt)" 
+
+   - Brackets contain sub-sub-ingredients: "Enriched Flour [Wheat, Niacin, Iron]"
+
+   - Count opening/closing symbols - they MUST match
+
+   
+
+2. PRESERVE EXACT PLACEMENT of "Contains X% Or Less Of:" markers
+
+   - These markers can appear INSIDE parentheses as part of a compound ingredient
+
+   - Example: "Sauce (Water, Oil, Contains 2% Or Less Of: Salt, Spices)"
+
+   - The marker and ingredients after it are INSIDE the Sauce parentheses
+
+   - Do NOT move closing parenthesis before the marker
+
+   
+
+3. DO NOT DUPLICATE ingredients
+
+   - If "[Red Chili Peppers, Vinegar, Garlic]" appears in Chili Paste, do NOT repeat those ingredients elsewhere
+
+   
+
+4. Extract ONLY actual ingredients (after "INGREDIENTS:" label)
+
+5. IGNORE Nutrition Facts, allergen warnings, company info
+
+6. Return as clean, comma-separated list preserving all nesting
+
+VALIDATION: Before returning, verify:
+
+- Every ( has matching )
+
+- Every [ has matching ]
+
+- "Contains X% Or Less Of:" appears in correct position relative to closing )
 
 If you cannot find ingredients, return "NO_INGREDIENTS_FOUND".`
 

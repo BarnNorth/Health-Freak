@@ -235,6 +235,28 @@ Add your RevenueCat API key to `.env`:
 EXPO_PUBLIC_REVENUECAT_API_KEY=appl_your_actual_api_key_here
 ```
 
+### Step 7.5: Configure Dev Build RevenueCat (Optional)
+
+For development builds with bundle ID `com.tommymulder.healthfreak`, you need a separate RevenueCat app:
+
+**Create Dev RevenueCat App:**
+1. In RevenueCat Dashboard, go to your project → Apps → + New App
+2. Configure:
+   - Platform: Apple App Store
+   - Bundle ID: `com.tommymulder.healthfreak`
+   - Name: "Health Freak (Dev)"
+3. Get the dev API key from Project Settings → API Keys
+4. Set as EAS secret:
+   ```bash
+   eas secret:create --scope project --name EXPO_PUBLIC_REVENUECAT_API_KEY_DEV --value "appl_your_dev_key_here"
+   ```
+
+**Important Notes:**
+- Dev builds will initialize RevenueCat SDK successfully with the dev API key
+- Products won't load in dev builds unless you create products in App Store Connect for the dev bundle ID (not recommended)
+- For actual purchase testing, use preview/production builds or StoreKit Configuration file
+- The app automatically selects the correct API key based on the build variant
+
 ### Step 8: Deploy RevenueCat Webhook Function
 
 Deploy the webhook handler to Supabase Edge Functions:
@@ -458,6 +480,13 @@ npm start
 - Verify `EXPO_PUBLIC_REVENUECAT_API_KEY` in `.env`
 - Check key starts with `appl_` (for iOS)
 - Restart development server after adding key
+
+**"RevenueCat bundle ID mismatch in dev builds"**
+- Dev builds use bundle ID `com.tommymulder.healthfreak` which doesn't match production `com.healthfreak.app`
+- Create a separate RevenueCat app for dev bundle ID (see Step 7.5)
+- Set `EXPO_PUBLIC_REVENUECAT_API_KEY_DEV` as EAS secret
+- The app automatically uses the correct key based on build variant
+- Note: Products won't load in dev builds without App Store Connect setup for dev bundle ID
 
 **"Products not loading"**
 - Ensure products are created in App Store Connect

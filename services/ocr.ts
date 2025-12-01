@@ -3,7 +3,6 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { config } from '@/lib/config';
 import { logDetailedError, getUserFriendlyErrorMessage } from './errorHandling';
 import { withRateLimit, validateImageData, validateExtractedText } from './security';
-import { AI_VISION_MODEL } from './aiAnalysis';
 import { supabase } from '../lib/supabase';
 
 /**
@@ -24,15 +23,6 @@ import { supabase } from '../lib/supabase';
 
 // Get Supabase URL for Edge Function
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-
-/**
- * Redact API keys from logs for security
- */
-function redactApiKey(value?: string): string {
-  if (!value) return 'NOT SET';
-  if (value.length < 8) return '***REDACTED***';
-  return `${value.substring(0, 4)}...***REDACTED***`;
-}
 
 export interface OCRResult {
   text: string;
@@ -145,8 +135,6 @@ export async function extractTextWithFallback(base64Image: string): Promise<OCRR
  */
 async function extractIngredientsWithGPT5Nano(base64Image: string): Promise<OCRResult> {
   try {
-    const startTime = Date.now();
-    
     // Get Supabase session for authentication
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) {
@@ -156,8 +144,6 @@ async function extractIngredientsWithGPT5Nano(base64Image: string): Promise<OCRR
         error: 'User not authenticated',
       };
     }
-
-    const apiStartTime = Date.now();
 
     const response = await fetch(`${supabaseUrl}/functions/v1/openai-proxy`, {
       method: 'POST',
@@ -175,8 +161,6 @@ async function extractIngredientsWithGPT5Nano(base64Image: string): Promise<OCRR
       const errorText = await response.text();
       throw new Error(`OpenAI Edge Function error: ${response.status} - ${errorText}`);
     }
-
-    const parseStartTime = Date.now();
 
     const result = await response.json() as OCRResult;
     const extractedText = result.text?.trim() || '';
@@ -420,27 +404,48 @@ function hasCertificationKeyword(text: string): boolean {
 }
 
 /**
- * Count commas outside of parentheses with proper nesting depth tracking
- * Handles arbitrary nesting levels (e.g., "A (B (C, D), E), F")
+ * Split text by commas while respecting both parentheses and brackets
+ * Only splits on commas when both parenthesis and bracket depths are zero
+ * Example: "A (B, C), D [E, F], G" splits into ["A (B, C)", "D [E, F]", "G"]
  */
-function countCommasWithProperNesting(text: string): number {
-  let commaCount = 0;
-  let depth = 0;
+function splitByCommasRespectingBrackets(text: string): string[] {
+  const parts: string[] = [];
+  let currentPart = '';
+  let parenDepth = 0;
+  let bracketDepth = 0;
   
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
     
     if (char === '(') {
-      depth++;
+      parenDepth++;
+      currentPart += char;
     } else if (char === ')') {
-      depth--;
-    } else if (char === ',' && depth === 0) {
-      // Only count commas outside all parentheses
-      commaCount++;
+      parenDepth--;
+      currentPart += char;
+    } else if (char === '[') {
+      bracketDepth++;
+      currentPart += char;
+    } else if (char === ']') {
+      bracketDepth--;
+      currentPart += char;
+    } else if (char === ',' && parenDepth === 0 && bracketDepth === 0) {
+      // Only split when both depths are zero
+      if (currentPart.trim()) {
+        parts.push(currentPart.trim());
+      }
+      currentPart = '';
+    } else {
+      currentPart += char;
     }
   }
   
-  return commaCount;
+  // Add the last part if it exists
+  if (currentPart.trim()) {
+    parts.push(currentPart.trim());
+  }
+  
+  return parts;
 }
 
 /**
@@ -698,6 +703,20 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
   // But exclude patterns that look like minor ingredient markers
   const sectionHeaderPattern = /\b([A-Z][A-Za-z\s]+?):(?![^\n]*contains?\s+(?:less\s+than\s+\d+\s*%|\d+\s*%\s+(?:or\s+)?less))/g;
   
+  // Exclusion list: phrases that should never be considered section headers
+  // These are parts of minor ingredient markers, not actual product sections
+  const excludedSectionPhrases = [
+    "or less of",
+    "less than", 
+    "or more of",
+    "of",
+    "contains",
+    "or less of the following",
+    "less than the following",
+    "of the following",
+    "the following"
+  ];
+  
   let match;
   let workingText = text;
   const sectionsToRemove: Array<{index: number; length: number; name: string}> = [];
@@ -705,6 +724,14 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
   // Find all section headers from original text
   while ((match = sectionHeaderPattern.exec(originalTextForParsing)) !== null) {
     const sectionName = match[1].trim();
+    const sectionNameLower = sectionName.toLowerCase();
+    
+    // Check if section name matches any excluded phrase
+    const isExcluded = excludedSectionPhrases.some(phrase => sectionNameLower === phrase);
+    if (isExcluded) {
+      continue; // Skip this section header
+    }
+    
     // Only consider it a section header if it's not a minor ingredient pattern
     const textAfterColon = text.substring(match.index + match[0].length, match.index + match[0].length + 50).trim();
     const isMinorPattern = /contains?\s+(?:less\s+than\s+\d+\s*%|\d+\s*%\s+(?:or\s+)?less)/i.test(textAfterColon);
@@ -743,15 +770,15 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
   text = workingText;
 
   // PASS 3: Detect minor ingredient names (name-based matching, not position-based)
-  interface MinorIngredientInfo {
-    name: string;
-    threshold: number;
-  }
-  
   const minorIngredientNames = new Map<string, number>(); // normalized name -> threshold
   
   // Pattern to detect minor sections with percentage extraction
-  const minorPattern = /(?:contains?\s+)?(?:less\s+than\s+(\d+(?:\.\d+)?)\s*%|(\d+(?:\.\d+)?)\s*%\s+(?:or\s+)?less)\s*(?:of\s+)?(?:each\s+of\s+)?(?:the\s+following:\s*)?/gi;
+  // Handles variations:
+  // - "Contains 2% Or Less Of:" 
+  // - "Contains 2% Or Less Of The Following:"
+  // - "Contains Less Than 2% Of:"
+  // - "2% Or Less Of:"
+  const minorPattern = /(?:contains?\s+)?(?:less\s+than\s+(\d+(?:\.\d+)?)\s*%|(\d+(?:\.\d+)?)\s*%\s+(?:or\s+)?less)\s*(?:of\s*)?(?:the\s+following\s*)?:?\s*/gi;
   
   const markersToRemove: Array<{index: number; length: number}> = [];
   let searchText = text;
@@ -759,63 +786,56 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
   // Find ALL minor sections and extract ingredient names
   while ((match = minorPattern.exec(searchText)) !== null) {
     const threshold = parseFloat(match[1] || match[2] || '2');
-    const textAfterMatch = searchText.substring(match.index + match[0].length).trim();
-    const hasColon = textAfterMatch.startsWith(':');
-    const hasFollowing = /^the\s+following:/i.test(textAfterMatch);
-    const isMultiple = hasColon || hasFollowing;
+    const markerEndIndex = match.index + match[0].length;
+    const textAfterMatch = searchText.substring(markerEndIndex).trim();
     
-    if (isMultiple) {
-      // Multiple ingredients: extract everything after colon/Following until next section or end
-      let ingredientsText = textAfterMatch.replace(/^:?\s*(the\s+following:)?\s*/i, '');
-      // Find the end of this section (next section header or end of text)
-      const nextSectionIndex = sectionHeaders.findIndex(sh => sh.index > match.index);
-      if (nextSectionIndex >= 0) {
-        const nextSection = sectionHeaders[nextSectionIndex];
-        // Find where this section starts in the original text
-        const sectionEndInText = searchText.substring(0, nextSection.index).length;
-        ingredientsText = searchText.substring(match.index + match[0].length, sectionEndInText).trim();
-        ingredientsText = ingredientsText.replace(/^:?\s*(the\s+following:)?\s*/i, '');
-      }
+    // Check if marker is inside parentheses - if so, it's part of a compound ingredient
+    const textBeforeMarker = searchText.substring(0, match.index);
+    const openParens = (textBeforeMarker.match(/\(/g) || []).length;
+    const closedParens = (textBeforeMarker.match(/\)/g) || []).length;
+    const isNestedInParens = openParens > closedParens;
+    
+    if (isNestedInParens) {
+      // Marker is inside parentheses - will be handled by compound ingredient extraction
+      console.log(`⚠️  Skipping minor marker (nested in parentheses)`);
+      continue;
+    }
+    
+    // For top-level minor markers, extract ALL ingredients after the marker until end or next major section
+    // Split by commas (respecting parentheses/brackets) and mark each as minor
+    let ingredientsText = textAfterMatch;
+    
+    // Find where this minor section ends (look for period, or next top-level ingredient pattern)
+    const periodIndex = ingredientsText.search(/\.\s*(?:[A-Z]|$)/);
+    if (periodIndex > 0) {
+      ingredientsText = ingredientsText.substring(0, periodIndex);
+    }
+    
+    // Split the ingredients text
+    const minorIngredientParts = splitByCommasRespectingBrackets(ingredientsText);
+    
+    for (const ingPart of minorIngredientParts) {
+      if (!ingPart || ingPart.length < 2) continue;
       
-      // Split by commas and add each ingredient name
-      const ingredientSplitRegex = /,(?![^()]*\))/g;
-      const ingredients = ingredientsText.split(ingredientSplitRegex).map(ing => ing.trim()).filter(ing => ing.length > 0);
-      
-      for (const ing of ingredients) {
-        // Parse to get clean ingredient name
-        const parsed = parseIndividualIngredient(ing, commonIngredients);
-        if (parsed && parsed.name) {
-          // Use same normalization as lookup to ensure matching
-          const normalizedName = parsed.name
-            .toLowerCase()
-            .replace(/:/g, ' ')
-            .replace(/\s*[.!?;:]+\s*$/, '')
-            .replace(/\s+/g, ' ')
-            .trim();
-          minorIngredientNames.set(normalizedName, threshold);
-          console.log(`🎯 Minor ingredient (multiple): "${parsed.name}" -> stored as: "${normalizedName}" (threshold: ${threshold}%)`);
-        }
-      }
-    } else {
-      // Single ingredient: extract the ingredient name immediately after
-      const restOfLine = textAfterMatch.split(/[,.]/)[0].trim(); // Everything up to next comma or period
-      if (restOfLine) {
-        const parsed = parseIndividualIngredient(restOfLine, commonIngredients);
-        if (parsed && parsed.name) {
-          // Use same normalization as lookup to ensure matching
-          const normalizedName = parsed.name
-            .toLowerCase()
-            .replace(/:/g, ' ')
-            .replace(/\s*[.!?;:]+\s*$/, '')
-            .replace(/\s+/g, ' ')
-            .trim();
-          minorIngredientNames.set(normalizedName, threshold);
-          console.log(`🎯 Minor ingredient (single): "${parsed.name}" -> stored as: "${normalizedName}" (threshold: ${threshold}%)`);
-        }
+      // Parse to get clean ingredient name
+      const parsed = parseIndividualIngredient(ingPart.trim(), commonIngredients);
+      if (parsed && parsed.name) {
+        // Normalize the name for lookup
+        const normalizedName = parsed.name
+          .toLowerCase()
+          .replace(/:/g, ' ')
+          .replace(/\s*[.!?;:]+\s*$/, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        
+        // Add to minor ingredients map
+        minorIngredientNames.set(normalizedName, threshold);
       }
     }
     
-    // Track marker for removal
+    console.log(`📋 Found ${minorIngredientParts.length} minor ingredients after marker (threshold: ${threshold}%)`);
+    
+    // Track marker for removal from text (for clean parsing later)
     markersToRemove.push({
       index: match.index,
       length: match[0].length
@@ -823,46 +843,38 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
   }
   
   // Remove minor markers from text
-  console.log(`🔧 Removing ${markersToRemove.length} minor marker(s) from text`);
-  for (let i = markersToRemove.length - 1; i >= 0; i--) {
-    const marker = markersToRemove[i];
-    const markerText = searchText.substring(marker.index, marker.index + marker.length);
-    let textBeforeMarker = searchText.substring(0, marker.index).trimEnd();
-    let textAfterMarker = searchText.substring(marker.index + marker.length).trim();
-    
-    console.log(`   Marker: "${markerText}"`);
-    console.log(`   Text after marker (before cleanup): "${textAfterMarker.substring(0, 50)}..."`);
-    
-    // Remove trailing "and" or ", and" before marker
-    textBeforeMarker = textBeforeMarker.replace(/,?\s*and\s*$/i, '').trimEnd();
-    
-    // Remove leading "of:" or "of" from text after marker
-    textAfterMarker = textAfterMarker.replace(/^of:?\s*/i, '').trim();
-    
-    // Ensure proper comma placement
-    // If textAfterMarker starts with an ingredient name (not a comma), ensure comma before it
-    const hasCommaBefore = textBeforeMarker.endsWith(',');
-    const textAfterStartsWithComma = textAfterMarker.startsWith(',');
-    
-    if (!hasCommaBefore && !textAfterStartsWithComma && textBeforeMarker && textAfterMarker) {
-      // Need to add comma between
-      searchText = textBeforeMarker + ', ' + textAfterMarker;
-    } else if (hasCommaBefore && textAfterStartsWithComma) {
-      // Both have comma, remove one
-      searchText = textBeforeMarker + ' ' + textAfterMarker.substring(1);
-    } else {
-      // Normal case - one comma exists
-      searchText = textBeforeMarker + (hasCommaBefore ? ' ' : '') + textAfterMarker;
+  if (markersToRemove.length > 0) {
+    console.log(`🔧 Removed ${markersToRemove.length} minor marker(s) from text`);
+    for (let i = markersToRemove.length - 1; i >= 0; i--) {
+      const marker = markersToRemove[i];
+      let textBeforeMarker = searchText.substring(0, marker.index).trimEnd();
+      let textAfterMarker = searchText.substring(marker.index + marker.length).trim();
+      
+      // Remove trailing "and" or ", and" before marker
+      textBeforeMarker = textBeforeMarker.replace(/,?\s*and\s*$/i, '').trimEnd();
+      
+      // Remove leading "of:" or "of" from text after marker
+      textAfterMarker = textAfterMarker.replace(/^of:?\s*/i, '').trim();
+      
+      // Ensure proper comma placement
+      // If textAfterMarker starts with an ingredient name (not a comma), ensure comma before it
+      const hasCommaBefore = textBeforeMarker.endsWith(',');
+      const textAfterStartsWithComma = textAfterMarker.startsWith(',');
+      
+      if (!hasCommaBefore && !textAfterStartsWithComma && textBeforeMarker && textAfterMarker) {
+        // Need to add comma between
+        searchText = textBeforeMarker + ', ' + textAfterMarker;
+      } else if (hasCommaBefore && textAfterStartsWithComma) {
+        // Both have comma, remove one
+        searchText = textBeforeMarker + ' ' + textAfterMarker.substring(1);
+      } else {
+        // Normal case - one comma exists
+        searchText = textBeforeMarker + (hasCommaBefore ? ' ' : '') + textAfterMarker;
+      }
     }
-    
-    console.log(`   Text after removal: "...${textBeforeMarker.substring(Math.max(0, textBeforeMarker.length - 30))}${hasCommaBefore ? ',' : ''} ${textAfterMarker.substring(0, 50)}..."`);
   }
   
   text = searchText;
-  console.log(`✅ Text after marker removal: ${text.length} chars`);
-  
-  // Debug: Show sample of text before parsing
-  console.log(`📄 Sample of cleaned text (first 300 chars): "${text.substring(0, 300)}..."`);
 
   // PASS 4: Parse ingredients with section tracking
   // Parse from original text before marker removal to ensure we catch all ingredients
@@ -881,16 +893,6 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
   // But we'll skip markers and section headers during parsing
   const rawIngredientsToParse = rawIngredientsOriginal;
   
-  // Debug: Log all raw ingredients after splitting
-  console.log(`🔍 Raw ingredients from ORIGINAL text (${rawIngredientsOriginal.length} total):`);
-  rawIngredientsOriginal.forEach((ing, idx) => {
-    console.log(`   [${idx}] "${ing.trim()}"`);
-  });
-  console.log(`🔍 Raw ingredients from CLEANED text (${rawIngredients.length} total):`);
-  rawIngredients.forEach((ing, idx) => {
-    console.log(`   [${idx}] "${ing.trim()}"`);
-  });
-  
   // Track current section as we parse
   let currentSection: string | null = null;
   const parsedIngredients: ParsedIngredient[] = [];
@@ -901,21 +903,34 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
     if (!trimmed) continue;
     
     // Check if this contains a minor marker phrase (shouldn't happen after removal, but handle gracefully)
-    const minorMarkerMatch = trimmed.match(/contains?\s+(?:less\s+than\s+\d+\s*%|\d+\s*%\s+(?:or\s+)?less)\s*(?:of\s+)?(?:each\s+of\s+)?(?:the\s+following:\s*)?/i);
+    const minorMarkerMatch = trimmed.match(/contains?\s+(?:less\s+than\s+\d+\s*%|\d+\s*%\s+(?:or\s+)?less)\s*(?:of\s*:?\s*)?(?:each\s+of\s+)?(?:the\s+following:\s*)?/i);
     if (minorMarkerMatch) {
-      // Extract ingredient name after the marker
-      const afterMarker = trimmed.substring(minorMarkerMatch.index! + minorMarkerMatch[0].length).trim();
-      // Remove leading "of:" or "of" if present
-      const cleanedAfterMarker = afterMarker.replace(/^of:?\s*/i, '').trim();
-      const ingredientName = cleanedAfterMarker.split(/[,.]/)[0].trim(); // Get first ingredient name up to comma/period
+      // Check if marker is inside parentheses (part of compound ingredient)
+      const textBeforeMarker = trimmed.substring(0, minorMarkerMatch.index!);
+      const openParens = (textBeforeMarker.match(/\(/g) || []).length;
+      const closedParens = (textBeforeMarker.match(/\)/g) || []).length;
+      const isNestedInParens = openParens > closedParens;
       
-      if (ingredientName && ingredientName.length > 1) {
-        console.log(`⚠️  Found minor marker in ingredient text: "${trimmed}"`);
-        console.log(`   Extracting ingredient: "${ingredientName}"`);
-        trimmed = ingredientName; // Use the extracted ingredient name
+      if (isNestedInParens) {
+        // Marker is inside a compound ingredient's parentheses
+        // Let it pass through - Bug 5's sub-ingredient extraction will handle it properly
+        console.log(`⚠️  Minor marker is inside compound ingredient, preserving: "${trimmed.substring(0, 80)}..."`);
+        // DON'T replace trimmed - let it continue to sub-ingredient extraction
       } else {
-        console.log(`⚠️  Skipping minor marker with no valid ingredient: "${trimmed}"`);
-        continue; // Skip if no valid ingredient name found
+        // Only extract/replace if NOT inside compound ingredient parentheses
+        const afterMarker = trimmed.substring(minorMarkerMatch.index! + minorMarkerMatch[0].length).trim();
+        // Remove leading "of:" or "of" if present
+        const cleanedAfterMarker = afterMarker.replace(/^of:?\s*/i, '').trim();
+        const ingredientName = cleanedAfterMarker.split(/[,.]/)[0].trim(); // Get first ingredient name up to comma/period
+        
+        if (ingredientName && ingredientName.length > 1) {
+          console.log(`⚠️  Found minor marker in ingredient text: "${trimmed}"`);
+          console.log(`   Extracting ingredient: "${ingredientName}"`);
+          trimmed = ingredientName; // Use the extracted ingredient name
+        } else {
+          console.log(`⚠️  Skipping minor marker with no valid ingredient: "${trimmed}"`);
+          continue; // Skip if no valid ingredient name found
+        }
       }
     }
     
@@ -952,17 +967,10 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
               .replace(/\s*[.!?;:]+\s*$/, '')
               .replace(/\s+/g, ' ')
               .trim();
-            console.log(`🔍 Checking minor status for "${parsed.name}" -> normalized: "${normalizedName}"`);
             const minorThreshold = minorIngredientNames.get(normalizedName);
             if (minorThreshold !== undefined) {
               parsed.isMinorIngredient = true;
               parsed.minorThreshold = minorThreshold;
-              console.log(`📌 Minor ingredient detected by name: "${parsed.name}" (threshold: ${minorThreshold}%)`);
-            } else {
-              if (minorIngredientNames.size > 0) {
-                const availableNames = Array.from(minorIngredientNames.keys()).slice(0, 5).join(', ');
-                console.log(`   No match found. Available minor names (first 5): ${availableNames}`);
-              }
             }
             
             parsedIngredients.push(parsed);
@@ -1008,7 +1016,6 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
       if (currentSection && !parsed.isSubIngredient) {
         parsed.parentIngredient = currentSection;
         parsed.isSubIngredient = true;
-        console.log(`📎 Assigned section parent "${currentSection}" to ingredient "${parsed.name}"`);
       }
       
       // Check if this ingredient is minor by name matching
@@ -1018,18 +1025,10 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
         .replace(/\s*[.!?;:]+\s*$/, '')
         .replace(/\s+/g, ' ')
         .trim();
-      console.log(`🔍 Checking minor status for "${parsed.name}" -> normalized: "${normalizedName}"`);
       const minorThreshold = minorIngredientNames.get(normalizedName);
       if (minorThreshold !== undefined) {
         parsed.isMinorIngredient = true;
         parsed.minorThreshold = minorThreshold;
-        console.log(`📌 Minor ingredient detected by name: "${parsed.name}" (threshold: ${minorThreshold}%)`);
-      } else {
-        // Debug: show what minor names are available if lookup fails
-        if (minorIngredientNames.size > 0) {
-          const availableNames = Array.from(minorIngredientNames.keys()).slice(0, 5).join(', ');
-          console.log(`   No match found. Available minor names (first 5): ${availableNames}`);
-        }
       }
       
       parsedIngredients.push(parsed);
@@ -1060,50 +1059,139 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
         };
         ingredientsWithSubs.push(parentIngredient);
         
-        // Parse the sub-ingredient list from the parenthetical content
-        // Split by comma, but be careful about commas within nested structures
-        // For simple comma-separated lists, we can split directly
-        const subIngredientsList = parentheticalContent
-          .split(',')
-          .map(sub => sub.trim())
-          .filter(sub => sub.length > 0);
+        // Check if parenthetical content contains a minor marker pattern
+        // Pattern matches: "Contains 2% Or Less Of:", "Contains 2% Or Less Of", etc.
+        const minorMarkerPattern = /(?:contains?\s+)?(?:less\s+than\s+(\d+(?:\.\d+)?)\s*%|(\d+(?:\.\d+)?)\s*%\s+(?:or\s+)?less)\s*(?:of\s*:?\s*)?(?:each\s+of\s+)?(?:the\s+following:\s*)?/gi;
+        const minorMarkerMatch = minorMarkerPattern.exec(parentheticalContent);
         
-        for (const subIngredientText of subIngredientsList) {
-          if (!subIngredientText || subIngredientText.length < 2) continue;
+        let beforeMarkerContent = '';
+        let afterMarkerContent = '';
+        let minorThreshold: number | undefined = undefined;
+        
+        if (minorMarkerMatch) {
+          // Found a minor marker - split content into before and after
+          const markerIndex = minorMarkerMatch.index;
+          const markerLength = minorMarkerMatch[0].length;
+          minorThreshold = parseFloat(minorMarkerMatch[1] || minorMarkerMatch[2] || '2');
           
-          // Clean the sub-ingredient text (remove any remaining parentheses or brackets)
-          let cleanedSubText = subIngredientText.trim();
+          beforeMarkerContent = parentheticalContent.substring(0, markerIndex).trim();
+          afterMarkerContent = parentheticalContent.substring(markerIndex + markerLength).trim();
           
-          // Parse the sub-ingredient as a regular ingredient
-          const parsedSub = parseIndividualIngredient(cleanedSubText, commonIngredients);
+          // Remove leading colon or "the following:" from afterMarkerContent if present
+          afterMarkerContent = afterMarkerContent.replace(/^:?\s*(the\s+following:)?\s*/i, '').trim();
           
-          if (parsedSub && parsedSub.name) {
-            // Check if this sub-ingredient is minor by name matching
-            const normalizedSubName = parsedSub.name
-              .toLowerCase()
-              .replace(/:/g, ' ')
-              .replace(/\s*[.!?;:]+\s*$/, '')
-              .replace(/\s+/g, ' ')
-              .trim();
-            const subMinorThreshold = minorIngredientNames.get(normalizedSubName);
+          console.log(`📋 Found minor marker in compound ingredient "${parentName}": threshold=${minorThreshold}%`);
+        } else {
+          // No minor marker - treat all content as regular sub-ingredients
+          beforeMarkerContent = parentheticalContent;
+        }
+        
+        // Extract sub-ingredients from content BEFORE the marker (regular sub-ingredients)
+        if (beforeMarkerContent) {
+          const beforeMarkerIngredients = splitByCommasRespectingBrackets(beforeMarkerContent)
+            .filter(sub => sub.length > 0);
+          
+          for (const subIngredientText of beforeMarkerIngredients) {
+            if (!subIngredientText || subIngredientText.length < 2) continue;
             
-            // Use minor status from name matching, or inherit from parent
-            const isMinor = subMinorThreshold !== undefined || ingredient.isMinorIngredient;
-            const minorThreshold = subMinorThreshold !== undefined ? subMinorThreshold : ingredient.minorThreshold;
+            let cleanedSubText = subIngredientText.trim();
             
-            // Mark as sub-ingredient with immediate parent (not section parent)
-            // Sub-ingredients have their immediate parent, not the section
-            // The parent ingredient already has the section parent set correctly
-            const subIngredient: ParsedIngredient = {
-              ...parsedSub,
-              isSubIngredient: true,
-              parentIngredient: parentName, // Immediate parent, not section
-              isMinorIngredient: isMinor,
-              minorThreshold: minorThreshold,
-              originalText: cleanedSubText
-            };
-            ingredientsWithSubs.push(subIngredient);
-            console.log(`🔗 Sub-ingredient extracted: ${parsedSub.name} (parent: ${parentName}${sectionParent ? `, section: ${sectionParent}` : ''}${isMinor ? `, minor: ${minorThreshold}%` : ''})`);
+            // Parse the sub-ingredient as a regular ingredient
+            const parsedSub = parseIndividualIngredient(cleanedSubText, commonIngredients);
+            
+            if (parsedSub && parsedSub.name) {
+              // These are regular sub-ingredients (NOT minor) - ingredients before the marker are never minor
+              const subIngredient: ParsedIngredient = {
+                ...parsedSub,
+                isSubIngredient: true,
+                parentIngredient: parentName,
+                isMinorIngredient: false,
+                originalText: cleanedSubText
+              };
+              ingredientsWithSubs.push(subIngredient);
+              
+              // Check if this sub-ingredient itself has bracket sub-ingredients
+              // Example: "Tamari Soy Sauce [Water, Soybeans, Salt, Sugar, Alcohol, Vinegar, Lactic Acid]"
+              const subBracketMatch = cleanedSubText.match(/\[([^\]]+)\]/);
+              if (subBracketMatch) {
+                const subBracketContent = subBracketMatch[1].trim();
+                if (subBracketContent.includes(',')) {
+                  const subSubIngredients = splitByCommasRespectingBrackets(subBracketContent)
+                    .filter(s => s.length > 0);
+                  
+                  for (const subSubText of subSubIngredients) {
+                    if (!subSubText || subSubText.length < 2) continue;
+                    const parsedSubSub = parseIndividualIngredient(subSubText.trim(), commonIngredients);
+                    
+                    if (parsedSubSub && parsedSubSub.name) {
+                      const subSubIngredient: ParsedIngredient = {
+                        ...parsedSubSub,
+                        isSubIngredient: true,
+                        parentIngredient: parsedSub.name, // Parent is the bracket-containing ingredient
+                        isMinorIngredient: false, // Regular sub-ingredients are not minor
+                        originalText: subSubText.trim()
+                      };
+                      ingredientsWithSubs.push(subSubIngredient);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        
+        // Extract sub-ingredients from content AFTER the marker (minor sub-ingredients)
+        if (afterMarkerContent && minorThreshold !== undefined) {
+          const afterMarkerIngredients = splitByCommasRespectingBrackets(afterMarkerContent)
+            .filter(sub => sub.length > 0);
+          
+          for (const subIngredientText of afterMarkerIngredients) {
+            if (!subIngredientText || subIngredientText.length < 2) continue;
+            
+            let cleanedSubText = subIngredientText.trim();
+            
+            // Parse the sub-ingredient as a regular ingredient
+            const parsedSub = parseIndividualIngredient(cleanedSubText, commonIngredients);
+            
+            if (parsedSub && parsedSub.name) {
+              // These are minor sub-ingredients
+              const subIngredient: ParsedIngredient = {
+                ...parsedSub,
+                isSubIngredient: true,
+                parentIngredient: parentName,
+                isMinorIngredient: true,
+                minorThreshold: minorThreshold,
+                originalText: cleanedSubText
+              };
+              ingredientsWithSubs.push(subIngredient);
+              
+              // Check if this minor sub-ingredient itself has bracket sub-ingredients
+              const subBracketMatch = cleanedSubText.match(/\[([^\]]+)\]/);
+              if (subBracketMatch) {
+                const subBracketContent = subBracketMatch[1].trim();
+                if (subBracketContent.includes(',')) {
+                  const subSubIngredients = splitByCommasRespectingBrackets(subBracketContent)
+                    .filter(s => s.length > 0);
+                  
+                  for (const subSubText of subSubIngredients) {
+                    if (!subSubText || subSubText.length < 2) continue;
+                    const parsedSubSub = parseIndividualIngredient(subSubText.trim(), commonIngredients);
+                    
+                    if (parsedSubSub && parsedSubSub.name) {
+                      const subSubIngredient: ParsedIngredient = {
+                        ...parsedSubSub,
+                        isSubIngredient: true,
+                        parentIngredient: parsedSub.name,
+                        isMinorIngredient: true, // Inherit minor status from parent
+                        minorThreshold: minorThreshold,
+                        originalText: subSubText.trim()
+                      };
+                      ingredientsWithSubs.push(subSubIngredient);
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       } else {
@@ -1111,8 +1199,46 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
         ingredientsWithSubs.push(ingredient);
       }
     } else {
-      // No parenthetical content, keep as-is
-      ingredientsWithSubs.push(ingredient);
+      // No parenthetical content, but check for bracket content
+      const bracketMatch = ingredient.originalText.match(/\[([^\]]+)\]/);
+      
+      if (bracketMatch) {
+        const bracketContent = bracketMatch[1].trim();
+        
+        if (bracketContent.includes(',')) {
+          // This ingredient has bracket sub-ingredients
+          const parentName = ingredient.name;
+          ingredientsWithSubs.push(ingredient); // Add the parent first
+          
+          const bracketIngredients = splitByCommasRespectingBrackets(bracketContent)
+            .filter(sub => sub.length > 0);
+          
+          for (const subIngredientText of bracketIngredients) {
+            if (!subIngredientText || subIngredientText.length < 2) continue;
+            
+            const cleanedSubText = subIngredientText.trim();
+            const parsedSub = parseIndividualIngredient(cleanedSubText, commonIngredients);
+            
+            if (parsedSub && parsedSub.name) {
+              const subIngredient: ParsedIngredient = {
+                ...parsedSub,
+                isSubIngredient: true,
+                parentIngredient: parentName,
+                isMinorIngredient: ingredient.isMinorIngredient || false,
+                minorThreshold: ingredient.minorThreshold,
+                originalText: cleanedSubText
+              };
+              ingredientsWithSubs.push(subIngredient);
+            }
+          }
+        } else {
+          // Bracket content but no commas - not sub-ingredients
+          ingredientsWithSubs.push(ingredient);
+        }
+      } else {
+        // No bracket content either, keep as-is
+        ingredientsWithSubs.push(ingredient);
+      }
     }
   }
   
@@ -1121,55 +1247,26 @@ export function parseIngredientsFromText(text: string): ParsedIngredient[] {
   parsedIngredients.push(...ingredientsWithSubs);
 
   // Post-parsing cleanup
-  console.log(`🧹 Starting cleanup: ${parsedIngredients.length} ingredients before filtering`);
-  
-  // Track removed ingredients for debugging
-  const removedIngredients: Array<{name: string; reason: string}> = [];
+  const initialCount = parsedIngredients.length;
   
   // Remove duplicates (case-insensitive)
   const afterDedup = parsedIngredients.filter((ingredient, index, array) => {
     const firstIndex = array.findIndex(item => 
       item.name.toLowerCase() === ingredient.name.toLowerCase()
     );
-    if (firstIndex !== index) {
-      removedIngredients.push({ name: ingredient.name, reason: 'duplicate' });
-      return false;
-    }
-    return true;
+    return firstIndex === index;
   });
-  console.log(`   After deduplication: ${afterDedup.length} ingredients`);
   
   // Remove very low confidence ingredients (likely errors)
-  const afterConfidence = afterDedup.filter(ingredient => {
-    if (ingredient.confidence <= 0.2) {
-      removedIngredients.push({ name: ingredient.name, reason: `low confidence (${ingredient.confidence})` });
-      return false;
-    }
-    return true;
-  });
-  console.log(`   After confidence filter: ${afterConfidence.length} ingredients`);
+  const afterConfidence = afterDedup.filter(ingredient => ingredient.confidence > 0.2);
   
   // Filter out footer notes like "*Organic", "†Fair Trade", etc.
-  const afterFooter = afterConfidence.filter(ingredient => {
-    if (isFooterNote(ingredient.name)) {
-      removedIngredients.push({ name: ingredient.name, reason: 'footer note' });
-      return false;
-    }
-    return true;
-  });
-  console.log(`   After footer filter: ${afterFooter.length} ingredients`);
-  
-  // Log any removed ingredients
-  if (removedIngredients.length > 0) {
-    console.log(`⚠️  Removed ${removedIngredients.length} ingredients during cleanup:`);
-    removedIngredients.forEach(({ name, reason }) => {
-      console.log(`   - "${name}": ${reason}`);
-    });
-  }
+  const afterFooter = afterConfidence.filter(ingredient => !isFooterNote(ingredient.name));
   
   // Convert markers to Organic/Fair Trade prefixes (using actual footnote meanings)
   const cleanedIngredients = afterFooter.map(ingredient => convertMarkersToPrefix(ingredient, footnotes));
 
+  console.log(`🧹 Cleanup: ${initialCount} -> ${afterDedup.length} (dedup) -> ${afterConfidence.length} (confidence) -> ${afterFooter.length} (footer)`);
   console.log(`✅ Final result: ${cleanedIngredients.length} ingredients`);
   return cleanedIngredients;
 }

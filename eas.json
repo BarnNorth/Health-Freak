@@ -9,7 +9,8 @@
       "channel": "development",
       "environment": "development",
       "env": {
-        "APP_VARIANT": "development"
+        "APP_VARIANT": "development",
+        "EXPO_PUBLIC_REVENUECAT_API_KEY_DEV": "${EXPO_PUBLIC_REVENUECAT_API_KEY_DEV}"
       },
       "ios": {
         "simulator": false

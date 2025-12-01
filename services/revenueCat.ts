@@ -10,13 +10,17 @@ import Purchases, {
   LOG_LEVEL 
 } from 'react-native-purchases';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { logDetailedError, getUserFriendlyErrorMessage } from './errorHandling';
 
 // ============================================
 // CONFIGURATION
 // ============================================
 
-const REVENUECAT_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY;
+// Get API key from app.config.js (variant-specific) or fall back to environment variable
+const REVENUECAT_API_KEY = 
+  Constants.expoConfig?.extra?.revenueCatKey || 
+  process.env.EXPO_PUBLIC_REVENUECAT_API_KEY;
 const PREMIUM_ENTITLEMENT_ID = 'Health Freak Group';
 const PRODUCT_ID = 'com.healthfreak.premium_monthly';
 const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
@@ -138,7 +142,13 @@ export async function configureRevenueCat(userId: string): Promise<void> {
     }
 
     if (__DEV__) {
+      const keySource = Constants.expoConfig?.extra?.revenueCatKey 
+        ? 'app.config.js (variant-specific)' 
+        : 'EXPO_PUBLIC_REVENUECAT_API_KEY (env)';
+      const keyPreview = REVENUECAT_API_KEY.substring(0, 10) + '...';
       console.log('🔧 [RevenueCat] Configuring SDK for user:', userId);
+      console.log('🔑 [RevenueCat] API key source:', keySource);
+      console.log('🔑 [RevenueCat] API key preview:', keyPreview);
       // Enable debug logs in development
       Purchases.setLogLevel(LOG_LEVEL.DEBUG);
     }
