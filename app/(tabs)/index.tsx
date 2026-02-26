@@ -436,7 +436,7 @@ export default function CameraScreen() {
         if (update.type === 'ocr' || update.type === 'parsing' || update.type === 'complete') {
           addAIThought({ message: update.message, emoji: update.emoji, type: update.type, isToxic: update.isToxic });
         }
-      });
+      }, photoAnalysis.parsedIngredients);
       
       // Set ingredient count from results (parsing happens once in analyzeIngredients)
       setIngredientCount(results.totalIngredients);

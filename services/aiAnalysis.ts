@@ -225,12 +225,11 @@ export async function analyzeSingleBatch(
 
     // Validate and clean up the results
     const validatedIngredients = [];
-    const total = result.ingredients.length;
-    
+
     for (let index = 0; index < result.ingredients.length; index++) {
       const item = result.ingredients[index];
       const name = item.name;
-      
+
       // Handle both individual and batch response formats
       const analysis = item.analysis || item;
       if (!analysis || !analysis.status) {
@@ -238,7 +237,6 @@ export async function analyzeSingleBatch(
         throw new Error(`Invalid analysis for ingredient: ${name}`);
       }
 
-      const originalConfidence = analysis.confidence;
       const adjustedConfidence = Math.max(0, Math.min(1, analysis.confidence || 0.5));
 
       validatedIngredients.push({
@@ -409,40 +407,44 @@ export async function analyzeIngredientsBatch(
 
   const startTime = Date.now();
 
-  // Process all batches in parallel
-  const batchPromises = batches.map((batch, idx) => 
-    analyzeSingleBatch(batch, userId, isPremium, (update) => {
-      // Update progress tracking for parallel batches
-      if (onProgress && update) {
-        const batchStartIndex = idx * BATCH_SIZE;
-        const currentInBatch = update.current || 0;
-        const totalProgress = batchStartIndex + currentInBatch;
-        
-        onProgress?.({ 
-          ...update, 
-          current: Math.min(totalProgress, ingredientNames.length), 
-          total: ingredientNames.length 
-        });
-      }
-    })
-  );
+  // Process batches with concurrency limit to avoid rate limiting
+  const MAX_CONCURRENT_BATCHES = 3;
+  const allResults: BatchAIAnalysisResult[] = [];
 
   try {
-    const results = await Promise.all(batchPromises);
-    
-    // Combine all batch results
+    for (let i = 0; i < batches.length; i += MAX_CONCURRENT_BATCHES) {
+      const chunk = batches.slice(i, i + MAX_CONCURRENT_BATCHES);
+      const chunkResults = await Promise.all(
+        chunk.map((batch, chunkIdx) => {
+          const batchIdx = i + chunkIdx;
+          return analyzeSingleBatch(batch, userId, isPremium, (update) => {
+            if (onProgress && update) {
+              const batchStartIndex = batchIdx * BATCH_SIZE;
+              const currentInBatch = update.current || 0;
+              const totalProgress = batchStartIndex + currentInBatch;
+              onProgress?.({
+                ...update,
+                current: Math.min(totalProgress, ingredientNames.length),
+                total: ingredientNames.length
+              });
+            }
+          });
+        })
+      );
+      allResults.push(...chunkResults);
+    }
+
     const combinedResult: BatchAIAnalysisResult = {
-      ingredients: results.flatMap(r => r.ingredients),
+      ingredients: allResults.flatMap(r => r.ingredients),
       processing_time: Date.now() - startTime,
-      tokens_used: results.reduce((sum, r) => sum + r.tokens_used, 0)
+      tokens_used: allResults.reduce((sum, r) => sum + r.tokens_used, 0)
     };
 
-
     return combinedResult;
-    
+
   } catch (error) {
     console.error('Parallel batch processing failed:', error);
-    
+
     // Fallback to single batch processing if parallel fails
     return analyzeSingleBatch(ingredientNames, userId, isPremium, onProgress);
   }

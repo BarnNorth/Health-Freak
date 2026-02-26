@@ -257,7 +257,7 @@ async function handleIngredientAnalysis(ingredientName: string): Promise<Respons
         }
       ],
       max_completion_tokens: AI_MODEL_MAX_TOKENS,
-      reasoning_effort: 'minimal' as const,
+      reasoning_effort: 'medium' as const,
       verbosity: 'low' as const
     }
 
@@ -313,53 +313,31 @@ async function handleIngredientAnalysis(ingredientName: string): Promise<Respons
 
 async function handleTextExtraction(base64Image: string): Promise<Response> {
   try {
-    const prompt = `You are analyzing a food product label. Extract ONLY the ingredients list with EXACT structural accuracy.
+    const prompt = `You are analyzing a food product label image. Extract the ingredients list and return structured JSON.
 
-CRITICAL STRUCTURE RULES:
+RULES:
+1. Extract ONLY the ingredients (after "INGREDIENTS:" label if present)
+2. IGNORE Nutrition Facts, allergen warnings ("CONTAINS: ..."), company info, addresses, phone numbers
+3. For compound ingredients with sub-ingredients in parentheses like "Sauce (Water, Salt, Onion)", list the parent AND each sub-ingredient separately
+4. For bracket sub-ingredients like "Enriched Flour [Wheat, Niacin]", list parent AND each sub-ingredient separately
+5. Detect "Contains X% Or Less Of:" markers - ingredients after this marker are minor ingredients with that threshold
+6. Minor markers can appear at top-level OR inside compound ingredient parentheses
+7. "and/or" constructions should be split into separate ingredients
+8. Remove footnote markers (*, †, etc.) from ingredient names but note if they indicate "Organic" or "Fair Trade" - prepend that to the name (e.g. "Honey*" becomes "Organic Honey")
+9. Section headers like "Filling:" or "Tortilla:" indicate parent groupings, not ingredients themselves
 
-1. PRESERVE EXACT NESTING of parentheses () and brackets []
+Return a JSON object with this EXACT structure:
+{
+  "ingredients": [
+    { "name": "Water", "isMinor": false, "parentIngredient": null, "isSubIngredient": false },
+    { "name": "Enriched Flour", "isMinor": false, "parentIngredient": null, "isSubIngredient": false },
+    { "name": "Wheat", "isMinor": false, "parentIngredient": "Enriched Flour", "isSubIngredient": true },
+    { "name": "Salt", "isMinor": true, "minorThreshold": 2, "parentIngredient": null, "isSubIngredient": false }
+  ],
+  "raw_text": "the original comma-separated text as read from the label"
+}
 
-   - Parentheses contain sub-ingredients: "Sauce (Water, Salt)" 
-
-   - Brackets contain sub-sub-ingredients: "Enriched Flour [Wheat, Niacin, Iron]"
-
-   - Count opening/closing symbols - they MUST match
-
-   
-
-2. PRESERVE EXACT PLACEMENT of "Contains X% Or Less Of:" markers
-
-   - These markers can appear INSIDE parentheses as part of a compound ingredient
-
-   - Example: "Sauce (Water, Oil, Contains 2% Or Less Of: Salt, Spices)"
-
-   - The marker and ingredients after it are INSIDE the Sauce parentheses
-
-   - Do NOT move closing parenthesis before the marker
-
-   
-
-3. DO NOT DUPLICATE ingredients
-
-   - If "[Red Chili Peppers, Vinegar, Garlic]" appears in Chili Paste, do NOT repeat those ingredients elsewhere
-
-   
-
-4. Extract ONLY actual ingredients (after "INGREDIENTS:" label)
-
-5. IGNORE Nutrition Facts, allergen warnings, company info
-
-6. Return as clean, comma-separated list preserving all nesting
-
-VALIDATION: Before returning, verify:
-
-- Every ( has matching )
-
-- Every [ has matching ]
-
-- "Contains X% Or Less Of:" appears in correct position relative to closing )
-
-If you cannot find ingredients, return "NO_INGREDIENTS_FOUND".`
+If no ingredients are found, return: { "error": "NO_INGREDIENTS_FOUND" }`
 
     const requestPayload = {
       model: AI_VISION_MODEL,
@@ -369,7 +347,7 @@ If you cannot find ingredients, return "NO_INGREDIENTS_FOUND".`
           content: [
             {
               type: "text" as const,
-              text: `${prompt}\n\nReturn ONLY a JSON object with this structure:\n{\n  "ingredients_text": "comma-separated ingredients list",\n  "raw_text": "original extracted text"\n}\nIf no ingredients are found, return {"error": "NO_INGREDIENTS_FOUND"}.`
+              text: prompt
             },
             {
               type: "image_url" as const,
@@ -380,7 +358,7 @@ If you cannot find ingredients, return "NO_INGREDIENTS_FOUND".`
           ]
         }
       ],
-      max_completion_tokens: 1000,
+      max_completion_tokens: 2500,
       reasoning_effort: 'minimal' as const,
       verbosity: 'low' as const
     }
@@ -402,24 +380,42 @@ If you cannot find ingredients, return "NO_INGREDIENTS_FOUND".`
 
     const completion = await response.json()
     const extractedContent = completion.choices[0]?.message?.content?.trim() || ''
+
     const parsedExtraction = (() => {
       try {
-        return JSON.parse(extractedContent)
+        const parsed = JSON.parse(extractedContent)
+        if (parsed.error) return parsed
+        if (parsed.ingredients && Array.isArray(parsed.ingredients)) return parsed
+        // Legacy format fallback
+        return {
+          ingredients: [],
+          raw_text: parsed.ingredients_text || parsed.raw_text || extractedContent
+        }
       } catch {
-        return { ingredients_text: extractedContent, raw_text: extractedContent }
+        return { ingredients: [], raw_text: extractedContent }
       }
     })()
 
-    const result: OCRResult = parsedExtraction.error
-      ? {
+    if (parsedExtraction.error) {
+      return new Response(
+        JSON.stringify({
           text: '',
           confidence: 0,
-          error: parsedExtraction.error
-        }
-      : {
-          text: parsedExtraction.ingredients_text || parsedExtraction.raw_text || '',
-          confidence: 0.8 // GPT-5 nano vision mode is generally reliable
-        }
+          error: parsedExtraction.error,
+          structured_ingredients: null
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const structuredIngredients = parsedExtraction.ingredients || null
+    const rawText = parsedExtraction.raw_text || ''
+
+    const result = {
+      text: rawText,
+      confidence: 0.9,
+      structured_ingredients: structuredIngredients
+    }
 
     return new Response(
       JSON.stringify(result),
@@ -428,15 +424,14 @@ If you cannot find ingredients, return "NO_INGREDIENTS_FOUND".`
 
   } catch (error) {
     console.error('Text extraction error:', error)
-    
-    const errorResult: OCRResult = {
-      text: '',
-      confidence: 0,
-      error: 'Failed to extract text from image'
-    }
 
     return new Response(
-      JSON.stringify(errorResult),
+      JSON.stringify({
+        text: '',
+        confidence: 0,
+        error: 'Failed to extract text from image',
+        structured_ingredients: null
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
@@ -480,8 +475,8 @@ Return format:
         { role: "system" as const, content: SYSTEM_PROMPT },
         { role: "user" as const, content: `${batchPrompt}\n\nReturn ONLY the JSON object described above.` }
       ],
-      max_completion_tokens: Math.min(AI_MODEL_MAX_TOKENS * sanitizedNames.length, 128000),
-      reasoning_effort: 'minimal' as const,
+      max_completion_tokens: 8000,
+      reasoning_effort: 'medium' as const,
       verbosity: 'low' as const
     }
 

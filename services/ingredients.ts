@@ -38,17 +38,18 @@ interface AnalysisResult {
 }
 
 export async function analyzeIngredients(
-  extractedText: string, 
-  userId: string, 
+  extractedText: string,
+  userId: string,
   isPremium: boolean = false,
-  onProgress?: (update: any) => void
+  onProgress?: (update: any) => void,
+  preParsedIngredients?: ParsedIngredient[]
 ): Promise<AnalysisResult> {
-  
+
   const aiStartTime = Date.now();
-  
-  // Parse ingredient list from extracted text
-  // Use the improved parsing from OCR service
-  const parsedIngredients = parseIngredientsFromText(extractedText);
+
+  // Use pre-parsed ingredients if available (from structured OCR),
+  // otherwise fall back to text parsing (manual text input path)
+  const parsedIngredients = preParsedIngredients || parseIngredientsFromText(extractedText);
   
   // Create a map to track which ingredients are minor and their thresholds
   const minorIngredientsMap = new Map<string, { isMinor: boolean; threshold?: number }>();

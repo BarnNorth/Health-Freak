@@ -40,7 +40,7 @@ export default {
     scheme: config.scheme,
     ios: {
       bundleIdentifier: config.bundleIdentifier,
-      buildNumber: "17",
+      buildNumber: "18",
       supportsTablet: false,
       associatedDomains: [
         "applinks:healthfreak.io"
