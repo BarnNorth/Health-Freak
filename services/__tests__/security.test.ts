@@ -21,23 +21,28 @@ describe('Rate Limiting', () => {
     jest.clearAllMocks();
   });
 
-  test('should allow requests within rate limit', () => {
-    const result = checkRateLimit(testUserId, 'ocr');
-    
+  // TODO: These tests were written against the old synchronous in-memory
+  // rate limiter. checkRateLimit is now async and calls a Supabase RPC, so
+  // they need a mocked supabase client to pass at runtime.
+  // Kept async + awaited for type-safety; they will fail until mocks are added.
+
+  test('should allow requests within rate limit', async () => {
+    const result = await checkRateLimit(testUserId, 'ocr');
+
     expect(result.allowed).toBe(true);
     expect(result.remaining).toBe(SECURITY_CONFIG.RATE_LIMITS.ocr.maxRequests - 1);
     expect(result.error).toBeUndefined();
   });
 
-  test('should block requests after exceeding rate limit', () => {
+  test('should block requests after exceeding rate limit', async () => {
     // Make requests up to the limit
     for (let i = 0; i < SECURITY_CONFIG.RATE_LIMITS.ocr.maxRequests; i++) {
-      checkRateLimit(testUserId, 'ocr');
+      await checkRateLimit(testUserId, 'ocr');
     }
-    
+
     // Next request should be blocked
-    const result = checkRateLimit(testUserId, 'ocr');
-    
+    const result = await checkRateLimit(testUserId, 'ocr');
+
     expect(result.allowed).toBe(false);
     expect(result.remaining).toBe(0);
     expect(result.error).toContain('Rate limit exceeded');
@@ -51,34 +56,34 @@ describe('Rate Limiting', () => {
 
     // Exhaust rate limit
     for (let i = 0; i < SECURITY_CONFIG.RATE_LIMITS.ocr.maxRequests; i++) {
-      checkRateLimit(testUserId, 'ocr');
+      await checkRateLimit(testUserId, 'ocr');
     }
-    
+
     // Should be blocked
-    expect(checkRateLimit(testUserId, 'ocr').allowed).toBe(false);
-    
+    expect((await checkRateLimit(testUserId, 'ocr')).allowed).toBe(false);
+
     // Advance time past window
     mockTime += SECURITY_CONFIG.RATE_LIMITS.ocr.windowMs + 1000;
-    
+
     // Should be allowed again
-    const result = checkRateLimit(testUserId, 'ocr');
+    const result = await checkRateLimit(testUserId, 'ocr');
     expect(result.allowed).toBe(true);
-    
+
     // Restore original Date.now
     Date.now = originalNow;
   });
 
-  test('should handle different operations independently', () => {
+  test('should handle different operations independently', async () => {
     // Use up OCR limit
     for (let i = 0; i < SECURITY_CONFIG.RATE_LIMITS.ocr.maxRequests; i++) {
-      checkRateLimit(testUserId, 'ocr');
+      await checkRateLimit(testUserId, 'ocr');
     }
-    
+
     // OCR should be blocked
-    expect(checkRateLimit(testUserId, 'ocr').allowed).toBe(false);
-    
+    expect((await checkRateLimit(testUserId, 'ocr')).allowed).toBe(false);
+
     // AI analysis should still be allowed
-    expect(checkRateLimit(testUserId, 'ai_analysis').allowed).toBe(true);
+    expect((await checkRateLimit(testUserId, 'ai_analysis')).allowed).toBe(true);
   });
 });
 

@@ -31,9 +31,9 @@ const AI_TEXT_MODEL = 'gpt-5-mini'
 const AI_MODEL_MAX_TOKENS = 4000
 
 // Rate limiting configuration
+// NOTE: Must stay in sync with services/security.ts RATE_LIMITS.ai_analysis
 const RATE_LIMIT_WINDOW_MS = 60 * 1000 // 1 minute
-const RATE_LIMIT_MAX_REQUESTS = 10 // 10 requests per minute per user
-const rateLimitStore = new Map<string, { count: number; resetTime: number }>()
+const RATE_LIMIT_MAX_REQUESTS = 15 // 15 requests per minute per user
 
 interface OpenAIRequest {
   type: 'analyze_ingredient' | 'extract_text' | 'analyze_batch' | 'identify_product'
@@ -41,6 +41,8 @@ interface OpenAIRequest {
   ingredientNames?: string[] // NEW
   base64Image?: string
   ingredientList?: string // For product identification
+  identifyProduct?: boolean // When true, include product identification in batch response
+  stream?: boolean // When explicitly false, disable SSE streaming for batch analysis
 }
 
 interface AIAnalysisResult {
@@ -62,27 +64,55 @@ interface OCRResult {
   error?: string
 }
 
-// Rate limiting function
-function checkRateLimit(userId: string): boolean {
-  const now = Date.now()
-  const userLimit = rateLimitStore.get(userId)
-  
-  if (!userLimit || now > userLimit.resetTime) {
-    rateLimitStore.set(userId, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS })
-    return true
+// Rate limiting via Supabase RPC (distributed, survives function cold starts)
+async function checkRateLimit(userId: string): Promise<{ allowed: boolean; error?: string }> {
+  const { data, error } = await supabase.rpc('check_and_increment_rate_limit', {
+    p_user_id: userId,
+    p_operation: 'ai_analysis',
+    p_window_ms: RATE_LIMIT_WINDOW_MS,
+    p_max_requests: RATE_LIMIT_MAX_REQUESTS,
+  })
+
+  if (error) {
+    console.error('[RATE_LIMIT] RPC error:', error)
+    // Fail open on RPC errors to avoid blocking legitimate users
+    return { allowed: true }
   }
-  
-  if (userLimit.count >= RATE_LIMIT_MAX_REQUESTS) {
-    return false
-  }
-  
-  userLimit.count++
-  return true
+
+  return { allowed: data.allowed, error: data.error }
 }
 
 // Validate ingredient name input
 function validateIngredientName(name: string): string {
   return name.trim().slice(0, 200) // Limit length
+}
+
+// Fake/placeholder domains to filter out
+const FAKE_DOMAINS = ['example.com', 'example.org', 'example.net', 'test.com', 'placeholder.com', 'fake.com', 'url.com']
+
+// Valid source types from the system prompt contract
+const VALID_SOURCE_TYPES = ['research', 'database', 'regulatory', 'other'] as const
+type SourceType = typeof VALID_SOURCE_TYPES[number]
+type ValidatedSource = { title: string; url: string; type: SourceType }
+
+// Validate and filter source URLs from AI responses
+function validateSources(sources?: Array<{ title: string; url: string; type: string }>): ValidatedSource[] {
+  if (!sources || !Array.isArray(sources)) return []
+
+  return sources.reduce<ValidatedSource[]>((acc, source) => {
+    try {
+      const parsed = new URL(source.url)
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return acc
+      if (FAKE_DOMAINS.some(domain => parsed.hostname === domain || parsed.hostname.endsWith('.' + domain))) return acc
+      const type: SourceType = (VALID_SOURCE_TYPES as readonly string[]).includes(source.type)
+        ? source.type as SourceType
+        : 'other'
+      acc.push({ title: source.title, url: source.url, type })
+    } catch {
+      // invalid URL — skip
+    }
+    return acc
+  }, [])
 }
 
 // System prompt for ingredient analysis
@@ -111,9 +141,19 @@ Classify individual ingredients as either "generally_clean" or "potentially_toxi
 - Ultra-processed ingredients that don't resemble their original food source
 - Ingredients known or suspected to disrupt gut health, hormones, or promote inflammation
 
+## CONTEXT MATTERS - Common Whole-Food Ingredients
+The following ingredients should be classified as "generally_clean" when they appear in their natural/traditional form, as they are recognizable kitchen staples:
+- Water, salt, sugar (in small amounts as a minor ingredient), vinegar, citric acid (naturally occurring in citrus fruits)
+- Baking soda, baking powder, cream of tartar, cornstarch (traditional cooking staples)
+- Butter, cream, milk, eggs, honey, molasses
+- Herbs and spices in their whole or ground form (e.g., garlic, onion, black pepper, cinnamon, turmeric)
+- Basic oils in unrefined form (olive oil, coconut oil, avocado oil, sesame oil)
+
+If the ingredient is a common recognizable food or kitchen staple, default to "generally_clean" even without an explicit organic designation. Reserve "potentially_toxic" for synthetic additives, artificial colors/flavors, highly processed seed oils, and ingredients that don't resemble their original food source.
+
 ## Crunchy Lifestyle Principles
 - Ultra-processed foods are treated as harmful by default
-- In cases of uncertainty or missing organic/non-GMO designation, default to "potentially_toxic"
+- For synthetic or unfamiliar ingredients with uncertainty, default to "potentially_toxic"
 - Any synthetically produced ingredient is classified as toxic, regardless of regulatory status (e.g., GRAS by FDA)
 - Favor simple, natural ingredients; distrust modern food science additives
 - Level of processing is key: organic/unrefined may be clean; refined/conventional considered toxic
@@ -183,10 +223,11 @@ serve(async (req: Request) => {
       )
     }
 
-    // Check rate limiting
-    if (!checkRateLimit(user.id)) {
+    // Check rate limiting (distributed via Supabase RPC)
+    const rateCheck = await checkRateLimit(user.id)
+    if (!rateCheck.allowed) {
       return new Response(
-        JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }),
+        JSON.stringify({ error: rateCheck.error || 'Rate limit exceeded. Please try again later.' }),
         { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -207,7 +248,7 @@ serve(async (req: Request) => {
     } else if (requestBody.type === 'extract_text') {
       return await handleTextExtraction(requestBody.base64Image!)
     } else if (requestBody.type === 'analyze_batch') {
-      return await handleBatchAnalysis(requestBody.ingredientNames!)
+      return await handleBatchAnalysis(requestBody.ingredientNames!, requestBody.identifyProduct, requestBody.ingredientList, requestBody.stream)
     } else if (requestBody.type === 'identify_product') {
       return await handleProductIdentification(requestBody.ingredientList!)
     } else {
@@ -257,6 +298,7 @@ async function handleIngredientAnalysis(ingredientName: string): Promise<Respons
         }
       ],
       max_completion_tokens: AI_MODEL_MAX_TOKENS,
+      temperature: 0.3,
       reasoning_effort: 'medium' as const,
       verbosity: 'low' as const
     }
@@ -286,6 +328,9 @@ async function handleIngredientAnalysis(ingredientName: string): Promise<Respons
 
     // Ensure confidence is within valid range
     analysis.confidence = Math.max(0, Math.min(1, analysis.confidence || 0.5))
+
+    // Validate source URLs
+    analysis.sources = validateSources(analysis.sources)
 
     return new Response(
       JSON.stringify(analysis),
@@ -359,6 +404,7 @@ If no ingredients are found, return: { "error": "NO_INGREDIENTS_FOUND" }`
         }
       ],
       max_completion_tokens: 2500,
+      temperature: 0.3,
       reasoning_effort: 'minimal' as const,
       verbosity: 'low' as const
     }
@@ -437,18 +483,23 @@ If no ingredients are found, return: { "error": "NO_INGREDIENTS_FOUND" }`
   }
 }
 
-async function handleBatchAnalysis(ingredientNames: string[]): Promise<Response> {
+async function handleBatchAnalysis(ingredientNames: string[], identifyProduct?: boolean, ingredientList?: string, streamResponse?: boolean): Promise<Response> {
+  const shouldStream = streamResponse !== false // Default to streaming unless explicitly disabled
   try {
     console.log(`🚀 [EDGE_FUNCTION] Starting batch analysis for ${ingredientNames.length} ingredients:`, ingredientNames);
     const sanitizedNames = ingredientNames.map(validateIngredientName)
-    
-    const batchPrompt = `Analyze these ${sanitizedNames.length} food ingredients. Return a JSON object with an "ingredients" array containing one object per ingredient in the EXACT order provided.
+
+    const productIdInstruction = identifyProduct ? `\n\nAlso identify the general food category based on the full ingredient list${ingredientList ? `: "${ingredientList}"` : ''}. Include a "productName" field in the root of the response JSON (e.g., "A frozen pasta meal", "A canned soup"). Keep it concise (under 30 characters). Don't guess specific brand names.` : ''
+
+    const batchPrompt = `Analyze these ${sanitizedNames.length} food ingredients. Analyze each ingredient independently with the same depth as if it were a single ingredient analysis. Provide specific reasoning for each ingredient, not generic batch reasoning. For each ingredient, consider its specific health impacts, processing level, and common sourcing before classifying.
+
+Return a JSON object with an "ingredients" array containing one object per ingredient in the EXACT order provided.
 
 Ingredients to analyze:
 ${sanitizedNames.map((name, i) => `${i + 1}. ${name}`).join('\n')}
 
 Return format:
-{
+{${identifyProduct ? '\n  "productName": "A generic food category",' : ''}
   "ingredients": [
     {
       "name": "ingredient 1 name",
@@ -467,7 +518,7 @@ Return format:
     },
     // ... one object per ingredient
   ]
-}`
+}${productIdInstruction}`
 
     const requestPayload = {
       model: AI_TEXT_MODEL,
@@ -476,8 +527,10 @@ Return format:
         { role: "user" as const, content: `${batchPrompt}\n\nReturn ONLY the JSON object described above.` }
       ],
       max_completion_tokens: 8000,
+      temperature: 0.3,
       reasoning_effort: 'medium' as const,
-      verbosity: 'low' as const
+      verbosity: 'low' as const,
+      stream: shouldStream
     }
 
     const response = await fetch(OPENAI_API_URL, {
@@ -495,16 +548,91 @@ Return format:
       throw new Error(`OpenAI API error: ${response.status} - ${errorBody}`)
     }
 
-    const completion = await response.json()
-    const responseData = JSON.parse(completion.choices[0]?.message?.content || '{"ingredients": []}')
-    const analyses = responseData.ingredients || []
-    
-    console.log(`✅ [EDGE_FUNCTION] Batch analysis completed for ${analyses.length} ingredients`);
+    // Non-streaming path (used for retries)
+    if (!shouldStream) {
+      const data = await response.json()
+      const content = data.choices?.[0]?.message?.content || '{}'
+      const cleanedContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      const responseData = JSON.parse(cleanedContent || '{"ingredients": []}')
+      const analyses = responseData.ingredients || []
 
-    return new Response(
-      JSON.stringify({ ingredients: analyses }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+      for (const item of analyses) {
+        item.sources = validateSources(item.sources)
+      }
+
+      console.log(`✅ [EDGE_FUNCTION] Batch analysis (non-streaming) completed for ${analyses.length} ingredients`)
+
+      return new Response(
+        JSON.stringify({ ingredients: analyses, productName: responseData.productName }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Stream SSE to client - relay OpenAI stream chunks and collect full content
+    const encoder = new TextEncoder()
+    const reader = response.body!.getReader()
+    const decoder = new TextDecoder()
+    let fullContent = ''
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            const chunk = decoder.decode(value, { stream: true })
+            const lines = chunk.split('\n')
+
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue
+              const data = line.slice(6).trim()
+              if (data === '[DONE]') continue
+
+              try {
+                const parsed = JSON.parse(data)
+                const delta = parsed.choices?.[0]?.delta?.content || ''
+                if (delta) {
+                  fullContent += delta
+                  // Send progress event to client
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'chunk', content: delta })}\n\n`))
+                }
+              } catch {
+                // Skip malformed chunks
+              }
+            }
+          }
+
+          // Parse the complete response
+          const responseData = JSON.parse(fullContent || '{"ingredients": []}')
+          const analyses = responseData.ingredients || []
+
+          // Validate source URLs for each ingredient
+          for (const item of analyses) {
+            item.sources = validateSources(item.sources)
+          }
+
+          console.log(`✅ [EDGE_FUNCTION] Batch analysis completed for ${analyses.length} ingredients`)
+
+          // Send final complete result
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'complete', ingredients: analyses, productName: responseData.productName })}\n\n`))
+          controller.close()
+        } catch (streamError) {
+          console.error('Streaming error:', streamError)
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', message: 'Streaming failed' })}\n\n`))
+          controller.close()
+        }
+      }
+    })
+
+    return new Response(stream, {
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      }
+    })
   } catch (error) {
     console.error('Batch analysis error:', error)
     // Fallback to individual processing
@@ -545,6 +673,7 @@ Return ONLY the generic food category, nothing else.`;
           }
         ],
         max_completion_tokens: 50,
+        temperature: 0.3,
         reasoning_effort: 'minimal',
         verbosity: 'low'
       })

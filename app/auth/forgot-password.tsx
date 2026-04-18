@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.white,
     borderWidth: 2,
     borderColor: COLORS.border,
     borderRadius: 8,

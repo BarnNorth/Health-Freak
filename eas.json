@@ -50,6 +50,10 @@
   "submit": {
     "development": {},
     "preview": {},
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6753876938"
+      }
+    }
   }
 }

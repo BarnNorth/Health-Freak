@@ -1,5 +1,5 @@
-import { getIngredientInfo, getIngredientsBatch, cacheIngredientInfo } from '@/lib/database';
-import { analyzeIngredientWithAI, analyzeIngredientsBatch, getAIAnalysisStatus, identifyProductFromIngredients } from './aiAnalysis';
+import { getIngredientInfo, getIngredientsBatch, cacheIngredientInfo, logAnalysis, logCacheError } from '@/lib/database';
+import { analyzeIngredientWithAI, analyzeIngredientsBatch, getAIAnalysisStatus } from './aiAnalysis';
 import { parseIngredientsFromText, ParsedIngredient } from './ocr';
 
 /**
@@ -14,7 +14,7 @@ function capitalizeIngredientName(name: string): string {
 
 interface IngredientInfo {
   name: string;
-  status: 'generally_clean' | 'potentially_toxic';
+  status: 'generally_clean' | 'potentially_toxic' | 'unknown';
   educational_note: string;
   basic_note?: string; // Short version for free users
   isMinorIngredient?: boolean; // true if ingredient is < X% of total product
@@ -72,9 +72,6 @@ export async function analyzeIngredients(
     parsedIngredientsMap.set(normalizedName, parsed);
   });
   
-  // Start product identification in parallel (don't await yet!)
-  const productIdentificationPromise = identifyProductFromIngredients(extractedText);
-  
   const ingredients = parsedIngredients
     .map(ingredient => ingredient.name
       .toLowerCase()
@@ -101,6 +98,7 @@ export async function analyzeIngredients(
 
   const results: IngredientInfo[] = [];
   const unknownIngredients: string[] = [];
+  let productIdentification: string | undefined;
 
   // Step 1: Start database lookup in parallel (performance optimization)
   const cachedIngredientsPromise = getIngredientsBatch(ingredients);
@@ -131,6 +129,8 @@ export async function analyzeIngredients(
         isSubIngredient: parsedIngredient?.isSubIngredient || false,
         parentIngredient: parsedIngredient?.parentIngredient,
       });
+      // Log cache hit (fire-and-forget)
+      logAnalysis(userId, normalizedIngredient, dbResult.status, null, true, null).catch(() => {});
     } else {
       console.log(`[CACHE DEBUG] Cache MISS: "${normalizedIngredient}"`);
       unknownIngredients.push(ingredient);
@@ -145,9 +145,13 @@ export async function analyzeIngredients(
 
     if (aiStatus.configured && aiStatus.enabled) {
       try {
-        // Use batch analysis for efficiency
-        const batchResult = await analyzeIngredientsBatch(unknownIngredients, userId, isPremium, onProgress);
-        
+        // Use batch analysis for efficiency (also includes product identification)
+        const batchResult = await analyzeIngredientsBatch(unknownIngredients, userId, isPremium, onProgress, true, extractedText);
+
+        // Extract product identification from batch result
+        if (batchResult.productName) {
+          productIdentification = batchResult.productName;
+        }
 
         // Process AI results
         const cachePromises = []; // Collect caching operations for background processing
@@ -171,24 +175,33 @@ export async function analyzeIngredients(
             sources: aiAnalysis.sources, // Add sources from AI analysis
           });
 
+          // Log AI analysis result (fire-and-forget)
+          logAnalysis(userId, ingredientName, aiAnalysis.status, aiAnalysis.confidence, false, null).catch(() => {});
+
           // Queue caching operation for background processing (non-blocking)
-          console.log(`[CACHE DEBUG] Writing cache key: "${ingredientName}"`);
-          cachePromises.push(
-            cacheIngredientInfo(
-              ingredientName,
-              aiAnalysis.status,
-              aiAnalysis.educational_note,
-              180 // Expires in 6 months
-            ).catch(error => {
-              console.error(`[DATABASE] Failed to cache ${ingredientName}:`, error);
-            })
-          );
+          // Skip caching if analysis failed — 'unknown' is not a real verdict.
+          if (aiAnalysis.status !== 'unknown') {
+            console.log(`[CACHE DEBUG] Writing cache key: "${ingredientName}"`);
+            cachePromises.push(
+              cacheIngredientInfo(
+                ingredientName,
+                aiAnalysis.status,
+                aiAnalysis.educational_note,
+                180 // Expires in 6 months
+              ).catch(error => {
+                console.error(`[DATABASE] Failed to cache ${ingredientName}:`, error);
+                // Log cache error to DB for debugging
+                logCacheError(userId, ingredientName, error instanceof Error ? error.message : String(error)).catch(() => {});
+              })
+            );
+          }
         }
 
         // Start background caching (don't await - let it happen in background)
-        Promise.all(cachePromises).catch(err => 
-          console.error('[DATABASE] Background caching error:', err)
-        );
+        Promise.all(cachePromises).catch(err => {
+          console.error('[DATABASE] Background caching error:', err);
+          logCacheError(userId, 'batch_caching', err instanceof Error ? err.message : String(err)).catch(() => {});
+        });
       } catch (error) {
         
         // Fallback: mark all unknown ingredients as unknown status
@@ -242,13 +255,11 @@ export async function analyzeIngredients(
   // Step 4: Calculate overall verdict (conservative approach)
   const toxicCount = results.filter(r => r.status === 'potentially_toxic').length;
   const cleanCount = results.filter(r => r.status === 'generally_clean').length;
-  
-  // If ANY ingredient is potentially toxic, mark product as TOXIC
-  const overallVerdict = toxicCount > 0 ? 'TOXIC' : 'CLEAN';
+  const unknownCount = results.filter(r => r.status === 'unknown').length;
 
-  // Await product identification (started earlier in parallel)
-  const productIdStartTime = Date.now();
-  const productIdentification = await productIdentificationPromise;
+  // Conservative: if ANY ingredient is toxic OR failed to analyze, mark as TOXIC.
+  // Displaying CLEAN when analysis silently failed would mislead users on a health app.
+  const overallVerdict: 'TOXIC' | 'CLEAN' = (toxicCount > 0 || unknownCount > 0) ? 'TOXIC' : 'CLEAN';
 
   const finalResult = {
     overallVerdict,
@@ -256,7 +267,7 @@ export async function analyzeIngredients(
     totalIngredients: results.length,
     toxicCount,
     cleanCount,
-    productIdentification,
+    productIdentification: productIdentification || 'A packaged food product',
   };
 
   

@@ -80,6 +80,7 @@ export interface BatchAIAnalysisResult {
   }>;
   processing_time: number;
   tokens_used: number;
+  productName?: string;
 }
 
 /**
@@ -168,7 +169,9 @@ export async function analyzeSingleBatch(
   ingredientNames: string[],
   userId: string,
   isPremium: boolean = false,
-  onProgress?: (update: any) => void
+  onProgress?: (update: any) => void,
+  identifyProduct?: boolean,
+  ingredientList?: string
 ): Promise<BatchAIAnalysisResult> {
   // Validate all ingredient names
   const sanitizedNames = ingredientNames.map(name => validateIngredientName(name));
@@ -187,29 +190,91 @@ export async function analyzeSingleBatch(
 
       // Process ingredients using batch endpoint
       
+      const requestBody: any = {
+        type: 'analyze_batch',
+        ingredientNames: sanitizedNames
+      };
+      if (identifyProduct) {
+        requestBody.identifyProduct = true;
+        if (ingredientList) requestBody.ingredientList = ingredientList;
+      }
+
       const response = await fetch(`${supabaseUrl}/functions/v1/openai-proxy`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          type: 'analyze_batch',
-          ingredientNames: sanitizedNames
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
         throw new Error(`Batch analysis failed: ${response.status} ${response.statusText}`);
       }
 
-      const batchResult = await response.json();
+      // Handle SSE streaming response
+      let batchResult: { ingredients: any[]; productName?: string; tokens_used?: number } = { ingredients: [] };
+      const contentType = response.headers.get('content-type') || '';
+
+      if (contentType.includes('text/event-stream') && response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let ingredientsSoFar = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const event = JSON.parse(line.slice(6));
+              if (event.type === 'chunk' && onProgress) {
+                // Count completed ingredient objects in streaming content for progress
+                const newCount = (event.content.match(/"name"\s*:/g) || []).length;
+                if (newCount > 0) {
+                  ingredientsSoFar += newCount;
+                  onProgress({
+                    type: 'parsing',
+                    message: `Analyzing ingredient ${Math.min(ingredientsSoFar, sanitizedNames.length)} of ${sanitizedNames.length}...`,
+                    emoji: '🔬',
+                    current: Math.min(ingredientsSoFar, sanitizedNames.length),
+                    total: sanitizedNames.length
+                  });
+                }
+              } else if (event.type === 'complete') {
+                batchResult = {
+                  ingredients: event.ingredients || [],
+                  productName: event.productName,
+                  tokens_used: event.tokens_used || 0
+                };
+              } else if (event.type === 'error') {
+                throw new Error(event.message || 'Streaming batch analysis failed');
+              }
+            } catch (parseErr) {
+              // Skip malformed SSE events
+              if (parseErr instanceof Error && parseErr.message.includes('Streaming')) throw parseErr;
+            }
+          }
+        }
+      } else {
+        // Fallback: non-streaming JSON response
+        const jsonResult = await response.json();
+        batchResult = jsonResult;
+      }
+
       const results = batchResult.ingredients;
 
     const result: BatchAIAnalysisResult = {
       ingredients: results,
       processing_time: 0,
-      tokens_used: batchResult.tokens_used || 0
+      tokens_used: batchResult.tokens_used || 0,
+      productName: batchResult.productName
     };
     
     
@@ -281,7 +346,8 @@ export async function analyzeSingleBatch(
             },
             body: JSON.stringify({
               type: 'analyze_batch',
-              ingredientNames: sanitizedNames
+              ingredientNames: sanitizedNames,
+              stream: false // Retries use non-streaming for simplicity
             }),
           });
 
@@ -388,13 +454,15 @@ export async function analyzeIngredientsBatch(
   ingredientNames: string[],
   userId: string,
   isPremium: boolean = false,
-  onProgress?: (update: any) => void
+  onProgress?: (update: any) => void,
+  identifyProduct?: boolean,
+  ingredientList?: string
 ): Promise<BatchAIAnalysisResult> {
   const batchStartTime = Date.now();
-  
+
   // For small batches, use single batch processing
   if (ingredientNames.length <= 8) {
-    return analyzeSingleBatch(ingredientNames, userId, isPremium, onProgress);
+    return analyzeSingleBatch(ingredientNames, userId, isPremium, onProgress, identifyProduct, ingredientList);
   }
 
   const BATCH_SIZE = 8;
@@ -417,6 +485,8 @@ export async function analyzeIngredientsBatch(
       const chunkResults = await Promise.all(
         chunk.map((batch, chunkIdx) => {
           const batchIdx = i + chunkIdx;
+          // Only include product identification in the first batch
+          const isFirstBatch = i === 0 && chunkIdx === 0;
           return analyzeSingleBatch(batch, userId, isPremium, (update) => {
             if (onProgress && update) {
               const batchStartIndex = batchIdx * BATCH_SIZE;
@@ -428,7 +498,7 @@ export async function analyzeIngredientsBatch(
                 total: ingredientNames.length
               });
             }
-          });
+          }, isFirstBatch ? identifyProduct : undefined, isFirstBatch ? ingredientList : undefined);
         })
       );
       allResults.push(...chunkResults);
@@ -437,7 +507,8 @@ export async function analyzeIngredientsBatch(
     const combinedResult: BatchAIAnalysisResult = {
       ingredients: allResults.flatMap(r => r.ingredients),
       processing_time: Date.now() - startTime,
-      tokens_used: allResults.reduce((sum, r) => sum + r.tokens_used, 0)
+      tokens_used: allResults.reduce((sum, r) => sum + r.tokens_used, 0),
+      productName: allResults.find(r => r.productName)?.productName
     };
 
     return combinedResult;

@@ -1,17 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, RefreshControl } from 'react-native';
 
-// Global temporary storage for navigation optimization
-declare global { var tempResults: Record<string, any>; }
-if (!global.tempResults) global.tempResults = {};
-
-function cleanupTempResults() {
-  const cutoff = Date.now() - (5 * 60 * 1000); // 5 minutes
-  Object.keys(global.tempResults).forEach(key => {
-    if (parseInt(key.split('_')[1]) < cutoff) delete global.tempResults[key];
-  });
-}
-
 // Extract clean ingredient names from analysis results
 function getCleanIngredientText(results: any): string {
   if (!results || !results.ingredients || !Array.isArray(results.ingredients)) {
@@ -82,6 +71,7 @@ export default function HistoryScreen() {
       try {
         const parsedResults = JSON.parse(resultsParam as string);
         setLatestResult({
+          id: null, // Will fall back to history[0].id when navigating
           results: parsedResults,
           extractedText: extractedTextParam as string,
           isLatest: true
@@ -155,7 +145,8 @@ export default function HistoryScreen() {
       // Legacy format - convert to new format
       const cleanCount = results.filter(r => r.status === 'generally_clean').length;
       const toxicCount = results.filter(r => r.status === 'potentially_toxic').length;
-      return { cleanCount, toxicCount, overallVerdict: toxicCount > 0 ? 'TOXIC' : 'CLEAN' };
+      const unknownCount = results.filter(r => r.status === 'unknown').length;
+      return { cleanCount, toxicCount, overallVerdict: (toxicCount > 0 || unknownCount > 0) ? 'TOXIC' : 'CLEAN' };
     }
     // New format
     return {
@@ -283,19 +274,17 @@ export default function HistoryScreen() {
                 </View>
               </View>
               
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.viewLatestButton}
                 onPress={() => {
-                  const resultId = `result_${Date.now()}`;
-                  cleanupTempResults();
-                  global.tempResults[resultId] = { 
-                    results: latestResult.results, 
-                    extractedText: latestResult.extractedText 
-                  };
-                  router.push({
-                    pathname: '/results',
-                    params: { resultId }
-                  });
+                  // Use the latest result's analysis ID, or fall back to first history item
+                  const analysisId = latestResult.id || (history.length > 0 ? history[0].id : null);
+                  if (analysisId) {
+                    router.push({
+                      pathname: '/results',
+                      params: { resultId: analysisId }
+                    });
+                  }
                 }}
               >
                 <Text style={styles.viewLatestButtonText}>View Full Results</Text>
@@ -374,18 +363,12 @@ export default function HistoryScreen() {
                 })()}
               </View>
               
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.viewButton}
                 onPress={() => {
-                  const resultId = `result_${Date.now()}`;
-                  cleanupTempResults();
-                  global.tempResults[resultId] = { 
-                    results: item.results, 
-                    extractedText: item.extractedText 
-                  };
                   router.push({
                     pathname: '/results',
-                    params: { resultId }
+                    params: { resultId: item.id }
                   });
                 }}
               >

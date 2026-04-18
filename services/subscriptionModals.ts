@@ -88,7 +88,8 @@ export function getIngredientCounts(results: any) {
   
   const cleanCount = results.ingredients.filter((i: any) => i.status === 'generally_clean').length;
   const toxicCount = results.ingredients.filter((i: any) => i.status === 'potentially_toxic').length;
-  const overallVerdict = results.overallVerdict || (toxicCount > 0 ? 'TOXIC' : 'CLEAN');
+  const unknownCount = results.ingredients.filter((i: any) => i.status === 'unknown').length;
+  const overallVerdict = results.overallVerdict || ((toxicCount > 0 || unknownCount > 0) ? 'TOXIC' : 'CLEAN');
   
   return { cleanCount, toxicCount, overallVerdict };
 }

@@ -405,6 +405,26 @@ export async function saveAnalysis(
   }
 }
 
+export async function getAnalysisById(analysisId: string): Promise<AnalysisHistory | null> {
+  try {
+    const { data, error } = await supabase
+      .from('analyses_history')
+      .select('*')
+      .eq('id', analysisId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[DATABASE] Error fetching analysis by ID:', error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('[DATABASE] Exception fetching analysis by ID:', error);
+    return null;
+  }
+}
+
 export async function getUserAnalyses(userId: string): Promise<AnalysisHistory[]> {
   try {
     console.log('📚 Fetching analyses for user:', userId);
@@ -575,6 +595,57 @@ export async function checkUserLimits(userId: string): Promise<{
       subscriptionStatus: 'free', 
       remaining: FREE_TIER_SCAN_LIMIT 
     };
+  }
+}
+
+/**
+ * Log an ingredient analysis event (fire-and-forget, non-blocking)
+ */
+export async function logAnalysis(
+  userId: string,
+  ingredientName: string,
+  status: string,
+  confidence: number | null,
+  cached: boolean,
+  processingTimeMs: number | null,
+  errorMessage?: string
+): Promise<void> {
+  try {
+    await supabase.from('ai_analysis_log').insert({
+      user_id: userId,
+      ingredient_name: ingredientName,
+      status,
+      confidence,
+      cached,
+      processing_time_ms: processingTimeMs,
+      error_message: errorMessage || null
+    });
+  } catch (error) {
+    // Silently fail - logging should never block the main flow
+    console.warn('[DATABASE] Failed to log analysis:', error);
+  }
+}
+
+/**
+ * Log a cache error for debugging
+ */
+export async function logCacheError(
+  userId: string,
+  ingredientName: string,
+  errorMessage: string
+): Promise<void> {
+  try {
+    await supabase.from('ai_analysis_log').insert({
+      user_id: userId,
+      ingredient_name: ingredientName,
+      status: 'cache_error',
+      confidence: null,
+      cached: false,
+      processing_time_ms: null,
+      error_message: errorMessage
+    });
+  } catch (error) {
+    console.warn('[DATABASE] Failed to log cache error:', error);
   }
 }
 

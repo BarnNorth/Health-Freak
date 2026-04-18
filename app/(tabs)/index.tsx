@@ -1,16 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, SafeAreaView, ActivityIndicator, TextInput, Modal, Image, Animated, KeyboardAvoidingView, Platform, ScrollView, TouchableWithoutFeedback, Keyboard } from 'react-native';
-
-// Global temporary storage for navigation optimization
-declare global { var tempResults: Record<string, any>; }
-if (!global.tempResults) global.tempResults = {};
-
-function cleanupTempResults() {
-  const cutoff = Date.now() - (5 * 60 * 1000); // 5 minutes
-  Object.keys(global.tempResults).forEach(key => {
-    if (parseInt(key.split('_')[1]) < cutoff) delete global.tempResults[key];
-  });
-}
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { PinchGestureHandler, TapGestureHandler, State } from 'react-native-gesture-handler';
 import { Camera, RotateCcw, Zap, Keyboard as KeyboardIcon, X, Heart, Star, Search, Apple, Carrot, Leaf, Flashlight, FlashlightOff, ZoomIn, ZoomOut } from 'lucide-react-native';
@@ -465,31 +454,29 @@ export default function CameraScreen() {
       await new Promise(r => setTimeout(r, AI_SUMMARY_DISPLAY_DURATION));
       setShowAILoading(false);
       
-      // Run database operations in background (non-blocking)
-      Promise.allSettled([
-        incrementAnalysisCount(user!.id),
+      // Save analysis to DB and get the ID for navigation
+      const [savedAnalysis] = await Promise.all([
         saveAnalysis(user!.id, photoAnalysis.extractedText, results),
+        incrementAnalysisCount(user!.id),
         refreshUserProfile()
-      ]).catch(e => console.error('Background DB operations failed:', e));
+      ]);
 
       // Optimistic UI updates for free users (no waiting for DB)
       if (!isPremiumUser) {
         setScansRemaining(prev => Math.max(0, (prev || 0) - 1));
         setCanScan(scansRemaining !== null ? scansRemaining > 1 : true);
       }
-      
+
       console.log('✅ Analysis complete, navigating to results...');
-      
-      // Navigate to results screen with latest results
+
+      // Navigate to results screen using saved analysis ID
       updatePerfMetric('navigationStart');
-      const resultId = `result_${Date.now()}`;
-      cleanupTempResults();
-      global.tempResults[resultId] = { results, extractedText: photoAnalysis.extractedText };
+      const resultId = savedAnalysis?.id || `fallback_${Date.now()}`;
       router.push({
         pathname: '/results',
         params: { resultId }
       });
-      
+
       // Log performance metrics
       logPerf();
       
@@ -553,23 +540,21 @@ export default function CameraScreen() {
       await new Promise(r => setTimeout(r, AI_SUMMARY_DISPLAY_DURATION));
       setShowAILoading(false);
       
-      // Run database operations in background (non-blocking)
-      Promise.allSettled([
-        incrementAnalysisCount(user!.id),
+      // Save analysis to DB and get the ID for navigation
+      const [savedAnalysis] = await Promise.all([
         saveAnalysis(user!.id, extractedText, results),
+        incrementAnalysisCount(user!.id),
         refreshUserProfile()
-      ]).catch(e => console.error('Background DB operations failed:', e));
+      ]);
 
       // Optimistic UI updates for free users (no waiting for DB)
       if (!isPremiumUser) {
         setScansRemaining(prev => Math.max(0, (prev || 0) - 1));
         setCanScan(scansRemaining !== null ? scansRemaining > 1 : true);
       }
-      
-      // Navigate to results screen with latest results
-      const resultId = `result_${Date.now()}`;
-      cleanupTempResults();
-      global.tempResults[resultId] = { results, extractedText: extractedText };
+
+      // Navigate to results screen using saved analysis ID
+      const resultId = savedAnalysis?.id || `fallback_${Date.now()}`;
       router.push({
         pathname: '/results',
         params: { resultId }

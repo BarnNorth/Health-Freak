@@ -1,26 +1,19 @@
 /**
  * Security Service - Rate Limiting and Input Validation
- * 
+ *
  * This service provides security controls to protect against:
- * 1. DoS attacks through rate limiting
+ * 1. DoS attacks through rate limiting (Supabase-backed)
  * 2. Resource exhaustion through input size limits
  * 3. Abuse of expensive API operations
  */
 
-interface RateLimitEntry {
-  count: number;
-  windowStart: number;
-  lastRequest: number;
-}
+import { supabase } from '../lib/supabase';
 
 interface RateLimitConfig {
   windowMs: number;  // Time window in milliseconds
   maxRequests: number;  // Max requests per window
   blockDurationMs?: number;  // How long to block after limit exceeded
 }
-
-// In-memory rate limiting store (in production, consider Redis)
-const rateLimitStore = new Map<string, RateLimitEntry>();
 
 // Rate limiting configurations for different operations
 const RATE_LIMITS: Record<string, RateLimitConfig> = {
@@ -71,122 +64,64 @@ const INPUT_LIMITS = {
 };
 
 /**
- * Rate Limiting Functions
+ * Rate Limiting Functions (Supabase-backed for distributed rate limiting)
  */
 
 /**
  * Check if a user has exceeded rate limits for a specific operation
- * @param userId - User ID (or IP address for anonymous users)
+ * Uses Supabase RPC for atomic, distributed rate limiting
+ * @param userId - User ID
  * @param operation - Operation type (ocr, ai_analysis, etc.)
  * @returns Object with allowed status and remaining requests
  */
-export function checkRateLimit(userId: string, operation: string): {
+export async function checkRateLimit(userId: string, operation: string): Promise<{
   allowed: boolean;
   remaining: number;
   resetTime: number;
   error?: string;
-} {
+}> {
   const config = RATE_LIMITS[operation];
   if (!config) {
-    // If no rate limit configured, allow the request
     return { allowed: true, remaining: Infinity, resetTime: 0 };
   }
 
-  const key = `${userId}:${operation}`;
-  const now = Date.now();
-  const entry = rateLimitStore.get(key);
-
-  // If no entry exists, create one
-  if (!entry) {
-    rateLimitStore.set(key, {
-      count: 1,
-      windowStart: now,
-      lastRequest: now
+  try {
+    const { data, error } = await supabase.rpc('check_and_increment_rate_limit', {
+      p_user_id: userId,
+      p_operation: operation,
+      p_window_ms: config.windowMs,
+      p_max_requests: config.maxRequests
     });
-    return { 
-      allowed: true, 
-      remaining: config.maxRequests - 1, 
-      resetTime: now + config.windowMs 
-    };
-  }
 
-  // Check if we're in a new time window
-  const windowElapsed = now - entry.windowStart;
-  if (windowElapsed >= config.windowMs) {
-    // Reset the window
-    rateLimitStore.set(key, {
-      count: 1,
-      windowStart: now,
-      lastRequest: now
-    });
-    return { 
-      allowed: true, 
-      remaining: config.maxRequests - 1, 
-      resetTime: now + config.windowMs 
-    };
-  }
-
-  // Check if user is currently blocked
-  if (config.blockDurationMs) {
-    const timeSinceLastRequest = now - entry.lastRequest;
-    const isBlocked = entry.count >= config.maxRequests && 
-                     timeSinceLastRequest < config.blockDurationMs;
-    
-    if (isBlocked) {
-      const unblockTime = entry.lastRequest + config.blockDurationMs;
-      return {
-        allowed: false,
-        remaining: 0,
-        resetTime: unblockTime,
-        error: `Rate limit exceeded. Try again in ${Math.ceil((unblockTime - now) / 1000)} seconds.`
-      };
+    if (error) {
+      console.error('[RATE_LIMIT] RPC error:', error);
+      // Fail open on RPC errors to avoid blocking legitimate users
+      return { allowed: true, remaining: config.maxRequests, resetTime: 0 };
     }
-  }
 
-  // Check if within rate limit
-  if (entry.count < config.maxRequests) {
-    // Allow the request
-    entry.count++;
-    entry.lastRequest = now;
-    rateLimitStore.set(key, entry);
-    
-    return { 
-      allowed: true, 
-      remaining: config.maxRequests - entry.count, 
-      resetTime: entry.windowStart + config.windowMs 
-    };
-  } else {
-    // Rate limit exceeded
-    entry.lastRequest = now;
-    rateLimitStore.set(key, entry);
-    
-    const resetTime = entry.windowStart + config.windowMs;
     return {
-      allowed: false,
-      remaining: 0,
-      resetTime,
-      error: `Rate limit exceeded. You can make ${config.maxRequests} ${operation} requests per minute. Try again in ${Math.ceil((resetTime - now) / 1000)} seconds.`
+      allowed: data.allowed,
+      remaining: data.remaining,
+      resetTime: data.reset_time || 0,
+      error: data.error
     };
+  } catch (error) {
+    console.error('[RATE_LIMIT] Exception:', error);
+    // Fail open on exceptions
+    return { allowed: true, remaining: config.maxRequests, resetTime: 0 };
   }
 }
 
 /**
- * Clean up old rate limit entries to prevent memory leaks
- * Should be called periodically (e.g., every 10 minutes)
+ * Clean up old rate limit entries in Supabase
+ * Called periodically to prevent table bloat
  */
-export function cleanupRateLimitStore(): void {
-  const now = Date.now();
-  const maxAge = Math.max(...Object.values(RATE_LIMITS).map(config => 
-    config.windowMs + (config.blockDurationMs || 0)
-  ));
-
-  for (const [key, entry] of Array.from(rateLimitStore.entries())) {
-    const age = now - entry.windowStart;
-    if (age > maxAge) {
-      rateLimitStore.delete(key);
-    }
+export async function cleanupRateLimitStore(): Promise<void> {
+  try {
+    await supabase.rpc('cleanup_rate_limits');
+  } catch (error) {
+    console.error('[RATE_LIMIT] Cleanup error:', error);
   }
-  
 }
 
 /**
@@ -338,9 +273,9 @@ export async function withRateLimit<T>(
   operation: string,
   fn: () => Promise<T>
 ): Promise<T> {
-  // Check rate limit
-  const rateCheck = checkRateLimit(userId, operation);
-  
+  // Check rate limit (async - calls Supabase RPC)
+  const rateCheck = await checkRateLimit(userId, operation);
+
   if (!rateCheck.allowed) {
     throw new Error(rateCheck.error || 'Rate limit exceeded');
   }
@@ -350,8 +285,6 @@ export async function withRateLimit<T>(
     const result = await fn();
     return result;
   } catch (error) {
-    // If the operation failed, we might want to not count it against the rate limit
-    // For now, we'll count all attempts to prevent abuse
     throw error;
   }
 }
@@ -360,29 +293,44 @@ export async function withRateLimit<T>(
  * Get rate limit status for a user and operation
  * Useful for showing users their current usage
  */
-export function getRateLimitStatus(userId: string, operation: string): {
+export async function getRateLimitStatus(userId: string, operation: string): Promise<{
   limit: number;
   remaining: number;
   resetTime: number;
   windowMs: number;
-} {
+}> {
   const config = RATE_LIMITS[operation];
   if (!config) {
     return { limit: Infinity, remaining: Infinity, resetTime: 0, windowMs: 0 };
   }
 
-  const rateCheck = checkRateLimit(userId, operation);
-  
-  return {
-    limit: config.maxRequests,
-    remaining: rateCheck.remaining,
-    resetTime: rateCheck.resetTime,
-    windowMs: config.windowMs
-  };
+  try {
+    const { data, error } = await supabase.rpc('get_rate_limit_status', {
+      p_user_id: userId,
+      p_operation: operation,
+      p_window_ms: config.windowMs,
+      p_max_requests: config.maxRequests
+    });
+
+    if (error) {
+      console.error('[RATE_LIMIT] Status RPC error:', error);
+      return { limit: config.maxRequests, remaining: config.maxRequests, resetTime: 0, windowMs: config.windowMs };
+    }
+
+    return {
+      limit: config.maxRequests,
+      remaining: data.remaining,
+      resetTime: data.reset_time || 0,
+      windowMs: config.windowMs
+    };
+  } catch (error) {
+    console.error('[RATE_LIMIT] Status exception:', error);
+    return { limit: config.maxRequests, remaining: config.maxRequests, resetTime: 0, windowMs: config.windowMs };
+  }
 }
 
 // Cleanup old entries every 10 minutes
-setInterval(cleanupRateLimitStore, 10 * 60 * 1000);
+setInterval(() => cleanupRateLimitStore().catch(console.error), 10 * 60 * 1000);
 
 // Export rate limit configurations for testing/monitoring
 export const SECURITY_CONFIG = {

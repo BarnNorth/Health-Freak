@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, Info, ArrowLeft, Crown, Zap, ThumbsUp, ThumbsDown, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { showPremiumUpgradePrompt, getIngredientCounts } from '@/services/subscriptionModals';
 import { submitIngredientFeedback, getBatchIngredientAccuracy } from '@/services/feedback';
 import { IngredientSources } from '@/components/IngredientSources';
+import { getAnalysisById } from '@/lib/database';
 import { COLORS } from '@/constants/colors';
 import { FONTS, FONT_SIZES, LINE_HEIGHTS } from '@/constants/typography';
 
@@ -39,14 +40,10 @@ export default function ResultsScreen() {
   const [extractedText, setExtractedText] = useState('');
   const [feedbackSubmitted, setFeedbackSubmitted] = useState<Set<string>>(new Set());
   const [loadingAccuracy, setLoadingAccuracy] = useState(false);
+  const [loadingResults, setLoadingResults] = useState(true);
   const [expandedCards, setExpandedCards] = useState<Set<number>>(new Set());
   const { user } = useAuth();
   const { resultId } = useLocalSearchParams<{ resultId: string }>();
-  
-  // Get data from global temp storage
-  const cachedData = global.tempResults?.[resultId];
-  const results = cachedData?.results;
-  const extractedTextData = cachedData?.extractedText;
 
   // Toggle card expansion
   const toggleCard = (index: number) => {
@@ -62,23 +59,33 @@ export default function ResultsScreen() {
   };
 
   useEffect(() => {
-    // Cleanup temp storage when component unmounts
-    return () => { 
-      if (resultId) delete global.tempResults?.[resultId]; 
-    };
+    if (resultId) {
+      loadResults(resultId);
+    } else {
+      setLoadingResults(false);
+    }
   }, [resultId]);
 
-  useEffect(() => {
-    if (results && extractedTextData) {
-      setAnalysisResult(results);
-      setExtractedText(extractedTextData);
-      
-      // Load community accuracy data for ingredients
-      if (results.ingredients && results.ingredients.length > 0) {
-        loadCommunityAccuracy(results.ingredients.map((i: any) => i.name));
+  const loadResults = async (id: string) => {
+    try {
+      setLoadingResults(true);
+      const analysis = await getAnalysisById(id);
+      if (analysis) {
+        const results = analysis.results_json;
+        setAnalysisResult(results);
+        setExtractedText(analysis.extracted_text || '');
+
+        // Load community accuracy data for ingredients
+        if (results?.ingredients && results.ingredients.length > 0) {
+          loadCommunityAccuracy(results.ingredients.map((i: any) => i.name));
+        }
       }
+    } catch (error) {
+      console.error('Error loading analysis results:', error);
+    } finally {
+      setLoadingResults(false);
     }
-  }, [results, extractedTextData]);
+  };
 
   // Load community accuracy data for ingredients
   const loadCommunityAccuracy = async (ingredientNames: string[]) => {
@@ -161,7 +168,18 @@ export default function ResultsScreen() {
 
   const isPremium = user?.subscription_status === 'premium';
 
-  if (!results || !analysisResult) {
+  if (loadingResults) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator size="large" color={COLORS.cleanGreen} />
+          <Text style={styles.emptyText}>Loading results...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!analysisResult) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.emptyContainer}>

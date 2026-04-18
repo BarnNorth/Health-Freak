@@ -147,15 +147,16 @@ export async function retryWithBackoff<T>(
       }
       
       // Don't retry non-retryable errors
+      const errorMessage = error instanceof Error ? error.message : String(error);
       if (!isRetryableError(error)) {
-        console.error('[ERROR_HANDLING] Non-retryable error detected, aborting:', error?.message);
+        console.error('[ERROR_HANDLING] Non-retryable error detected, aborting:', errorMessage);
         throw error;
       }
-      
+
       // Calculate exponential backoff: 1s, 2s, 4s, 8s, etc.
       const backoffMs = initialDelayMs * Math.pow(2, attempt);
       console.log(`[ERROR_HANDLING] Retry ${attempt + 1}/${maxRetries} after ${backoffMs}ms delay`);
-      console.log(`[ERROR_HANDLING] Error was:`, error?.message || error);
+      console.log(`[ERROR_HANDLING] Error was:`, errorMessage);
       
       await delay(backoffMs);
     }

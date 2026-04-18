@@ -13,7 +13,7 @@
  *   EXPO_PUBLIC_OPENAI_API_KEY
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
@@ -173,7 +173,7 @@ Return format:
  * Update ingredient in database
  */
 async function updateIngredient(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient<any, any, any>,
   ingredientName: string,
   analysis: AIAnalysisResult
 ): Promise<boolean> {

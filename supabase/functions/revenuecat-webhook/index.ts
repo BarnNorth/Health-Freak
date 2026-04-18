@@ -1,5 +1,19 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
+// @ts-expect-error - ESM module resolution (works at runtime)
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
+
+// Deno global types declaration
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+  serve(handler: (req: Request) => Response | Promise<Response>): void;
+};
+
+// Edge runtime global (for waitUntil)
+declare const EdgeRuntime: {
+  waitUntil(promise: Promise<unknown>): void;
+};
 
 const REVENUECAT_AUTH_TOKEN = Deno.env.get('REVENUECAT_WEBHOOK_AUTH_TOKEN');
 const supabase = createClient(

@@ -101,10 +101,15 @@ export async function getIngredientAccuracyStats(
     console.log('[CALIBRATION] Fetching ingredient accuracy:', ingredientName);
 
     const { data, error } = await supabase
-      .rpc('get_ingredient_accuracy', { 
-        ingredient_name_param: ingredientName.toLowerCase().trim() 
+      .rpc('get_ingredient_accuracy', {
+        ingredient_name_param: ingredientName.toLowerCase().trim()
       })
-      .single();
+      .single<{
+        total_feedback: number;
+        correct_feedback: number;
+        accuracy_rate: number;
+        avg_confidence: number;
+      }>();
 
     if (error) {
       console.error('[CALIBRATION] Error getting ingredient accuracy:', error);
