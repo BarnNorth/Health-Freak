@@ -31,7 +31,7 @@ export default {
   expo: {
     name: config.name,
     slug: "health-freak",
-    version: "1.0.2",
+    version: "1.0.3",
     sdkVersion: "54.0.0",
     orientation: "portrait",
     icon: "./assets/AppIcons v2/appstore.png",
@@ -40,7 +40,7 @@ export default {
     scheme: config.scheme,
     ios: {
       bundleIdentifier: config.bundleIdentifier,
-      buildNumber: "19",
+      buildNumber: "20",
       supportsTablet: false,
       associatedDomains: [
         "applinks:healthfreak.io"
