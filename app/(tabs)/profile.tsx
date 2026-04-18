@@ -245,9 +245,11 @@ export default function ProfileScreen() {
                 )}
               </View>
             </View>
-            <TouchableOpacity 
-              style={styles.refreshButton} 
+            <TouchableOpacity
+              style={styles.refreshButton}
               onPress={refreshUserProfile}
+              accessibilityLabel="Refresh profile"
+              accessibilityRole="button"
             >
               <RefreshCw size={16} color={COLORS.cleanGreen} />
             </TouchableOpacity>

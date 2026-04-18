@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, SafeAreaView, TouchableOpacity, RefreshControl } from 'react-native';
 
 // Extract clean ingredient names from analysis results
 function getCleanIngredientText(results: any): string {
@@ -203,26 +203,76 @@ export default function HistoryScreen() {
     );
   }
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView 
-        contentContainerStyle={styles.scrollContainer}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={COLORS.cleanGreen}
-            colors={[COLORS.cleanGreen]}
-          />
-        }
-      >
-        {/* Bold Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Health Freak</Text>
+  const renderHistoryItem = useCallback(({ item }: { item: AnalysisHistory }) => {
+    const { cleanCount, toxicCount, overallVerdict } = getResultCounts(item.results);
+    return (
+      <View style={styles.historyCard}>
+        <View style={styles.historyHeader}>
+          <View style={styles.dateContainer}>
+            <Calendar size={16} color={COLORS.textSecondary} />
+            <Text style={styles.dateText}>{formatDate(item.created_at)}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => handleDeleteAnalysis(item.id)}
+            accessibilityLabel="Delete analysis"
+            accessibilityRole="button"
+          >
+            <Trash2 size={16} color={COLORS.toxicRed} />
+          </TouchableOpacity>
         </View>
 
-        {/* Latest Result Section */}
-        {latestResult && (
+        {/* Show product name if available, otherwise show ingredients */}
+        {!Array.isArray(item.results) && item.results?.productIdentification ? (
+          <View style={styles.productNameContainer}>
+            <Text style={styles.productNameIcon}>🔍</Text>
+            <Text style={styles.productNameText} numberOfLines={2}>
+              {item.results.productIdentification}
+            </Text>
+          </View>
+        ) : (
+          <Text style={styles.ingredientText} numberOfLines={2}>
+            {getCleanIngredientText(item.results)}
+          </Text>
+        )}
+
+        <View style={styles.resultsContainer}>
+          <View style={styles.resultBadge}>
+            <View style={[styles.statusDot, overallVerdict === 'CLEAN' ? styles.cleanDot : styles.toxicDot]} />
+            <Text style={styles.resultText}>Product is {overallVerdict === 'TOXIC' ? 'potentially TOXIC' : overallVerdict}</Text>
+          </View>
+          {isPremium && (
+            <View style={styles.ingredientCounts}>
+              <Text style={styles.resultText}>{cleanCount} clean, {toxicCount} toxic</Text>
+            </View>
+          )}
+        </View>
+
+        <TouchableOpacity
+          style={styles.viewButton}
+          onPress={() => {
+            router.push({
+              pathname: '/results',
+              params: { resultId: item.id }
+            });
+          }}
+        >
+          <Text style={styles.viewButtonText}>View Details</Text>
+          <ChevronRight size={16} color={COLORS.cleanGreen} />
+        </TouchableOpacity>
+      </View>
+    );
+  }, [isPremium]);
+
+  const ListHeader = (
+    <>
+      {/* Bold Header */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Health Freak</Text>
+      </View>
+
+      {/* Latest Result Section */}
+      {latestResult && (
           <View style={styles.latestResultSection}>
             <View style={styles.latestResultHeader}>
               <Text style={styles.latestResultTitle}>Latest Analysis</Text>
@@ -294,108 +344,69 @@ export default function HistoryScreen() {
           </View>
         )}
 
-        {/* Free Tier Notice */}
-        {user?.subscription_status === 'free' && latestResult && (
-          <View style={styles.freeTierNotice}>
-            <Text style={styles.freeTierNoticeTitle}>⚡ Free Tier Limits</Text>
-            <Text style={styles.freeTierNoticeText}>
-              • 10 total scans with full ingredient analysis{'\n'}
-              • Complete breakdown during each scan{'\n'}
-              • History saved for all your scans{'\n\n'}
-              Upgrade to Premium for unlimited scans and full history tracking!
-            </Text>
-            <TouchableOpacity style={styles.upgradeButton} onPress={() => router.push('/profile')}>
-              <Text style={styles.upgradeButtonText}>View Premium</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* History List */}
-        {history.length > 0 && (
-          <View style={styles.historySection}>
-            <Text style={styles.historySectionTitle}>Previous Ingredient Analyses</Text>
-            <View style={styles.historyContainer}>
-              {history.map((item) => (
-            <View key={item.id} style={styles.historyCard}>
-              <View style={styles.historyHeader}>
-                <View style={styles.dateContainer}>
-                  <Calendar size={16} color={COLORS.textSecondary} />
-                  <Text style={styles.dateText}>{formatDate(item.created_at)}</Text>
-                </View>
-                <TouchableOpacity 
-                  style={styles.deleteButton}
-                  onPress={() => handleDeleteAnalysis(item.id)}
-                >
-                  <Trash2 size={16} color={COLORS.toxicRed} />
-                </TouchableOpacity>
-              </View>
-              
-              {/* Show product name if available, otherwise show ingredients */}
-              {!Array.isArray(item.results) && item.results?.productIdentification ? (
-                <View style={styles.productNameContainer}>
-                  <Text style={styles.productNameIcon}>🔍</Text>
-                  <Text style={styles.productNameText} numberOfLines={2}>
-                    {item.results.productIdentification}
-                  </Text>
-                </View>
-              ) : (
-                <Text style={styles.ingredientText} numberOfLines={2}>
-                  {getCleanIngredientText(item.results)}
-                </Text>
-              )}
-              
-              <View style={styles.resultsContainer}>
-                {(() => {
-                  const { cleanCount, toxicCount, overallVerdict } = getResultCounts(item.results);
-                  return (
-                    <>
-                      <View style={styles.resultBadge}>
-                        <View style={[styles.statusDot, overallVerdict === 'CLEAN' ? styles.cleanDot : styles.toxicDot]} />
-                        <Text style={styles.resultText}>Product is {overallVerdict === 'TOXIC' ? 'potentially TOXIC' : overallVerdict}</Text>
-                      </View>
-                      {isPremium && (
-                        <View style={styles.ingredientCounts}>
-                          <Text style={styles.resultText}>{cleanCount} clean, {toxicCount} toxic</Text>
-                        </View>
-                      )}
-                    </>
-                  );
-                })()}
-              </View>
-              
-              <TouchableOpacity
-                style={styles.viewButton}
-                onPress={() => {
-                  router.push({
-                    pathname: '/results',
-                    params: { resultId: item.id }
-                  });
-                }}
-              >
-                <Text style={styles.viewButtonText}>View Details</Text>
-                <ChevronRight size={16} color={COLORS.cleanGreen} />
-              </TouchableOpacity>
-            </View>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Educational Note & Disclaimer */}
-        <View style={styles.educationalNote}>
-          <Text style={styles.educationalTitle}>
-            {isPremium ? 'About Your History' : 'About Your Analysis'}
+      {/* Free Tier Notice */}
+      {user?.subscription_status === 'free' && latestResult && (
+        <View style={styles.freeTierNotice}>
+          <Text style={styles.freeTierNoticeTitle}>⚡ Free Tier Limits</Text>
+          <Text style={styles.freeTierNoticeText}>
+            • 10 total scans with full ingredient analysis{'\n'}
+            • Complete breakdown during each scan{'\n'}
+            • History saved for all your scans{'\n\n'}
+            Upgrade to Premium for unlimited scans and full history tracking!
           </Text>
-          <Text style={styles.educationalText}>
-            {isPremium ? 
-              '♾️ Premium: Unlimited scans with full history saved automatically.' :
-              '⚡ Free Tier: 10 scans with full ingredient analysis and saved history. Upgrade to Premium for unlimited scans!'
-            }
-            {'\n\n'}📚 For educational reference only. Not medical advice.
-            {'\n\n'}🏥 Always consult healthcare professionals for dietary decisions.
-          </Text>
+          <TouchableOpacity style={styles.upgradeButton} onPress={() => router.push('/profile')}>
+            <Text style={styles.upgradeButtonText}>View Premium</Text>
+          </TouchableOpacity>
         </View>
-      </ScrollView>
+      )}
+
+      {/* History section title (list renders below) */}
+      {history.length > 0 && (
+        <View style={styles.historySection}>
+          <Text style={styles.historySectionTitle}>Previous Ingredient Analyses</Text>
+        </View>
+      )}
+    </>
+  );
+
+  const ListFooter = (
+    <View style={styles.educationalNote}>
+      <Text style={styles.educationalTitle}>
+        {isPremium ? 'About Your History' : 'About Your Analysis'}
+      </Text>
+      <Text style={styles.educationalText}>
+        {isPremium ?
+          '♾️ Premium: Unlimited scans with full history saved automatically.' :
+          '⚡ Free Tier: 10 scans with full ingredient analysis and saved history. Upgrade to Premium for unlimited scans!'
+        }
+        {'\n\n'}📚 For educational reference only. Not medical advice.
+        {'\n\n'}🏥 Always consult healthcare professionals for dietary decisions.
+      </Text>
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <FlatList
+        data={history}
+        renderItem={renderHistoryItem}
+        keyExtractor={item => item.id}
+        ListHeaderComponent={ListHeader}
+        ListFooterComponent={ListFooter}
+        contentContainerStyle={styles.scrollContainer}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={COLORS.cleanGreen}
+            colors={[COLORS.cleanGreen]}
+          />
+        }
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        removeClippedSubviews
+      />
     </SafeAreaView>
   );
 }

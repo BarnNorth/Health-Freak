@@ -62,9 +62,11 @@ export default function UpdatePasswordScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         <View style={styles.header}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.backIcon}
             onPress={() => router.back()}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
           >
             <ArrowLeft size={24} color={COLORS.textPrimary} />
           </TouchableOpacity>

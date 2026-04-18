@@ -109,7 +109,12 @@ export default function EmailConfirmationScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBackToSignUp}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={handleBackToSignUp}
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+        >
           <ArrowLeft size={24} color={COLORS.cleanGreen} />
         </TouchableOpacity>
         <Text style={styles.title}>Verify Your Email</Text>

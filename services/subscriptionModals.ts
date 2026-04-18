@@ -1,4 +1,6 @@
 import { Alert, Platform } from 'react-native';
+import { router } from 'expo-router';
+import { purchasePremiumSubscription } from './revenueCat';
 
 export async function showCancelSubscriptionPrompt(): Promise<void> {
   if (Platform.OS !== 'ios') {
@@ -32,11 +34,10 @@ export async function showPremiumUpgradePrompt(): Promise<void> {
     'Get unlimited scans and automatic scan history tracking.\n\n• ♾️ Unlimited ingredient scans\n• 💾 Scan history saved automatically\n• 🔍 Search and filter features\n\n$4.99/month',
     [
       { text: 'Maybe Later', style: 'cancel' },
-      { 
-        text: 'Upgrade to Premium - $4.99/month', 
+      {
+        text: 'Upgrade to Premium - $4.99/month',
         onPress: async () => {
           try {
-            const { purchasePremiumSubscription } = require('./revenueCat');
             await purchasePremiumSubscription();
           } catch (error) {
             // Handle subscription start error
@@ -63,14 +64,12 @@ export async function showScanLimitReachedModal(): Promise<void> {
     [
       { text: 'Learn More', style: 'default', onPress: () => {
         // Navigate to profile/upgrade section
-        const { router } = require('expo-router');
         router.push('/profile');
       }},
-      { 
-        text: 'Upgrade to Premium - $4.99/month', 
+      {
+        text: 'Upgrade to Premium - $4.99/month',
         onPress: async () => {
           try {
-            const { purchasePremiumSubscription } = require('./revenueCat');
             await purchasePremiumSubscription();
           } catch (error) {
             // Handle subscription start error

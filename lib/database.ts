@@ -128,6 +128,16 @@ export async function getUserProfile(userId: string): Promise<User | null> {
 
 export async function updateUserProfile(userId: string, updates: Partial<User>): Promise<User | null> {
   try {
+    // Verify the caller owns the row they're trying to update. RLS should also
+    // prevent cross-user writes, but this is a defense-in-depth check that fails
+    // loudly instead of silently writing nothing.
+    const { data: session } = await supabase.auth.getSession();
+    const callerId = session?.session?.user?.id;
+    if (!callerId || callerId !== userId) {
+      console.error('[DATABASE] updateUserProfile denied: caller does not own target user row');
+      return null;
+    }
+
     const { data, error } = await supabase
       .from('users')
       .update(updates)
@@ -221,7 +231,7 @@ export async function getIngredientsBatch(ingredientNames: string[]): Promise<Ma
         .replace(/\s+/g, ' ') // Collapse multiple spaces into single space
         .trim()
     );
-    console.log('[CACHE DEBUG] Batch lookup keys (normalized):', normalizedKeys);
+    if (__DEV__) console.log('[CACHE DEBUG] Batch lookup keys (normalized):', normalizedKeys);
     
     const { data, error } = await supabase
       .rpc('get_fresh_ingredients_batch', { 
@@ -242,7 +252,7 @@ export async function getIngredientsBatch(ingredientNames: string[]): Promise<Ma
         resultMap.set(normalizedKey, ingredient);
         resultKeys.push(ingredient.ingredient_name);
       });
-      console.log('[CACHE DEBUG] Batch results keys:', resultKeys);
+      if (__DEV__) console.log('[CACHE DEBUG] Batch results keys:', resultKeys);
     }
 
     console.log('[DATABASE] Batch fetch completed:', {
@@ -273,7 +283,7 @@ export async function cacheIngredientInfo(
       .replace(/\s*[.!?;:]+\s*$/, '') // Remove trailing punctuation
       .replace(/\s+/g, ' ') // Collapse multiple spaces into single space
       .trim();
-    console.log('[CACHE DEBUG] Final insert key: "' + finalInsertKey + '"');
+    if (__DEV__) console.log('[CACHE DEBUG] Final insert key: "' + finalInsertKey + '"');
     
     console.log('[DATABASE] Caching ingredient with expiration:', {
       ingredient: ingredientName,
@@ -303,7 +313,7 @@ export async function cacheIngredientInfo(
     }
 
     console.log('[DATABASE] Successfully cached ingredient:', data?.ingredient_name);
-    console.log('[CACHE DEBUG] Successfully inserted key: "' + (data?.ingredient_name || '') + '"');
+    if (__DEV__) console.log('[CACHE DEBUG] Successfully inserted key: "' + (data?.ingredient_name || '') + '"');
     return data;
   } catch (error) {
     // Log the error but don't throw - caching is not critical for app functionality
@@ -489,30 +499,19 @@ export async function deleteAnalysis(userId: string, analysisId: string): Promis
 // Premium tier: Unlimited scans
 export async function incrementAnalysisCount(userId: string): Promise<boolean> {
   try {
-    // Get current count first, then increment
-    const { data: user, error: fetchError } = await supabase
-      .from('users')
-      .select('total_scans_used')
-      .eq('id', userId)
-      .single();
-
-    if (fetchError) {
-      console.error('Error fetching current analysis count:', fetchError);
-      return false;
-    }
-
-    const newCount = (user?.total_scans_used || 0) + 1;
-
-    const { error } = await supabase
-      .from('users')
-      .update({ 
-        total_scans_used: newCount,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', userId);
+    // Atomic RPC: check tier, enforce free-tier limit, and increment in a single
+    // transaction. Replaces read-then-write which could double-count under concurrency.
+    const { data, error } = await supabase
+      .rpc('increment_scan_count', { p_user_id: userId });
 
     if (error) {
       console.error('Error incrementing analysis count:', error);
+      return false;
+    }
+
+    const result = data as { allowed: boolean; error?: string } | null;
+    if (!result?.allowed) {
+      console.warn('[DATABASE] Scan not allowed:', result?.error);
       return false;
     }
 

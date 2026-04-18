@@ -35,6 +35,9 @@ const AI_MODEL_MAX_TOKENS = 4000
 const RATE_LIMIT_WINDOW_MS = 60 * 1000 // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 15 // 15 requests per minute per user
 
+// Maximum ingredients per batch request (prevents cost-amplification abuse)
+const MAX_BATCH_SIZE = 30
+
 interface OpenAIRequest {
   type: 'analyze_ingredient' | 'extract_text' | 'analyze_batch' | 'identify_product'
   ingredientName?: string
@@ -242,13 +245,49 @@ serve(async (req: Request) => {
       )
     }
 
+    // Enforce free-tier scan limit on cost-incurring AI analysis request types.
+    // `extract_text` and `identify_product` are cheap helpers; `analyze_ingredient`
+    // and `analyze_batch` are the expensive calls and the ones counted against quota.
+    if (requestBody.type === 'analyze_ingredient' || requestBody.type === 'analyze_batch') {
+      const { data: limitCheck, error: limitErr } = await supabase
+        .rpc('get_user_analysis_stats', { user_id: user.id })
+        .maybeSingle()
+
+      if (!limitErr && limitCheck) {
+        const stats = limitCheck as { can_analyze: boolean; total_used: number; subscription_status: string }
+        if (stats.can_analyze === false) {
+          return new Response(
+            JSON.stringify({
+              error: 'Free tier scan limit reached. Upgrade to Premium for unlimited scans.',
+              total_used: stats.total_used,
+              subscription_status: stats.subscription_status,
+            }),
+            { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+      }
+    }
+
     // Handle different request types
     if (requestBody.type === 'analyze_ingredient') {
       return await handleIngredientAnalysis(requestBody.ingredientName!)
     } else if (requestBody.type === 'extract_text') {
       return await handleTextExtraction(requestBody.base64Image!)
     } else if (requestBody.type === 'analyze_batch') {
-      return await handleBatchAnalysis(requestBody.ingredientNames!, requestBody.identifyProduct, requestBody.ingredientList, requestBody.stream)
+      const names = requestBody.ingredientNames ?? []
+      if (!Array.isArray(names) || names.length === 0) {
+        return new Response(
+          JSON.stringify({ error: 'ingredientNames array is required and must not be empty' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      if (names.length > MAX_BATCH_SIZE) {
+        return new Response(
+          JSON.stringify({ error: `Batch size exceeds maximum of ${MAX_BATCH_SIZE} ingredients` }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      return await handleBatchAnalysis(names, requestBody.identifyProduct, requestBody.ingredientList, requestBody.stream)
     } else if (requestBody.type === 'identify_product') {
       return await handleProductIdentification(requestBody.ingredientList!)
     } else {

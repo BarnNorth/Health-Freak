@@ -10,7 +10,12 @@ export default function DeveloperNoteScreen() {
     <SafeAreaView style={styles.container}>
       {/* Fixed Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+        >
           <ArrowLeft size={24} color={COLORS.cleanGreen} />
         </TouchableOpacity>
         <Text style={styles.title}>Note from Developer</Text>

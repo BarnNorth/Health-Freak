@@ -82,9 +82,11 @@ export async function analyzeIngredients(
     );
 
   // Debug logging: Log each normalized lookup key
-  ingredients.forEach(ingredient => {
-    console.log(`[CACHE DEBUG] Lookup key: "${ingredient}"`);
-  });
+  if (__DEV__) {
+    ingredients.forEach(ingredient => {
+      console.log(`[CACHE DEBUG] Lookup key: "${ingredient}"`);
+    });
+  }
 
   if (ingredients.length === 0) {
     return {
@@ -116,7 +118,7 @@ export async function analyzeIngredients(
     const dbResult = cachedIngredientsMap.get(normalizedIngredient);
     
     if (dbResult) {
-      console.log(`[CACHE DEBUG] Cache HIT: "${normalizedIngredient}"`);
+      if (__DEV__) console.log(`[CACHE DEBUG] Cache HIT: "${normalizedIngredient}"`);
       const minorInfo = minorIngredientsMap.get(normalizedIngredient);
       const parsedIngredient = parsedIngredientsMap.get(normalizedIngredient);
       resultsByName.set(normalizedIngredient, {
@@ -132,7 +134,7 @@ export async function analyzeIngredients(
       // Log cache hit (fire-and-forget)
       logAnalysis(userId, normalizedIngredient, dbResult.status, null, true, null).catch(() => {});
     } else {
-      console.log(`[CACHE DEBUG] Cache MISS: "${normalizedIngredient}"`);
+      if (__DEV__) console.log(`[CACHE DEBUG] Cache MISS: "${normalizedIngredient}"`);
       unknownIngredients.push(ingredient);
     }
   }
@@ -181,7 +183,7 @@ export async function analyzeIngredients(
           // Queue caching operation for background processing (non-blocking)
           // Skip caching if analysis failed — 'unknown' is not a real verdict.
           if (aiAnalysis.status !== 'unknown') {
-            console.log(`[CACHE DEBUG] Writing cache key: "${ingredientName}"`);
+            if (__DEV__) console.log(`[CACHE DEBUG] Writing cache key: "${ingredientName}"`);
             cachePromises.push(
               cacheIngredientInfo(
                 ingredientName,

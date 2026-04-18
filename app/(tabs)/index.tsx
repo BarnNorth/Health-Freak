@@ -657,18 +657,22 @@ export default function CameraScreen() {
                       </Text>
                     </View>
                     
-                    <TouchableOpacity 
-                      style={styles.zoomButton} 
+                    <TouchableOpacity
+                      style={styles.zoomButton}
                       onPress={() => adjustZoom(-0.2)}
                       disabled={zoom <= MIN_ZOOM}
+                      accessibilityLabel="Zoom out"
+                      accessibilityRole="button"
                     >
                       <ZoomOut size={20} color={COLORS.white} />
                     </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      style={styles.zoomButton} 
+
+                    <TouchableOpacity
+                      style={styles.zoomButton}
                       onPress={() => adjustZoom(0.2)}
                       disabled={zoom >= MAX_ZOOM}
+                      accessibilityLabel="Zoom in"
+                      accessibilityRole="button"
                     >
                       <ZoomIn size={20} color={COLORS.white} />
                     </TouchableOpacity>
@@ -727,7 +731,12 @@ export default function CameraScreen() {
 
       {/* Camera Controls - Fixed at bottom */}
       <View style={styles.controls}>
-        <TouchableOpacity style={styles.flipButton} onPress={toggleCameraFacing}>
+        <TouchableOpacity
+          style={styles.flipButton}
+          onPress={toggleCameraFacing}
+          accessibilityLabel="Flip camera"
+          accessibilityRole="button"
+        >
           <RotateCcw size={24} color={COLORS.white} />
         </TouchableOpacity>
         
@@ -743,7 +752,12 @@ export default function CameraScreen() {
           )}
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.textInputButton} onPress={openTextInput}>
+        <TouchableOpacity
+          style={styles.textInputButton}
+          onPress={openTextInput}
+          accessibilityLabel="Enter ingredients manually"
+          accessibilityRole="button"
+        >
           <KeyboardIcon size={20} color={COLORS.textPrimary} />
         </TouchableOpacity>
       </View>

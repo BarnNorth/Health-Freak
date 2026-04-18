@@ -206,7 +206,12 @@ export default function ResultsScreen() {
     <SafeAreaView style={styles.container}>
       {/* Bold Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+        >
           <ArrowLeft size={20} color={COLORS.cleanGreen} />
         </TouchableOpacity>
         <Text style={styles.title}>Health Freak</Text>

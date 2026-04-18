@@ -18,7 +18,7 @@ export function useIAPPurchase(): UseIAPPurchaseReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
-  const { setUserPremiumStatus } = useAuth();
+  const { setUserPremiumStatus, refreshUserProfile } = useAuth();
 
   const reset = useCallback(() => {
     setIsLoading(false);
@@ -45,11 +45,29 @@ export function useIAPPurchase(): UseIAPPurchaseReturn {
         }
         
         setIsSuccess(true);
-        
-        // Optimistically update UI immediately - trust RevenueCat
-        // The webhook will update the database in the background for persistence
+
+        // Optimistic UI: mark local user premium for immediate feedback.
         setUserPremiumStatus();
-        
+
+        // Reconcile with DB — the RevenueCat webhook updates `users.subscription_status`,
+        // but there's a small window before it lands. Poll a few times so that if the
+        // webhook is delayed or fails, the UI converges on actual server state rather
+        // than diverging silently.
+        const reconcileWithServer = async () => {
+          const delays = [2000, 4000, 8000]; // ms
+          for (const ms of delays) {
+            await new Promise(resolve => setTimeout(resolve, ms));
+            try {
+              await refreshUserProfile();
+            } catch (err) {
+              if (__DEV__) {
+                console.warn('[IAP Hook] refreshUserProfile failed during reconcile:', err);
+              }
+            }
+          }
+        };
+        reconcileWithServer();
+
         // Clear success state after 3 seconds
         setTimeout(() => {
           setIsSuccess(false);
@@ -86,7 +104,7 @@ export function useIAPPurchase(): UseIAPPurchaseReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [setUserPremiumStatus]);
+  }, [setUserPremiumStatus, refreshUserProfile]);
 
   return {
     isLoading,

@@ -200,7 +200,12 @@ export function IntroStory({ visible, onComplete }: IntroStoryProps) {
       <StatusBar hidden />
       <SafeAreaView style={styles.container}>
         {/* Skip button */}
-        <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
+        <TouchableOpacity
+          style={styles.skipButton}
+          onPress={handleSkip}
+          accessibilityLabel="Skip intro"
+          accessibilityRole="button"
+        >
           <X size={24} color={COLORS.white} />
         </TouchableOpacity>
 
