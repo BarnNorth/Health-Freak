@@ -2,7 +2,10 @@ name: Supabase Keep-Alive
 
 on:
   schedule:
-    - cron: '0 8 */3 * *'  # Every 3 days at 8am UTC
+    # Daily. Supabase free tier pauses after 7 consecutive days with no API
+    # requests. Every-3-days left no margin: 2 consecutive failures = a 9-day
+    # gap = pause. Daily means it takes 7 straight failures to risk a pause.
+    - cron: '37 13 * * *'  # Every day at 13:37 UTC
   workflow_dispatch:        # Allow manual trigger
 
 jobs:
@@ -11,7 +14,12 @@ jobs:
     steps:
       - name: Ping Supabase
         run: |
-          curl --fail -s \
+          # Retry on transient failures. Past runs intermittently failed with
+          # curl exit 6 (DNS resolution) / HTTP 000 from runner network blips;
+          # --retry-all-errors makes curl retry connection/DNS errors too.
+          curl --fail -sS \
+            --retry 5 --retry-delay 5 --retry-all-errors \
+            --connect-timeout 15 --max-time 60 \
             "${{ secrets.SUPABASE_URL }}/auth/v1/settings" \
             -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
             -o /dev/null -w "HTTP %{http_code}\n"
