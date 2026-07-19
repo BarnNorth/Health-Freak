@@ -55,11 +55,7 @@ jobs:
               --repo "${{ github.repository }}" \
               --title "Supabase keep-alive failed" \
               --label keep-alive-failure \
-              --body "The Supabase keep-alive workflow failed on $(date -u '+%Y-%m-%d %H:%M UTC'). The project may be paused or unreachable — check it at https://supabase.com/dashboard/project/vuiaqdkbpkbcvyrzpmzv
-
-Failing run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-This issue is created once and reused; it will not re-file daily. Close it once the keep-alive is green again."
+              --body "Keep-alive failed on $(date -u '+%Y-%m-%d %H:%M UTC'). The project may be paused or unreachable (dashboard: https://supabase.com/dashboard/project/vuiaqdkbpkbcvyrzpmzv). Failing run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} . This issue is reused and will not re-file daily; close it once the keep-alive is green again."
           else
             echo "An open keep-alive-failure issue already exists; not filing another."
           fi
