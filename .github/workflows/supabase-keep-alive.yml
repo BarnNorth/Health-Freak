@@ -3,23 +3,63 @@ name: Supabase Keep-Alive
 on:
   schedule:
     # Daily. Supabase free tier pauses after 7 consecutive days with no API
-    # requests. Every-3-days left no margin: 2 consecutive failures = a 9-day
-    # gap = pause. Daily means it takes 7 straight failures to risk a pause.
+    # requests. Daily means it takes 7 straight failures to risk a pause.
     - cron: '37 13 * * *'  # Every day at 13:37 UTC
   workflow_dispatch:        # Allow manual trigger
+
+# Needed so the failure step can open a tracking issue.
+permissions:
+  contents: read
+  issues: write
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Supabase
+      - name: Ping Supabase DB
         run: |
-          # Retry on transient failures. Past runs intermittently failed with
-          # curl exit 6 (DNS resolution) / HTTP 000 from runner network blips;
-          # --retry-all-errors makes curl retry connection/DNS errors too.
+          # Hit PostgREST (a real Postgres query) so the request registers as
+          # database activity for Supabase's inactivity timer. The previous
+          # version pinged /auth/v1/settings, which returned HTTP 200 but did
+          # NOT prevent the project from pausing (it paused June 2026 despite
+          # daily 200s). RLS returns an empty result with HTTP 200 here, which
+          # is fine — the query still exercises the database.
+          #
+          # --retry-all-errors also retries DNS/connection errors, covering the
+          # transient curl exit 6 / HTTP 000 runner network blips seen before.
           curl --fail -sS \
             --retry 5 --retry-delay 5 --retry-all-errors \
             --connect-timeout 15 --max-time 60 \
-            "${{ secrets.SUPABASE_URL }}/auth/v1/settings" \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/users?select=id&limit=1" \
             -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
             -o /dev/null -w "HTTP %{http_code}\n"
+
+      - name: Alert on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Ensure the label exists (no-op if it already does).
+          gh label create keep-alive-failure \
+            --color B60205 \
+            --description "Supabase keep-alive workflow failure" \
+            --repo "${{ github.repository }}" 2>/dev/null || true
+
+          # Only open a new issue if one isn't already open, so a sustained
+          # outage doesn't file a new issue every single day.
+          existing=$(gh issue list --state open --label keep-alive-failure \
+            --repo "${{ github.repository }}" --json number --jq 'length')
+          if [ "$existing" -eq 0 ]; then
+            gh issue create \
+              --repo "${{ github.repository }}" \
+              --title "Supabase keep-alive failed" \
+              --label keep-alive-failure \
+              --body "The Supabase keep-alive workflow failed on $(date -u '+%Y-%m-%d %H:%M UTC'). The project may be paused or unreachable — check it at https://supabase.com/dashboard/project/vuiaqdkbpkbcvyrzpmzv
+
+Failing run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+This issue is created once and reused; it will not re-file daily. Close it once the keep-alive is green again."
+          else
+            echo "An open keep-alive-failure issue already exists; not filing another."
+          fi
